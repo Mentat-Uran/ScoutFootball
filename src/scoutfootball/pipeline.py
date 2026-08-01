@@ -12,6 +12,18 @@ import pandas as pd
 from scoutfootball.config import DEFAULT_INGEST_CONFIG, IngestConfig, PlatformSettings
 from scoutfootball.entities.normalize import normalize_country_name, normalize_person_name
 from scoutfootball.evaluation.validation import run_pre_training_validation
+from scoutfootball.features.manifest import (
+    SourceLineageEntry,
+    compute_dataframe_hash,
+    count_parquet_rows,
+    extract_lineage_attrs,
+    hash_file,
+    relative_to_data_root,
+    write_player_match_manifest,
+    write_player_rolling_manifest,
+    write_team_match_manifest,
+    write_team_rolling_manifest,
+)
 from scoutfootball.features.player_match import build_player_match_features
 from scoutfootball.features.player_rolling import build_player_rolling_features
 from scoutfootball.features.rating_matrix import build_rating_feature_matrix, write_feature_manifest
@@ -22,8 +34,31 @@ from scoutfootball.models.match_prediction import (
     fit_dixon_coles,
     fit_independent_poisson,
 )
+from scoutfootball.storage.csv_safety import dataframe_to_csv
 
 logger = logging.getLogger(__name__)
+
+
+def _lineage_entry(
+    name: str,
+    path: Path,
+    settings: PlatformSettings,
+    *,
+    notes: str | None = None,
+) -> SourceLineageEntry:
+    """Build a SourceLineageEntry for *path* under *settings*.
+
+    Records the relative path, sha256[:16] file hash, and parquet row
+    count so manifests can detect input drift without re-reading the
+    underlying raw file.
+    """
+    return SourceLineageEntry(
+        name=name,
+        relative_path=relative_to_data_root(path, settings),
+        rows_read=count_parquet_rows(path),
+        input_hash=hash_file(path),
+        notes=notes,
+    )
 
 
 def _settings() -> PlatformSettings:
@@ -85,12 +120,53 @@ def run_build_features(
     try:
         team_match = _build_team_match_from_football_data(resolved)
         team_match_path = resolved.gold_root / "feature_store" / "team_match.parquet"
+        # Pop lineage/hash attrs before to_parquet: pandas tries to
+        # JSON-serialize df.attrs into parquet metadata, but
+        # SourceLineageEntry dataclasses are not JSON-serializable and
+        # would raise TypeError (or silently drop attrs depending on
+        # pandas build). Pass them explicitly to the manifest writer.
+        team_lineage, team_input_hash = extract_lineage_attrs(team_match)
         team_match.to_parquet(team_match_path, index=False)
+        # Write team_match_manifest.json next to the parquet file. Captures
+        # input file hash, row/column counts, schema and source lineage so
+        # downstream validation and audit can detect drift without re-reading
+        # the underlying raw parquet bytes.
+        try:
+            write_team_match_manifest(
+                team_match,
+                team_match_path,
+                source_lineage=team_lineage,
+                input_hash=team_input_hash,
+            )
+        except Exception as exc:
+            logger.warning("team_match manifest write failed: %s", exc)
         results["team_match"] = f"ok ({len(team_match)} rows -> {team_match_path.name})"
 
         team_rolling = build_team_rolling_features(team_match, windows=(3, 5))
         team_rolling_path = resolved.gold_root / "feature_store" / "team_rolling.parquet"
+        # Attach source lineage pointing at the direct upstream parquet
+        # (team_match). team_rolling is a leak-safe grouped rolling
+        # aggregate over team_match rows; recording the upstream lets the
+        # manifest trace team_rolling -> team_match -> raw football_data.
+        team_rolling.attrs["_source_lineage"] = [
+            _lineage_entry("team_match", team_match_path, resolved),
+        ]
+        # Pop lineage/hash attrs before to_parquet (same reason as
+        # team_match/player_match: pandas tries to JSON-serialize
+        # SourceLineageEntry dataclasses in attrs).
+        team_rolling_lineage, team_rolling_input_hash = extract_lineage_attrs(
+            team_rolling
+        )
         team_rolling.to_parquet(team_rolling_path, index=False)
+        try:
+            write_team_rolling_manifest(
+                team_rolling,
+                team_rolling_path,
+                source_lineage=team_rolling_lineage,
+                input_hash=team_rolling_input_hash,
+            )
+        except Exception as exc:
+            logger.warning("team_rolling manifest write failed: %s", exc)
         results["team_rolling"] = f"ok ({len(team_rolling)} rows -> {team_rolling_path.name})"
 
         # Combine StatsBomb per-match data with season proxies.  FBref stays
@@ -113,15 +189,68 @@ def run_build_features(
             player_match = pd.concat(proxy_frames, ignore_index=True, sort=False)
             granularity_info = "season-level FBref + Understat proxies"
 
+        # Reconstruct source lineage on the concatenated frame. pd.concat
+        # does not preserve attrs in a predictable way, so we merge the
+        # lineage lists from each builder explicitly. Empty frames (e.g.
+        # statsbomb_open not found) contribute no lineage entries.
+        combined_lineage: list[SourceLineageEntry] = []
+        for frame in ([sb_match, fbref_proxy, understat_proxy] if not sb_match.empty
+                      else [fbref_proxy, understat_proxy]):
+            combined_lineage.extend(frame.attrs.get("_source_lineage", []) or [])
+        player_match.attrs["_source_lineage"] = combined_lineage
+        # Propagate the combined input hash from the statsbomb builder when
+        # available; otherwise let the manifest writer compute a fallback
+        # hash from the player_match contents.
+        sb_input_hash = sb_match.attrs.get("_input_hash") if not sb_match.empty else None
+        if sb_input_hash:
+            player_match.attrs["_input_hash"] = sb_input_hash
+
         player_match_path = resolved.gold_root / "feature_store" / "player_match.parquet"
+        # Pop lineage/hash attrs before to_parquet (same reason as team_match).
+        player_lineage, player_input_hash = extract_lineage_attrs(player_match)
         player_match.to_parquet(player_match_path, index=False)
+        # Write player_match_manifest.json. Adds source_breakdown (per-source
+        # row counts) on top of the shared schema, since player_match is the
+        # concatenation of statsbomb_open + fbref + understat.
+        try:
+            write_player_match_manifest(
+                player_match,
+                player_match_path,
+                source_lineage=player_lineage,
+                input_hash=player_input_hash,
+            )
+        except Exception as exc:
+            logger.warning("player_match manifest write failed: %s", exc)
         results["player_match"] = (
             f"ok ({len(player_match)} rows -> {player_match_path.name}; {granularity_info})"
         )
 
         player_rolling = build_player_rolling_features(player_match, windows=(2, 3))
         player_rolling_path = resolved.gold_root / "feature_store" / "player_rolling.parquet"
+        # Attach source lineage pointing at the direct upstream parquet
+        # (player_match). player_rolling is a leak-safe grouped rolling
+        # aggregate over player_match rows; recording the upstream lets
+        # the manifest trace player_rolling -> player_match -> raw
+        # (statsbomb_open + fbref + understat).
+        player_rolling.attrs["_source_lineage"] = [
+            _lineage_entry("player_match", player_match_path, resolved),
+        ]
+        # Pop lineage/hash attrs before to_parquet (same reason as
+        # team_match/player_match: pandas tries to JSON-serialize
+        # SourceLineageEntry dataclasses in attrs).
+        player_rolling_lineage, player_rolling_input_hash = extract_lineage_attrs(
+            player_rolling
+        )
         player_rolling.to_parquet(player_rolling_path, index=False)
+        try:
+            write_player_rolling_manifest(
+                player_rolling,
+                player_rolling_path,
+                source_lineage=player_rolling_lineage,
+                input_hash=player_rolling_input_hash,
+            )
+        except Exception as exc:
+            logger.warning("player_rolling manifest write failed: %s", exc)
         results["player_rolling"] = (
             f"ok ({len(player_rolling)} rows -> {player_rolling_path.name}; built from proxy)"
         )
@@ -133,8 +262,38 @@ def run_build_features(
                 rating_matrix_path = (
                     resolved.gold_root / "feature_store" / "rating_feature_matrix.parquet"
                 )
+                # Attach source lineage pointing at the two direct
+                # upstream parquet artifacts (player_match + player_rolling).
+                # rating_feature_matrix is a player-season aggregate
+                # built from these two tables; recording them here lets
+                # the manifest trace rating_matrix → player_match →
+                # raw inputs (statsbomb/fbref/understat) in one hop.
+                rating_matrix.attrs["_source_lineage"] = [
+                    _lineage_entry(
+                        "player_match",
+                        player_match_path,
+                        resolved,
+                    ),
+                    _lineage_entry(
+                        "player_rolling",
+                        player_rolling_path,
+                        resolved,
+                    ),
+                ]
+                # Pop lineage/hash attrs before to_parquet (same reason
+                # as team_match/player_match: pandas tries to JSON-
+                # serialize SourceLineageEntry dataclasses in attrs),
+                # then pass them explicitly to write_feature_manifest.
+                rating_lineage, rating_input_hash = extract_lineage_attrs(
+                    rating_matrix
+                )
                 rating_matrix.to_parquet(rating_matrix_path, index=False)
-                write_feature_manifest(rating_matrix, rating_matrix_path)
+                write_feature_manifest(
+                    rating_matrix,
+                    rating_matrix_path,
+                    source_lineage=rating_lineage,
+                    input_hash=rating_input_hash,
+                )
                 results["rating_feature_matrix"] = (
                     f"ok ({len(rating_matrix)} rows -> {rating_matrix_path.name})"
                 )
@@ -167,6 +326,33 @@ def run_build_features(
     except Exception as exc:
         results["features"] = f"failed: {exc}"
         logger.error("Feature build failed: %s", exc)
+
+    # Post-build validation: catch inconsistent state immediately rather
+    # than waiting for the maintainer to run `scoutfootball validate` or
+    # `scoutfootball train`. This is a defense-in-depth complement to the
+    # pre-training validation gate in run_weekly_train (Round 17 fixed the
+    # CLI train gate bypass; this closes the analogous build-features gap
+    # where a manifest write failure or partial rebuild leaves the disk
+    # inconsistent but build-features returns "ok").
+    try:
+        report = run_pre_training_validation(resolved)
+        passed = report.passed
+        total = len(report.checks)
+        failed = len(report.failures)
+        if passed:
+            results["validation"] = f"PASS ({total} checks)"
+        else:
+            results["validation"] = (
+                f"FAIL ({total - failed}/{total} checks passed)"
+            )
+            logger.warning(
+                "Post-build validation failed — run `scoutfootball validate` "
+                "for details:\n%s",
+                report.summary(),
+            )
+    except Exception as exc:
+        results["validation"] = f"skipped: {exc}"
+        logger.warning("Post-build validation could not run: %s", exc)
 
     return results
 
@@ -567,33 +753,126 @@ def _ingest_transfermarkt_datasets(
     *,
     ingest_config: IngestConfig | None = None,
 ) -> str:
-    """Import Transfermarkt dataset files from the manual import directory."""
-    tm_dir = settings.raw_root / "transfermarkt_manual"
-    if not tm_dir.exists():
-        return "skipped: no transfermarkt_manual directory"
+    """Import Transfermarkt dataset files.
 
-    from scoutfootball.adapters.transfermarkt_manual import load_snapshot
+    Two acquisition paths are supported (see
+    ``adapters/transfermarkt_datasets.py``):
 
-    csv_files = sorted(f for f in tm_dir.glob("*.csv") if not f.name.startswith("."))
-    if not csv_files:
-        return "skipped: no CSV files in transfermarkt_manual"
+    1. ``transfermarkt_datasets`` bulk export — DuckDB file or Kaggle
+       CSVs that have been materialised to
+       ``data/raw/transfermarkt_datasets/{table}.parquet`` by
+       ``export_table`` / ``load_csv_table``. The priority table for
+       market value is ``player_valuations``.
+    2. ``transfermarkt_manual`` snapshot CSVs — maintainer-placed
+       CSVs in ``data/raw/transfermarkt_manual/`` read by
+       ``adapters.transfermarkt_manual.load_snapshot``.
 
+    The two paths are complementary: the bulk dataset is the canonical
+    source for historical valuations, while the manual snapshot path is
+    used for ad-hoc latest-value imports. This function reports the
+    status of each path separately so the maintainer can see which one
+    produced data.
+    """
+    parts: list[str] = []
     total = 0
-    errors: list[str] = []
 
-    for csv_file in csv_files:
-        try:
-            result = load_snapshot(csv_file)
-            total += result.metadata.record_count
-        except Exception as exc:
-            errors.append(f"{csv_file.name}: {type(exc).__name__}")
-            logger.warning("Transfermarkt import failed for %s: %s", csv_file.name, exc)
+    # Path 1: transfermarkt_datasets bulk export (player_valuations etc.)
+    tm_datasets_dir = settings.raw_root / "transfermarkt_datasets"
+    bulk_exported: list[str] = []
+    if tm_datasets_dir.exists():
+        from scoutfootball.adapters.transfermarkt_datasets import PRIORITY_TABLES
+
+        for table_name in PRIORITY_TABLES:
+            parquet_path = tm_datasets_dir / f"{table_name}.parquet"
+            csv_path = tm_datasets_dir / "csv" / f"{table_name}.csv"
+            if parquet_path.exists():
+                try:
+                    from scoutfootball.adapters.transfermarkt_datasets import (
+                        load_csv_table,
+                    )
+
+                    # load_csv_table returns the cached frame when the
+                    # parquet already exists; safe to call as a freshness
+                    # check. force_refresh=False keeps it read-only.
+                    result = load_csv_table(
+                        table_name, settings=settings, force_refresh=False
+                    )
+                    rows = result.metadata.record_count
+                    total += rows
+                    bulk_exported.append(f"{table_name}={rows}")
+                except Exception as exc:
+                    logger.warning(
+                        "transfermarkt_datasets: %s parquet read failed: %s",
+                        table_name,
+                        exc,
+                    )
+            elif csv_path.exists():
+                # CSV present but parquet not yet materialised — invoke
+                # load_csv_table to perform the CSV→parquet conversion.
+                try:
+                    from scoutfootball.adapters.transfermarkt_datasets import (
+                        load_csv_table,
+                    )
+
+                    result = load_csv_table(
+                        table_name, settings=settings, force_refresh=False
+                    )
+                    rows = result.metadata.record_count
+                    total += rows
+                    bulk_exported.append(f"{table_name}={rows}(from-csv)")
+                except Exception as exc:
+                    logger.warning(
+                        "transfermarkt_datasets: %s CSV load failed: %s",
+                        table_name,
+                        exc,
+                    )
+        if bulk_exported:
+            parts.append(
+                f"transfermarkt_datasets: {', '.join(bulk_exported)}"
+            )
+
+    # Path 2: transfermarkt_manual snapshot CSVs.
+    tm_manual_dir = settings.raw_root / "transfermarkt_manual"
+    if tm_manual_dir.exists():
+        from scoutfootball.adapters.transfermarkt_manual import load_snapshot
+
+        csv_files = sorted(
+            f for f in tm_manual_dir.glob("*.csv") if not f.name.startswith(".")
+        )
+        if csv_files:
+            manual_total = 0
+            manual_errors: list[str] = []
+            for csv_file in csv_files:
+                try:
+                    result = load_snapshot(csv_file)
+                    manual_total += result.metadata.record_count
+                except Exception as exc:
+                    manual_errors.append(f"{csv_file.name}: {type(exc).__name__}")
+                    logger.warning(
+                        "Transfermarkt manual import failed for %s: %s",
+                        csv_file.name,
+                        exc,
+                    )
+            if manual_total > 0:
+                total += manual_total
+                parts.append(
+                    f"transfermarkt_manual: {manual_total} rows from "
+                    f"{len(csv_files)} file(s)"
+                )
+            elif manual_errors:
+                parts.append(
+                    f"transfermarkt_manual: degraded ({'; '.join(manual_errors)})"
+                )
 
     if total > 0:
-        return f"ok ({total} player records from {len(csv_files)} file(s))"
-    if errors:
-        return f"degraded: all Transfermarkt imports failed ({'; '.join(errors)})"
-    return "skipped: no valid Transfermarkt data found"
+        return "ok (" + "; ".join(parts) + ")"
+    if parts:
+        return "degraded: " + "; ".join(parts)
+    return (
+        "skipped: no transfermarkt_datasets parquet or transfermarkt_manual CSVs "
+        "found. Run `python scripts/download_transfermarkt_kaggle.py` or place "
+        "CSVs in data/raw/transfermarkt_manual/."
+    )
 
 
 def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataFrame:
@@ -605,6 +884,32 @@ def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataF
     matches["match_date"] = pd.to_datetime(
         matches["Date"], dayfirst=True, format="mixed", errors="raise"
     )
+
+    # Filter out future-match placeholder rows: football-data.co.uk includes
+    # scheduled-but-not-yet-played matches with NaN FTHG/FTAG/FTR. These rows
+    # have no goals and would pollute team_match.parquet with NaN goals,
+    # silently corrupting downstream model training (see fit_dixon_coles NaN
+    # handling and WORKFLOW_LOG.md reference workflow 3).
+    nan_goals_mask = matches["FTHG"].isna() | matches["FTAG"].isna()
+    filtered_count = int(nan_goals_mask.sum()) if nan_goals_mask.any() else 0
+    if nan_goals_mask.any():
+        nan_count = int(nan_goals_mask.sum())
+        sample_cols = ["match_date", "Div", "HomeTeam", "AwayTeam"]
+        sample_rows = matches.loc[nan_goals_mask, sample_cols].head(5)
+        logger.info(
+            "Filtering %d future-match placeholder row(s) from Football-Data "
+            "(FTHG/FTAG NaN): %s",
+            nan_count,
+            sample_rows.to_dict("records"),
+        )
+        matches = matches.loc[~nan_goals_mask].reset_index(drop=True)
+        if matches.empty:
+            raise ValueError(
+                "All Football-Data rows have NaN FTHG/FTAG; raw data appears to "
+                "contain only future-match placeholders. Re-run ingest or inspect "
+                f"{input_path}."
+            )
+
     matches = matches.sort_values(["match_date", "league", "HomeTeam", "AwayTeam"]).reset_index(
         drop=True
     )
@@ -622,20 +927,40 @@ def _build_team_match_from_football_data(settings: PlatformSettings) -> pd.DataF
     matches["home_shots_on_target"] = pd.to_numeric(matches.get("HST"), errors="coerce")
     matches["away_shots_on_target"] = pd.to_numeric(matches.get("AST"), errors="coerce")
 
-    return build_team_match_features(matches)
+    team_match = build_team_match_features(matches)
+
+    # Attach source lineage for manifest writer. Notes record the pre-match_id
+    # filter so consumers can reconcile raw input row count with total_rows.
+    filter_note = (
+        f"{filtered_count} future-match placeholder row(s) filtered (FTHG/FTAG NaN); "
+        "home+away expansion produces 2 rows per remaining match"
+        if filtered_count > 0
+        else "home+away expansion produces 2 rows per match"
+    )
+    team_match.attrs["_source_lineage"] = [
+        _lineage_entry(
+            "football_data",
+            input_path,
+            settings,
+            notes=filter_note,
+        )
+    ]
+    team_match.attrs["_input_hash"] = compute_dataframe_hash(matches)
+    return team_match
 
 
 def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFrame:
     """Aggregate StatsBomb events into per-player-per-match appearances."""
     events_path = settings.raw_root / "statsbomb_open" / "events_all.parquet"
+    events_path_used = events_path
     if not events_path.exists():
-        events_path = settings.raw_root / "statsbomb_open" / "events_sample.parquet"
+        events_path_used = settings.raw_root / "statsbomb_open" / "events_sample.parquet"
     matches_path = settings.raw_root / "statsbomb_open" / "big5_matches.parquet"
 
-    if not events_path.exists() or not matches_path.exists():
+    if not events_path_used.exists() or not matches_path.exists():
         return pd.DataFrame()
 
-    events = pd.read_parquet(events_path)
+    events = pd.read_parquet(events_path_used)
     matches = pd.read_parquet(matches_path)
 
     if events.empty or matches.empty:
@@ -684,7 +1009,7 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
 
         agg_records.append({
             "match_id": str(match_id),
-            "player_id": str(player_id),
+            "player_id": str(int(float(player_id))),
             "player_name": player_name,
             "team_id": str(team_id),
             "team_name": team_name,
@@ -706,10 +1031,55 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
 
     player_match = pd.DataFrame(agg_records)
 
-    # Merge match metadata
-    match_meta = matches[["match_id", "match_date", "home_team_id", "away_team_id"]].copy()
+    # Merge match metadata. Include season and competition columns so
+    # statsbomb match-level rows carry the same season_id/competition_id
+    # vocabulary as the understat/fbref season-proxy rows — without this,
+    # the rows have NaN season_id and are silently dropped during
+    # rating_feature_matrix aggregation (groupby drops NaN keys). Only
+    # select columns that exist in ``matches`` so older/incomplete match
+    # files don't raise KeyError — missing columns simply won't be merged.
+    _match_meta_cols = [
+        "match_id",
+        "match_date",
+        "home_team_id",
+        "away_team_id",
+        "season_id",
+        "season_name",
+        "competition_id",
+        "competition_name",
+    ]
+    available_cols = [c for c in _match_meta_cols if c in matches.columns]
+    match_meta = matches[available_cols].copy()
     match_meta["match_id"] = match_meta["match_id"].astype(str)
     player_match = player_match.merge(match_meta, on="match_id", how="left")
+
+    # Convert StatsBomb internal IDs to the vocabulary used by
+    # understat/fbref season-proxy rows so downstream groupby and grain
+    # audit can cross-reference the same player-season across sources.
+    # season_name "2019/2020" -> season_id "1920" (matches understat/fbref).
+    # competition_name "La Liga" -> competition_id "ESP-La Liga" (matches
+    # the "<country>-<league>" format used by fbref/understat).
+    def _season_name_to_id(s: object) -> object:
+        if pd.isna(s):
+            return pd.NA
+        parts = str(s).strip().split("/")
+        if len(parts) == 2:
+            return parts[0][-2:] + parts[1][-2:]
+        return pd.NA
+
+    if "season_name" in player_match.columns:
+        player_match["season_id"] = player_match["season_name"].apply(_season_name_to_id)
+
+    _statsbomb_competition_map = {
+        "La Liga": "ESP-La Liga",
+        "Ligue 1": "FRA-Ligue 1",
+        "Premier League": "ENG-Premier League",
+        "Serie A": "ITA-Serie A",
+        "Bundesliga": "GER-Bundesliga",
+    }
+    if "competition_name" in player_match.columns:
+        mapped = player_match["competition_name"].map(_statsbomb_competition_map)
+        player_match["competition_id"] = mapped.fillna(player_match.get("competition_id"))
 
     # Determine is_home and opponent
     player_match["is_home"] = player_match["team_id"] == player_match["home_team_id"].astype(str)
@@ -741,11 +1111,35 @@ def _build_player_match_from_statsbomb(settings: PlatformSettings) -> pd.DataFra
 
     # Drop helper columns
     player_match = player_match.drop(
-        columns=["home_team_id", "away_team_id", "position_name"],
+        columns=[
+            "home_team_id",
+            "away_team_id",
+            "position_name",
+            "season_name",
+            "competition_name",
+        ],
         errors="ignore",
     )
 
-    return build_player_match_features(player_match)
+    built = build_player_match_features(player_match)
+    # Attach source lineage: events file + matches file. Both are needed to
+    # reconstruct the player_match rows, so both hashes are recorded.
+    built.attrs["_source_lineage"] = [
+        _lineage_entry(
+            "statsbomb_open",
+            events_path_used,
+            settings,
+            notes="events file; aggregated to per-player-per-match",
+        ),
+        _lineage_entry(
+            "statsbomb_open",
+            matches_path,
+            settings,
+            notes="matches metadata file; joined on match_id",
+        ),
+    ]
+    built.attrs["_input_hash"] = compute_dataframe_hash(events, matches)
+    return built
 
 
 def _build_player_match_proxy_from_fbref(settings: PlatformSettings) -> pd.DataFrame:
@@ -809,6 +1203,16 @@ def _build_player_match_proxy_from_fbref(settings: PlatformSettings) -> pd.DataF
     proxy["source_name"] = "fbref"
 
     player_match = build_player_match_features(proxy)
+    # Attach source lineage for manifest writer.
+    player_match.attrs["_source_lineage"] = [
+        _lineage_entry(
+            "fbref",
+            input_path,
+            settings,
+            notes="season proxy; one row per player-season",
+        )
+    ]
+    player_match.attrs["_input_hash"] = compute_dataframe_hash(frame)
     return player_match
 
 
@@ -822,13 +1226,34 @@ def _build_player_match_proxy_from_understat(
         logger.info("Understat historical player snapshot not found: %s", input_path)
         return pd.DataFrame()
     try:
-        return build_understat_season_proxy(
-            pd.read_parquet(input_path),
+        raw = pd.read_parquet(input_path)
+        proxy = build_understat_season_proxy(
+            raw,
             excluded_season_ids=excluded_season_ids,
         )
     except Exception as exc:
         logger.warning("Understat historical player proxy unavailable: %s", exc)
         return pd.DataFrame()
+
+    if proxy.empty:
+        return proxy
+
+    excluded_note = (
+        f"season proxy; excluded {len(excluded_season_ids)} season(s) already "
+        "covered by FBref to avoid double-counting"
+        if excluded_season_ids
+        else "season proxy; no seasons excluded"
+    )
+    proxy.attrs["_source_lineage"] = [
+        _lineage_entry(
+            "understat",
+            input_path,
+            settings,
+            notes=excluded_note,
+        )
+    ]
+    proxy.attrs["_input_hash"] = compute_dataframe_hash(raw)
+    return proxy
 
 
 def _save_poisson_artifacts(
@@ -947,6 +1372,14 @@ def _save_dc_calibration_report(
         try:
             pred = predict_match_dc(model, home_id, away_id, max_goals=5)
         except Exception:
+            logger.warning(
+                "Calibration report: prediction failed for match_id=%s "
+                "home=%s away=%s; skipping (may bias calibration metrics)",
+                row.get("match_id", "?"),
+                home_id,
+                away_id,
+                exc_info=True,
+            )
             continue
 
         # Actual score bucket
@@ -1100,6 +1533,12 @@ def _build_market_enriched_features(
             market_source = csv_file.name
             break
         except Exception:
+            logger.debug(
+                "Transfermarkt manual snapshot %s failed to load; "
+                "trying next candidate",
+                csv_file.name,
+                exc_info=True,
+            )
             continue
 
     # Fallback: try raw Transfermarkt CSVs (player_market_value + player_profiles)
@@ -1168,7 +1607,7 @@ def _load_raw_transfermarkt_csv(
 
     Returns (None, "none") if the required files are not found.
     """
-    tm_dir = settings.raw_root / "transfermarkt"
+    tm_dir = settings.raw_root / "transfermarkt_manual"
     mv_path = tm_dir / "player_latest_market_value.csv"
     profiles_path = tm_dir / "player_profiles.csv"
 
@@ -1279,7 +1718,7 @@ def _generate_synthetic_market_values(player_rolling: pd.DataFrame) -> pd.DataFr
         )
         with open(output_path, "w") as f:
             f.write(header_comment)
-            result.to_csv(f, index=False)
+            f.write(dataframe_to_csv(result))
 
     return result
 

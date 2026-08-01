@@ -1,0 +1,337 @@
+{
+  "artifact": "team_rolling",
+  "schema_version": "1.0",
+  "total_rows": 137904,
+  "column_count": 53,
+  "columns": [
+    {
+      "name": "match_id",
+      "dtype": "object",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "match_date",
+      "dtype": "datetime64[ns]",
+      "source": "temporal",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "competition_id",
+      "dtype": "string",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "season_id",
+      "dtype": "string",
+      "source": "category",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "team_id",
+      "dtype": "string",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "team_name",
+      "dtype": "string",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "opponent_team_id",
+      "dtype": "string",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "opponent_team_name",
+      "dtype": "string",
+      "source": "identifier",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "is_home",
+      "dtype": "bool",
+      "source": "flag",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "goals_for",
+      "dtype": "float64",
+      "source": "metric",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "goals_against",
+      "dtype": "float64",
+      "source": "metric",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "goal_diff",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "result_points",
+      "dtype": "int64",
+      "source": "derived",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "shots",
+      "dtype": "float64",
+      "source": "metric",
+      "missing_rate": 0.049
+    },
+    {
+      "name": "has_shots_data",
+      "dtype": "bool",
+      "source": "flag",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "shots_on_target",
+      "dtype": "float64",
+      "source": "metric",
+      "missing_rate": 0.049
+    },
+    {
+      "name": "has_shots_on_target_data",
+      "dtype": "bool",
+      "source": "flag",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "xg",
+      "dtype": "object",
+      "source": "metric",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xg_against",
+      "dtype": "object",
+      "source": "metric",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "has_xg_data",
+      "dtype": "bool",
+      "source": "flag",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "rest_days",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "elo_pre",
+      "dtype": "object",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "opponent_elo_pre",
+      "dtype": "object",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "elo_diff",
+      "dtype": "object",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "prior_matches_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "result_points_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "goals_for_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "goals_against_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "goal_diff_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "shots_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.052
+    },
+    {
+      "name": "shots_on_target_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.052
+    },
+    {
+      "name": "xg_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xg_against_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xg_diff",
+      "dtype": "object",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xg_diff_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "points_per_match_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "goal_diff_per_match_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "elo_pre_mean_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "rest_days_mean_3",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0076
+    },
+    {
+      "name": "prior_matches_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "result_points_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "goals_for_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "goals_against_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "goal_diff_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "shots_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.052
+    },
+    {
+      "name": "shots_on_target_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.052
+    },
+    {
+      "name": "xg_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xg_against_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "xg_diff_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "points_per_match_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "goal_diff_per_match_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0038
+    },
+    {
+      "name": "elo_pre_mean_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 1.0
+    },
+    {
+      "name": "rest_days_mean_5",
+      "dtype": "float64",
+      "source": "derived",
+      "missing_rate": 0.0076
+    }
+  ],
+  "input_hash": "c1a42346db4f1305",
+  "source_lineage": [
+    {
+      "name": "team_match",
+      "relative_path": "gold/feature_store/team_match.parquet",
+      "rows_read": 137904,
+      "input_hash": "d6bdfe1f72079fdb",
+      "notes": null
+    }
+  ],
+  "timestamp": "2026-07-30T17:33:40.890772+00:00"
+}

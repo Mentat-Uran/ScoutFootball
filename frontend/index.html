@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://scoutfootball-for-world-cup.onrender.com http://localhost:8600 http://127.0.0.1:8600; img-src 'self' data:">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://scoutfootball-for-world-cup.onrender.com http://localhost:8600 http://127.0.0.1:8600; img-src 'self' data:">
     <title>ScoutFootball Analyst Console</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js" integrity="sha384-pPi0zxBAoDu6+JXW/C68UZLvBUUtU+7zonhif43rqj7pxsGyqyqzcian2Rj37Rss" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js" integrity="sha384-4RMW82CWFobXY+HRHXe5go/V5acBhiIVGCT+2k7TEoxi7AiWKw8WoWb9qMU+FAFu" crossorigin="anonymous"></script>
+    <script src="vendor/echarts.min.js"></script>
+    <script src="vendor/gif.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -26,6 +26,14 @@
                 <button class="nav-action active" data-view="overview" type="button">
                     <span class="nav-icon">◎</span>
                     <span data-i18n="nav_overview">总览</span>
+                </button>
+                <button class="nav-action" data-view="workflow" type="button">
+                    <span class="nav-icon">⇢</span>
+                    <span data-i18n="nav_workflow">工作流</span>
+                </button>
+                <button class="nav-action" data-view="versions" type="button">
+                    <span class="nav-icon">⇆</span>
+                    <span data-i18n="nav_versions">版本</span>
                 </button>
                 <button class="nav-action" data-view="players" type="button">
                     <span class="nav-icon">◇</span>
@@ -46,6 +54,10 @@
                 <button class="nav-action" data-view="teams" type="button">
                     <span class="nav-icon">⬢</span>
                     <span data-i18n="nav_teams">球队</span>
+                </button>
+                <button class="nav-action" data-view="league" type="button">
+                    <span class="nav-icon">⊞</span>
+                    <span data-i18n="nav_league">联赛</span>
                 </button>
                 <button class="nav-action" data-view="scouting" type="button">
                     <span class="nav-icon">□</span>
@@ -113,8 +125,8 @@
 
             <div class="nav-footer">
                 <div class="nav-author-card">
-                    <div class="nav-author-name">by Mentaturan</div>
-                    <a class="nav-author-link" href="https://github.com/Mentaturan/ScoutFootball_for_World_Cup" target="_blank" rel="noopener">GitHub · 项目主页</a>
+                    <div class="nav-author-name">by Uran</div>
+                    <a class="nav-author-link" href="https://github.com/Mentat-Uran/ScoutFootball_for_World_Cup" target="_blank" rel="noopener">GitHub · 项目主页</a>
                 </div>
                 <div class="nav-footer-actions">
                     <button class="icon-button" id="theme-toggle" type="button" aria-label="Theme">☾</button>
@@ -134,7 +146,7 @@
                         <span>⌕</span>
                         <input id="global-search" type="search" data-i18n-placeholder="search_placeholder" placeholder="搜索球员、球队、报告">
                     </label>
-                    <a class="top-link" href="https://github.com/Mentaturan/ScoutFootball_for_World_Cup" target="_blank" rel="noopener" title="项目主页">↗ GitHub</a>
+                    <a class="top-link" href="https://github.com/Mentat-Uran/ScoutFootball_for_World_Cup" target="_blank" rel="noopener" title="项目主页">↗ GitHub</a>
                     <span class="status-pill status-low" id="top-api-pill">API</span>
                     <span class="status-pill" id="top-version-pill" style="font-size:0.65rem;opacity:0.7">v1.0.3</span>
                     <span class="status-pill status-medium" id="top-coverage-pill">loading</span>
@@ -200,6 +212,21 @@
                     <article class="liquid-panel compact-panel"></article>
                 </div>
 
+                <div id="detailed-health-section" style="margin-bottom:var(--space);display:none">
+                    <article class="liquid-panel compact-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="detailed_health_title">本地健康详情</h3>
+                            <span class="status-pill status-medium" id="dh-overall-pill">–</span>
+                            <button type="button" id="dh-refresh-btn" class="glass-control" style="margin-left:auto;font-size:0.72rem;padding:0.2rem 0.6rem" data-i18n="detailed_health_force_refresh" title="force_refresh=true">强制刷新</button>
+                        </div>
+                        <p class="feature-note" id="dh-meta-note" style="padding:0.3rem 0.8rem;font-size:0.72rem;color:var(--text-muted)">–</p>
+                        <div id="dh-grid" style="padding:0.4rem 0.8rem 0.8rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(11rem,1fr));gap:0.5rem">
+                            <!-- Filled by renderDetailedHealth() -->
+                        </div>
+                        <p class="feature-note" id="dh-limitations-note" style="padding:0 0.8rem 0.6rem;font-size:0.7rem;color:var(--text-muted);border-top:1px solid rgba(255,255,255,0.05);padding-top:0.5rem">–</p>
+                    </article>
+                </div>
+
                 <div class="grid-3">
                     <article class="liquid-panel work-card" data-jump="players">
                         <span class="card-index">01</span>
@@ -217,6 +244,163 @@
                         <p data-i18n="card_match_body">胜平负、比分矩阵、模型覆盖和校准入口。</p>
                     </article>
                 </div>
+            </section>
+
+            <section class="view" id="view-workflow" aria-label="workflow">
+                <article class="liquid-panel feature-hero">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="workflow_kicker">工作流导航</p>
+                        <h2 data-i18n="workflow_title">下一步、缺失证据与阻断原因</h2>
+                        <p class="feature-note" data-i18n="workflow_boundary">本地优先：基于已加载的 brief / briefing / 复核队列状态推断可执行的下一步；标注缺失证据和阻断原因。</p>
+                    </div>
+                    <div class="feature-metric-strip" aria-label="Workflow summary">
+                        <div><span class="metric-value" id="wf-next-count">0</span><span data-i18n="workflow_metric_next">可执行下一步</span></div>
+                        <div><span class="metric-value" id="wf-blocker-count">0</span><span data-i18n="workflow_metric_blocker">阻断项</span></div>
+                        <div><span class="metric-value" id="wf-evidence-gap-count">0</span><span data-i18n="workflow_metric_evidence_gap">缺失证据</span></div>
+                    </div>
+                </article>
+                <div class="workspace-status-rail" id="wf-status-rail" aria-live="polite"></div>
+                <div class="layout-2">
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="workflow_next_steps">下一步</h3>
+                            <span class="status-pill status-high" id="wf-next-pill">0</span>
+                        </div>
+                        <ol id="wf-next-list" class="wf-step-list" aria-live="polite"></ol>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="workflow_blockers">阻断原因</h3>
+                            <span class="status-pill status-low" id="wf-blocker-pill">0</span>
+                        </div>
+                        <ul id="wf-blocker-list" class="wf-step-list" aria-live="polite"></ul>
+                    </article>
+                </div>
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="workflow_evidence_gaps">缺失证据</h3>
+                        <span class="status-pill status-medium" id="wf-evidence-gap-pill">0</span>
+                    </div>
+                    <ul id="wf-evidence-gap-list" class="wf-step-list" aria-live="polite"></ul>
+                </article>
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="workflow_sources">数据来源</h3>
+                    </div>
+                    <p class="feature-note" id="wf-sources-note" style="padding:0.5rem 0.8rem"></p>
+                </article>
+            </section>
+
+            <section class="view" id="view-versions" aria-label="versions">
+                <article class="liquid-panel feature-hero">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="versions_kicker">版本与备份</p>
+                        <h2 data-i18n="versions_title">版本时间线、diff 与恢复</h2>
+                        <p class="feature-note" data-i18n="versions_boundary">本地优先：列出每个 brief / briefing 的备份时间线，查看任意两个版本的字段级 diff，并从备份恢复（遵守 If-Match 乐观并发）。</p>
+                    </div>
+                    <div class="feature-metric-strip" aria-label="Versions summary">
+                        <div><span class="metric-value" id="ver-brief-count">0</span><span data-i18n="versions_metric_briefs">Recruitment briefs</span></div>
+                        <div><span class="metric-value" id="ver-briefing-count">0</span><span data-i18n="versions_metric_briefings">Opposition briefings</span></div>
+                        <div><span class="metric-value" id="ver-backup-count">0</span><span data-i18n="versions_metric_backups">备份总数</span></div>
+                    </div>
+                </article>
+                <div class="workspace-status-rail" id="ver-status-rail" aria-live="polite"></div>
+                <div class="layout-2">
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="versions_select">选择记录</h3>
+                        </div>
+                        <div style="padding:0 0.8rem 0.8rem;display:grid;gap:10px">
+                            <label style="display:grid;gap:4px;font-size:0.74rem;color:var(--text-muted)">
+                                <span data-i18n="versions_type">类型</span>
+                                <select id="ver-type-select" class="glass-control">
+                                    <option value="brief" data-i18n="versions_type_brief">Recruitment brief</option>
+                                    <option value="briefing" data-i18n="versions_type_briefing">Opposition briefing</option>
+                                    <option value="dossier" data-i18n="versions_type_dossier">Recruitment decision dossier</option>
+                                    <option value="review" data-i18n="versions_type_review">Opposition post-match review</option>
+                                </select>
+                            </label>
+                            <label style="display:grid;gap:4px;font-size:0.74rem;color:var(--text-muted)">
+                                <span data-i18n="versions_record">记录</span>
+                                <select id="ver-record-select" class="glass-control"></select>
+                            </label>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                                <button class="text-button" id="ver-create" type="button" hidden>＋ <span data-i18n="versions_create">创建</span></button>
+                                <button class="text-button" id="ver-edit" type="button" hidden>✎ <span data-i18n="versions_edit">编辑</span></button>
+                                <span class="toolbar-status" id="ver-create-hint" aria-live="polite" style="font-size:0.72rem;color:var(--text-muted)"></span>
+                            </div>
+                        </div>
+                        <div class="panel-head" style="padding:0 0.8rem">
+                            <h3 data-i18n="versions_timeline">时间线</h3>
+                            <span class="status-pill status-medium" id="ver-timeline-pill">0</span>
+                        </div>
+                        <ul id="ver-timeline" class="wf-step-list" style="padding:0 0.8rem 0.8rem" aria-live="polite"></ul>
+                        <div style="padding:0 0.8rem 0.8rem;display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="text-button" id="ver-refresh" type="button">↻ <span data-i18n="versions_refresh">刷新</span></button>
+                            <button class="text-button" id="ver-load-backup" type="button" disabled>⬇ <span data-i18n="versions_load_backup">加载备份</span></button>
+                            <button class="text-button" id="ver-diff-backup" type="button" disabled>⇆ <span data-i18n="versions_diff_vs_current">与当前 diff</span></button>
+                            <button class="text-button" id="ver-restore-backup" type="button" disabled>⇧ <span data-i18n="versions_restore">恢复</span></button>
+                        </div>
+                    </article>
+                    <article class="liquid-panel table-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="versions_diff">字段级 diff</h3>
+                            <span class="status-pill status-high" id="ver-diff-pill">0</span>
+                        </div>
+                        <div id="ver-diff-output" style="padding:0 0.8rem 0.8rem;font-size:0.78rem;line-height:1.5" aria-live="polite"></div>
+                    </article>
+                </div>
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="versions_portable_pack">可移植离线包</h3>
+                    </div>
+                    <div style="padding:0 0.8rem 0.8rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                        <button class="text-button" id="ver-export-pack" type="button">⬇ <span data-i18n="versions_export_pack">导出 portable pack JSON</span></button>
+                        <button class="text-button" id="ver-import-pack" type="button">⬆ <span data-i18n="versions_import_pack">导入 portable pack JSON</span></button>
+                        <input id="ver-import-pack-input" type="file" accept="application/json,.json" style="display:none" />
+                        <span class="toolbar-status" id="ver-pack-status" aria-live="polite"></span>
+                    </div>
+                    <p class="feature-note" style="padding:0 0.8rem 0.8rem" data-i18n="versions_pack_note">便携包包含所有本地产物（recruitment briefs、opposition briefings），并附带每节的 sha256 哈希用于完整性校验。</p>
+                </article>
+                <dialog class="workspace-dialog" id="ver-create-dialog" aria-labelledby="ver-create-title">
+                    <div class="workspace-dialog-shell">
+                        <div class="workspace-dialog-head">
+                            <div>
+                                <p class="eyebrow" id="ver-create-kicker">Create</p>
+                                <h3 id="ver-create-title">New record</h3>
+                            </div>
+                            <button class="icon-button workspace-dialog-close" id="ver-create-close" type="button" aria-label="Close">×</button>
+                        </div>
+                        <form id="ver-create-form" autocomplete="off" novalidate>
+                            <div id="ver-create-fields" style="display:grid;gap:12px"></div>
+                            <p class="workspace-conflict-note" id="ver-create-note" data-i18n="versions_create_note">本地优先：新记录以 draft 状态写入本地存储；证据、对比、风险等子项可在创建后追加。</p>
+                            <div class="workspace-dialog-actions">
+                                <button class="text-button" id="ver-create-cancel" type="button" data-i18n="versions_create_cancel">取消</button>
+                                <button class="text-button" id="ver-create-submit" type="submit" data-i18n="versions_create_submit">创建</button>
+                            </div>
+                        </form>
+                    </div>
+                </dialog>
+                <dialog class="workspace-dialog" id="ver-edit-dialog" aria-labelledby="ver-edit-title">
+                    <div class="workspace-dialog-shell">
+                        <div class="workspace-dialog-head">
+                            <div>
+                                <p class="eyebrow" id="ver-edit-kicker">Edit</p>
+                                <h3 id="ver-edit-title">Edit record</h3>
+                            </div>
+                            <button class="icon-button workspace-dialog-close" id="ver-edit-close" type="button" aria-label="Close">×</button>
+                        </div>
+                        <form id="ver-edit-form" autocomplete="off" novalidate>
+                            <div id="ver-edit-fields" style="display:grid;gap:12px"></div>
+                            <p class="workspace-conflict-note" id="ver-edit-note" data-i18n="versions_edit_note">本地优先：编辑会写入本地存储并创建备份；evidence、comparisons、risks 等子项不在编辑范围内。</p>
+                            <p class="workspace-conflict-note" id="ver-edit-conflict" hidden style="color:var(--danger)"></p>
+                            <div class="workspace-dialog-actions">
+                                <button class="text-button" id="ver-edit-cancel" type="button" data-i18n="versions_edit_cancel">取消</button>
+                                <button class="text-button" id="ver-edit-submit" type="submit" data-i18n="versions_edit_submit">保存</button>
+                            </div>
+                        </form>
+                    </div>
+                </dialog>
             </section>
 
             <section class="view" id="view-players" aria-label="players">
@@ -602,15 +786,15 @@
                         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.4rem;margin-bottom:0.5rem">
                             <label style="font-size:0.7rem;display:flex;flex-direction:column;gap:0.2rem">
                                 <span data-i18n="value_bet_home_odds">主胜赔率</span>
-                                <input type="number" id="value-bet-home-odds" min="1" max="1000" step="0.01" value="2.00" style="font-size:0.8rem;padding:0.2rem 0.4rem" />
+                                <input type="number" id="value-bet-home-odds" min="1" max="1000" step="0.01" value="2.00" class="glass-control" style="font-size:0.8rem;height:30px" />
                             </label>
                             <label style="font-size:0.7rem;display:flex;flex-direction:column;gap:0.2rem">
                                 <span data-i18n="value_bet_draw_odds">平局赔率</span>
-                                <input type="number" id="value-bet-draw-odds" min="1" max="1000" step="0.01" value="3.50" style="font-size:0.8rem;padding:0.2rem 0.4rem" />
+                                <input type="number" id="value-bet-draw-odds" min="1" max="1000" step="0.01" value="3.50" class="glass-control" style="font-size:0.8rem;height:30px" />
                             </label>
                             <label style="font-size:0.7rem;display:flex;flex-direction:column;gap:0.2rem">
                                 <span data-i18n="value_bet_away_odds">客胜赔率</span>
-                                <input type="number" id="value-bet-away-odds" min="1" max="1000" step="0.01" value="3.00" style="font-size:0.8rem;padding:0.2rem 0.4rem" />
+                                <input type="number" id="value-bet-away-odds" min="1" max="1000" step="0.01" value="3.00" class="glass-control" style="font-size:0.8rem;height:30px" />
                             </label>
                         </div>
                         <div id="match-value-bet-result"></div>
@@ -965,6 +1149,154 @@
                 </article>
             </section>
 
+            <section class="view" id="view-league" aria-label="league">
+                <article class="liquid-panel feature-hero">
+                    <div class="hero-copy">
+                        <p class="eyebrow" data-i18n="league_kicker">联赛赛季分析</p>
+                        <h2 data-i18n="league_title">表单、赛程难度与赛季投影</h2>
+                        <p class="feature-note" data-i18n="league_note">基于 Football-Data 赛果的描述性叠加层：近 N 场表单、Bradey-Terry 赛程难度、蒙特卡洛赛季投影。不使用 Dixon-Coles 模型或赔率数据。</p>
+                    </div>
+                    <div class="feature-metric-strip" aria-label="League season summary">
+                        <div><span class="metric-value" id="league-form-teams-count">0</span><span data-i18n="league_metric_teams">球队数</span></div>
+                        <div><span class="metric-value" id="league-form-top-ppg">0.0</span><span data-i18n="league_metric_top_ppg">最高 PPG</span></div>
+                        <div><span class="metric-value" id="league-projection-title-prob">0%</span><span data-i18n="league_metric_title_prob">头名概率</span></div>
+                    </div>
+                </article>
+
+                <article class="liquid-panel compact-panel">
+                    <div class="panel-head">
+                        <h3 data-i18n="league_filter_title">联赛与赛季选择</h3>
+                    </div>
+                    <div style="display:flex;gap:var(--space);flex-wrap:wrap;align-items:flex-end;padding:var(--space)">
+                        <div style="display:flex;flex-direction:column;gap:0.25rem">
+                            <label for="league-season-filter" style="font-size:0.75rem;color:var(--text-muted)" data-i18n="league_filter_season">赛季</label>
+                            <select id="league-season-filter" class="filter-select" aria-label="Season filter">
+                                <option value="2425">2425</option>
+                                <option value="2526">2526</option>
+                                <option value="2324">2324</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:0.25rem">
+                            <label for="league-league-filter" style="font-size:0.75rem;color:var(--text-muted)" data-i18n="league_filter_league">联赛</label>
+                            <select id="league-league-filter" class="filter-select" aria-label="League filter">
+                                <option value="">ALL</option>
+                                <option value="Premier League">Premier League</option>
+                                <option value="La Liga">La Liga</option>
+                                <option value="Bundesliga">Bundesliga</option>
+                                <option value="Serie A">Serie A</option>
+                                <option value="Ligue 1">Ligue 1</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:0.25rem">
+                            <label for="league-last-n-filter" style="font-size:0.75rem;color:var(--text-muted)" data-i18n="league_filter_last_n">近 N 场</label>
+                            <select id="league-last-n-filter" class="filter-select" aria-label="Last N matches">
+                                <option value="6">6</option>
+                                <option value="10">10</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+                        <button id="league-refresh-btn" class="cta-button" type="button" data-i18n="league_refresh">刷新</button>
+                    </div>
+                </article>
+
+                <article class="liquid-panel table-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="league_form_title">近 N 场表单表</h3>
+                        <span class="status-pill status-medium" id="league-form-status">—</span>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="data-table" id="league-form-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th data-i18n="league_form_col_team">球队</th>
+                                    <th data-i18n="league_form_col_ppg">PPG</th>
+                                    <th data-i18n="league_form_col_rating">表单评分</th>
+                                    <th data-i18n="league_form_col_trend">趋势</th>
+                                    <th data-i18n="league_form_col_home">主场 PPG</th>
+                                    <th data-i18n="league_form_col_away">客场 PPG</th>
+                                    <th data-i18n="league_form_col_string">近 N 场</th>
+                                </tr>
+                            </thead>
+                            <tbody id="league-form-table-body">
+                                <tr><td colspan="8" style="text-align:center;color:var(--text-muted)" data-i18n="league_loading">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+
+                <article class="liquid-panel chart-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="league_form_heatmap_title">近 N 场表单热力图</h3>
+                        <span class="status-pill status-medium" id="league-form-heatmap-status">—</span>
+                    </div>
+                    <div id="league-form-heatmap" class="chart-box" style="height:520px"></div>
+                </article>
+
+                <article class="liquid-panel table-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="league_difficulty_title">赛程难度评估</h3>
+                        <div style="display:flex;gap:0.5rem;align-items:center">
+                            <input id="league-difficulty-team" type="text" placeholder="Arsenal / Liverpool / 留空看全部" style="font-size:0.8rem;padding:0.25rem 0.5rem;width:220px;border:1px solid var(--border-color);border-radius:var(--radius-xs);background:var(--surface);color:var(--text)" aria-label="Team filter" />
+                            <button id="league-difficulty-btn" class="cta-button" type="button" data-i18n="league_difficulty_btn">查询</button>
+                        </div>
+                    </div>
+                    <div id="league-difficulty-content" style="padding:var(--space)">
+                        <p style="color:var(--text-muted)" data-i18n="league_difficulty_placeholder">输入球队名查询最近 10 场赛程难度，留空查看全联赛。</p>
+                    </div>
+                </article>
+
+                <article class="liquid-panel chart-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="league_difficulty_heatmap_title">赛程难度热力图</h3>
+                        <span class="status-pill status-medium" id="league-difficulty-heatmap-status">—</span>
+                    </div>
+                    <div id="league-difficulty-heatmap" class="chart-box" style="height:520px"></div>
+                </article>
+
+                <article class="liquid-panel chart-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="league_difficulty_distribution_title">球队难度分布</h3>
+                        <span class="status-pill status-medium" id="league-difficulty-distribution-status">—</span>
+                    </div>
+                    <div id="league-difficulty-distribution" class="chart-box" style="height:420px"></div>
+                </article>
+
+                <article class="liquid-panel table-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="league_projection_title">赛季蒙特卡洛投影</h3>
+                        <div style="display:flex;gap:0.5rem;align-items:center">
+                            <label for="league-sim-count" style="font-size:0.75rem;color:var(--text-muted)" data-i18n="league_projection_sims">模拟次数</label>
+                            <select id="league-sim-count" class="filter-select" aria-label="Simulation count">
+                                <option value="500">500</option>
+                                <option value="1000" selected>1000</option>
+                                <option value="2000">2000</option>
+                            </select>
+                            <button id="league-projection-btn" class="cta-button" type="button" data-i18n="league_projection_btn">投影</button>
+                        </div>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="data-table" id="league-projection-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th data-i18n="league_proj_col_team">球队</th>
+                                    <th data-i18n="league_proj_col_points">平均积分</th>
+                                    <th data-i18n="league_proj_col_position">平均排名</th>
+                                    <th data-i18n="league_proj_col_title">夺冠概率</th>
+                                    <th data-i18n="league_proj_col_topn">前 4 概率</th>
+                                    <th data-i18n="league_proj_col_relegation">降级概率</th>
+                                </tr>
+                            </thead>
+                            <tbody id="league-projection-table-body">
+                                <tr><td colspan="7" style="text-align:center;color:var(--text-muted)" data-i18n="league_projection_placeholder">点击"投影"按钮运行模拟</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p style="padding:0 var(--space) var(--space);font-size:0.75rem;color:var(--text-muted)" id="league-projection-disclaimer"></p>
+                </article>
+            </section>
+
             <section class="view" id="view-scouting" aria-label="scouting">
                 <article class="liquid-panel feature-hero">
                     <div class="hero-copy">
@@ -994,6 +1326,12 @@
                     <button class="text-button" id="scout-export-csv" type="button">↧ <span data-i18n="export_csv">导出 CSV</span></button>
                     <button class="text-button" id="scout-export-decision-pack-json" type="button">▣ 导出候选决策包 JSON</button>
                     <button class="text-button" id="scout-export-decision-pack-csv" type="button">↧ 导出候选决策包 CSV</button>
+                    <button class="text-button" id="scout-import-decision-pack" type="button" data-i18n="shortlist_decision_pack_import">↥ 导入候选决策包</button>
+                    <input id="scout-decision-pack-file" type="file" accept="application/json,.json" hidden>
+                    <span class="toolbar-status" id="scout-decision-pack-import-status" aria-live="polite"></span>
+                    <button class="text-button" id="scout-preview-decision-pack" type="button" data-i18n="shortlist_decision_pack_preview">👁 预览决策包</button>
+                    <input id="scout-decision-pack-preview-file" type="file" accept="application/json,.json" hidden>
+                    <span class="toolbar-status" id="scout-decision-pack-preview-status" aria-live="polite"></span>
                     <button class="text-button" id="scout-shortlist-to-tactical" type="button">◇ 将短名单带到战术板</button>
                     <button class="text-button" id="scout-export-workspace" type="button">▣ <span data-i18n="scout_workspace_export">导出工作区</span></button>
                     <button class="text-button" id="scout-import-workspace" type="button">↥ <span data-i18n="scout_workspace_import">导入工作区</span></button>
@@ -1020,8 +1358,12 @@
                         <div class="panel-head" style="margin-top:1rem">
                             <h3>Shortlist</h3>
                             <span class="status-pill status-high" id="shortlist-count">0</span>
+                            <button id="shortlist-reset-ui-state" type="button" class="text-button" data-i18n-title="shortlist_reset_ui_state_title" title="Clear filters and compare selection" style="font-size:0.7rem;padding:0.15rem 0.4rem;margin-left:auto" data-i18n="shortlist_reset_ui_state">Reset UI state</button>
                         </div>
                         <div id="shortlist" class="watch-grid"></div>
+                        <div id="shortlist-compare-bar" style="padding:0.3rem 0"></div>
+                        <div id="shortlist-compare-result"></div>
+                        <div id="shortlist-provenance-log" style="padding:0.3rem 0"></div>
                         <div id="player-detail-notes" style="padding:0.4rem 0.8rem"></div>
                         <div id="player-tactical-role" style="padding:0.4rem 0.8rem"></div>
                     </article>
@@ -1106,6 +1448,112 @@
                         <button id="style-fit-btn" class="cta-button" type="button" data-i18n="style_fit_button">计算</button>
                     </div>
                     <div id="style-fit-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                </article>
+
+                <article class="liquid-panel compact-panel" style="margin-top:var(--space)">
+                    <div class="panel-head">
+                        <h3 data-i18n="cross_scouting_title">跨联赛球探分析</h3>
+                        <span id="cross-scouting-pill" class="status-pill status-medium">—</span>
+                    </div>
+                    <p class="feature-note" style="padding:0 var(--space)" data-i18n="cross_scouting_boundary">基于评分矩阵的描述性叠加：按位置深度对比、按缺口推荐候选、按风格相似度匹配。非转会建议。</p>
+
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:var(--space)">
+                        <div style="flex:1;min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_season">赛季</label>
+                            <input type="text" id="cross-scouting-season" class="filter-input" placeholder="e.g. 2526" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_min_minutes">最低分钟</label>
+                            <input type="number" id="cross-scouting-min-minutes" class="filter-input" value="500" min="0" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:80px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="risers_top_n">前 N</label>
+                            <input type="number" id="cross-scouting-top-n" class="filter-input" value="10" min="1" max="50" style="width:100%;margin-top:0.3rem">
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:0 var(--space) var(--space)">
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_team_a">球队 A</label>
+                            <input type="text" id="cross-scouting-team-a" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_team_b">球队 B</label>
+                            <input type="text" id="cross-scouting-team-b" class="filter-input" placeholder="e.g. Barcelona" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <button id="cross-scouting-depth-btn" class="cta-button" type="button" data-i18n="cross_scouting_depth_btn">对比深度</button>
+                    </div>
+                    <div id="cross-scouting-depth-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:0 var(--space) var(--space);border-top:1px solid var(--border)">
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_compare_team">球队</label>
+                            <input type="text" id="cross-scouting-targets-team" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <label class="glass-control" style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem">
+                            <input type="checkbox" id="cross-scouting-exclude-same-league" checked>
+                            <span data-i18n="cross_scouting_exclude_same_league">排除同联赛</span>
+                        </label>
+                        <button id="cross-scouting-targets-btn" class="cta-button" type="button" data-i18n="cross_scouting_targets_btn">推荐目标</button>
+                    </div>
+                    <div id="cross-scouting-targets-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:0 var(--space) var(--space);border-top:1px solid var(--border)">
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_compare_team">球队</label>
+                            <input type="text" id="cross-scouting-style-team" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div style="flex:1;min-width:100px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="style_atlas_team">位置组</label>
+                            <select id="cross-scouting-style-pos" class="filter-input" style="width:100%;margin-top:0.3rem">
+                                <option value="GK">GK</option>
+                                <option value="CB">CB</option>
+                                <option value="FB">FB</option>
+                                <option value="DM">DM</option>
+                                <option value="CM" selected>CM</option>
+                                <option value="AM">AM</option>
+                                <option value="W">W</option>
+                                <option value="ST">ST</option>
+                            </select>
+                        </div>
+                        <label class="glass-control" style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem">
+                            <input type="checkbox" id="cross-scouting-style-exclude" checked>
+                            <span data-i18n="cross_scouting_exclude_same_league">排除同联赛</span>
+                        </label>
+                        <label class="glass-control" style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem">
+                            <input type="checkbox" id="cross-scouting-style-weighted">
+                            <span data-i18n="cross_scouting_style_weighted">位置加权</span>
+                        </label>
+                        <button id="cross-scouting-style-btn" class="cta-button" type="button" data-i18n="cross_scouting_style_btn">风格匹配</button>
+                    </div>
+                    <div id="cross-scouting-style-result" style="display:none;padding:0 var(--space) var(--space)"></div>
+                    <div id="cross-scouting-compare-tray" style="display:none;border-top:1px solid var(--border)"></div>
+
+                    <div style="display:flex;gap:var(--space);align-items:flex-end;flex-wrap:wrap;padding:0 var(--space) var(--space);border-top:1px solid var(--border)">
+                        <div style="flex:2;min-width:160px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="teams_compare_team">球队</label>
+                            <input type="text" id="cross-scouting-dashboard-team" class="filter-input" placeholder="e.g. Arsenal" style="width:100%;margin-top:0.3rem">
+                        </div>
+                        <div class="glass-control" style="min-width:120px">
+                            <label style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em" data-i18n="cross_scouting_dashboard_max_positions">最大位置数</label>
+                            <select id="cross-scouting-dashboard-max-positions" class="filter-input" style="width:100%;margin-top:0.3rem">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3" selected>3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                            </select>
+                        </div>
+                        <label class="glass-control" style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem;padding-bottom:0.4rem">
+                            <input type="checkbox" id="cross-scouting-dashboard-weighted">
+                            <span data-i18n="cross_scouting_dashboard_weighted">位置加权</span>
+                        </label>
+                        <button id="cross-scouting-dashboard-btn" class="cta-button" type="button" data-i18n="cross_scouting_dashboard_btn">仪表盘</button>
+                    </div>
+                    <div id="cross-scouting-dashboard-result" style="display:none;padding:0 var(--space) var(--space)"></div>
                 </article>
 
                 <dialog class="workspace-dialog" id="scout-workspace-dialog" aria-labelledby="scout-workspace-dialog-title">
@@ -1288,6 +1736,10 @@
 
             <!-- Tactical Board -->
             <section class="view" id="view-tactical" aria-label="tactical">
+                <div class="tactical-desktop-notice" id="tactical-desktop-notice" hidden>
+                    <span class="wf-step-marker wf-marker-blocker">!</span>
+                    <span data-i18n="tactical_desktop_only">战术编辑为桌面限定：屏幕窄于 760px 时仅可阅读，编辑控件已禁用。</span>
+                </div>
                 <div class="layout-2">
                     <article class="liquid-panel chart-panel">
                         <div class="panel-head">
@@ -1436,10 +1888,10 @@
                         </div>
                         <div id="tactical-a11y-live" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
                         <div id="tactical-export-preview" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);align-items:center;justify-content:center">
-                            <div style="background:var(--bg,#1a1a2e);border:1px solid var(--border,#333);border-radius:8px;padding:1.5rem;max-width:500px;width:90%">
+                            <div style="background:var(--bg,#1a1a2e);border:1px solid var(--border,#333);border-radius:var(--radius-sm);padding:1.5rem;max-width:500px;width:90%">
                                 <h3 style="margin:0 0 0.5rem">Export Preview</h3>
                                 <p style="font-size:0.82rem;color:var(--text-muted);margin:0 0 0.5rem">The following attribution will be included in the export:</p>
-                                <pre id="tactical-export-attribution" style="background:var(--bg-alt,#111);padding:0.5rem;border-radius:4px;font-size:0.78rem;white-space:pre-wrap;word-break:break-all;color:var(--text,#ccc);max-height:200px;overflow-y:auto"></pre>
+                                <pre id="tactical-export-attribution" style="background:var(--bg-alt,#111);padding:0.5rem;border-radius:var(--radius-xs);font-size:0.78rem;white-space:pre-wrap;word-break:break-all;color:var(--text,#ccc);max-height:200px;overflow-y:auto"></pre>
                                 <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
                                     <button class="text-button" id="tactical-export-confirm" type="button" aria-label="Confirm export">Confirm Export</button>
                                     <button class="text-button" id="tactical-export-cancel" type="button" aria-label="Cancel export">Cancel</button>
@@ -1484,7 +1936,7 @@
                             <button class="text-button" id="tactical-save-frame" type="button" aria-label="Save current frame state">保存当前帧</button>
                         </div>
                         <div id="tactical-frame-list" class="rank-list" style="margin-bottom:0.5rem"></div>
-                        <div id="tactical-decision-pack" class="signal-list" hidden style="white-space:pre-line;font-size:0.78rem;line-height:1.5;margin:0.5rem 0;padding:0.65rem;border:1px solid var(--border);border-radius:8px;color:var(--text-muted)"></div>
+                        <div id="tactical-decision-pack" class="signal-list" hidden style="white-space:pre-line;font-size:0.78rem;line-height:1.5;margin:0.5rem 0;padding:0.65rem;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted)"></div>
                         <div class="panel-head" style="margin-top:0.5rem">
                             <h3>Coaching Notes</h3>
                         </div>
@@ -1565,6 +2017,21 @@
                         </table>
                     </div>
                 </article>
+
+                <article class="liquid-panel compact" style="margin-top:1rem">
+                    <div class="panel-head">
+                        <h3 id="wc-form-trend-title">Team Form Trend</h3>
+                        <div style="display:flex;gap:0.5rem;align-items:center">
+                            <select id="wc-form-trend-team" class="filter-select" style="min-width:160px;font-size:0.75rem"></select>
+                            <button class="text-button" id="wc-form-trend-btn" type="button" style="font-size:0.75rem">Load</button>
+                        </div>
+                    </div>
+                    <div id="wc-form-trend-panel">
+                        <p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">
+                            Select a team and click "Load" to view recent form trend.
+                        </p>
+                    </div>
+                </article>
             </section>
 
             <!-- World Cup Squads -->
@@ -1600,11 +2067,19 @@
                                         <th data-i18n="wc_league">联赛</th>
                                         <th data-i18n="th_rating">评分</th>
                                         <th data-i18n="th_conf">置信度</th>
+                                        <th data-i18n="wc_scouting_need_col">球探需求</th>
                                     </tr>
                                 </thead>
                                 <tbody id="wc-squad-table"></tbody>
                             </table>
                         </div>
+                    </article>
+                    <article class="liquid-panel chart-panel">
+                        <div class="panel-head">
+                            <h3 data-i18n="wc_scouting_need_title">球探需求概览</h3>
+                            <span class="status-pill status-medium" id="wc-scouting-needs-status">—</span>
+                        </div>
+                        <div id="wc-scouting-needs-panel" class="chart-box" style="height:auto;min-height:120px"></div>
                     </article>
                     <article class="liquid-panel chart-panel">
                         <div class="panel-head">
@@ -1689,6 +2164,7 @@
                     </article>
                 </div>
                 <div id="wc-match-prediction-panel" style="margin-top:1rem"></div>
+                <div id="wc-match-spotlight-panel" style="margin-top:1rem"></div>
             </section>
 
             <!-- World Cup Probability -->
@@ -1843,7 +2319,7 @@
                         <h3>Repository</h3>
                     </div>
                     <div style="padding:0.8rem 1rem;font-size:0.85rem;color:var(--text-muted)">
-                        <p><a id="license-repo-url" href="https://github.com/Mentaturan/ScoutFootball_for_World_Cup" target="_blank" rel="noopener" style="color:var(--accent)">github.com/Mentaturan/ScoutFootball_for_World_Cup</a></p>
+                        <p><a id="license-repo-url" href="https://github.com/Mentat-Uran/ScoutFootball_for_World_Cup" target="_blank" rel="noopener" style="color:var(--accent)">github.com/Mentat-Uran/ScoutFootball_for_World_Cup</a></p>
                         <p style="margin-top:0.4rem" id="license-last-updated"></p>
                     </div>
                 </article>
@@ -2331,7 +2807,7 @@
                             <span class="kicker" data-i18n="team_profile_desc">单队预测准确率/校准/超额表现/常见比分/最佳最差预测</span>
                         </div>
                         <div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">
-                            <input id="team-profile-input" type="text" placeholder="Team name" style="font-size:0.75rem;padding:0.25rem 0.5rem;width:160px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:4px;color:var(--text-base)" />
+                            <input id="team-profile-input" type="text" placeholder="Team name" style="font-size:0.75rem;padding:0.25rem 0.5rem;width:160px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:var(--radius-xs);color:var(--text-base)" />
                             <button class="text-button" id="btn-team-profile" type="button" style="font-size:0.78rem;padding:0.3rem 0.6rem" data-i18n="team_profile_fetch">加载</button>
                         </div>
                     </div>
@@ -2346,7 +2822,7 @@
                         <h2>用户说明书</h2>
                         <a class="text-button" href="user-guide.html" target="_blank" rel="noopener" style="font-size:0.82rem">在新标签页打开 ↗</a>
                     </div>
-                    <iframe src="user-guide.html" style="width:100%;height:calc(100dvh - 200px);border:none;border-radius:8px;background:var(--bg-base)" title="ScoutFootball User Guide"></iframe>
+                    <iframe src="user-guide.html" style="width:100%;height:calc(100dvh - 200px);border:none;border-radius:var(--radius-sm);background:var(--bg-base)" title="ScoutFootball User Guide"></iframe>
                 </article>
             </section>
         </main>

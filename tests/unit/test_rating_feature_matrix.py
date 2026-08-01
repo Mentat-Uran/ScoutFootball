@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from scoutfootball.features.manifest import SourceLineageEntry
 from scoutfootball.features.rating_matrix import (
     FIELD_GROUPS,
     build_rating_feature_matrix,
@@ -177,6 +178,7 @@ class TestBuildRatingFeatureMatrix:
             "passes": [30, 15, 50],
             "xT_added": [pd.NA, pd.NA, pd.NA],
             "source_name": ["fbref", "fbref", "statsbomb_open"],
+            "data_granularity": ["season_proxy", "season_proxy", "match"],
         })
 
     def _sample_player_rolling(self) -> pd.DataFrame:
@@ -230,6 +232,150 @@ class TestBuildRatingFeatureMatrix:
         assert "_input_hash" in matrix.attrs
         assert len(matrix.attrs["_input_hash"]) > 0
 
+    def test_matrix_carries_grain_and_source_columns(self) -> None:
+        """The feature matrix must carry data_granularity, source_name,
+        data_granularity_set and source_name_set columns forward from
+        player_match so the downstream grain audit (PRS-1 R-006/R-007)
+        can classify missingness without guessing. This is the
+        event-level source join: grain/source provenance is no longer
+        dropped at the player_match → rating_feature_matrix boundary.
+        """
+        pm = self._sample_player_match()
+        pr = self._sample_player_rolling()
+        matrix = build_rating_feature_matrix(pm, pr)
+
+        for col in (
+            "data_granularity",
+            "source_name",
+            "data_granularity_set",
+            "source_name_set",
+        ):
+            assert col in matrix.columns, f"Missing grain/source column: {col}"
+
+    def test_grain_set_reflects_single_grain_per_player_season(self) -> None:
+        """When a player-season has exactly one grain and one source
+        (the current real-data case for all 26,678 player-seasons), the
+        _set columns equal the first-aggregated value. This keeps the
+        simple case simple while the _set columns stay available for
+        future cross-grain joins.
+        """
+        pm = self._sample_player_match()
+        pr = self._sample_player_rolling()
+        matrix = build_rating_feature_matrix(pm, pr)
+
+        # p1 has 2 fbref season_proxy rows → aggregated to 1 row.
+        p1 = matrix[matrix["player_id"] == "p1"].iloc[0]
+        assert p1["data_granularity"] == "season_proxy"
+        assert p1["source_name"] == "fbref"
+        assert p1["data_granularity_set"] == "season_proxy"
+        assert p1["source_name_set"] == "fbref"
+
+        # p2 has 1 statsbomb_open match row.
+        p2 = matrix[matrix["player_id"] == "p2"].iloc[0]
+        assert p2["data_granularity"] == "match"
+        assert p2["source_name"] == "statsbomb_open"
+        assert p2["data_granularity_set"] == "match"
+        assert p2["source_name_set"] == "statsbomb_open"
+
+    def test_grain_set_aggregates_cross_grain_player_season(self) -> None:
+        """When a player-season spans multiple grains (e.g. a future
+        join that produces both match-level statsbomb and season-proxy
+        understat rows for the same player-season), the _set column
+        surfaces both grains sorted and pipe-separated while the
+        first-aggregated column only shows one. This is the defensive
+        case: current real data does not trigger it, but the schema
+        must handle it so a future cross-source join does not silently
+        collapse grain information.
+        """
+        pm = pd.DataFrame({
+            "player_id": ["p1", "p1"],
+            "player_name": ["Alice", "Alice"],
+            "team_id": ["t1", "t2"],
+            "team_name": ["Team A", "Team B"],
+            "season_id": ["2024", "2024"],
+            "competition_id": ["PL", "PL"],
+            "position_group": ["FW", "FW"],
+            "match_date": pd.to_datetime(["2024-01-01", "2024-02-01"]),
+            "match_id": ["m1", "m2"],
+            "minutes_played": [90, 90],
+            "goals": [1, 0],
+            "assists": [0, 1],
+            "shots": [3, 2],
+            "shots_on_target": [1, 1],
+            "npxg": [0.5, 0.2],
+            "xa": [0.2, 0.3],
+            "starts": [1, 1],
+            "available_flag": [1, 1],
+            "tackles": [0, 2],
+            "passes": [30, 25],
+            "xT_added": [pd.NA, pd.NA],
+            "source_name": ["statsbomb_open", "understat"],
+            "data_granularity": ["match", "season_proxy"],
+        })
+        pr = pd.DataFrame({
+            "player_id": ["p1"],
+            "season_id": ["2024"],
+            "goals_2": [1],
+        })
+        matrix = build_rating_feature_matrix(pm, pr)
+
+        assert len(matrix) == 1
+        row = matrix.iloc[0]
+        # first-aggregated columns show one value (the first row's).
+        assert row["data_granularity"] in ("match", "season_proxy")
+        assert row["source_name"] in ("statsbomb_open", "understat")
+        # _set columns surface both values, sorted and pipe-separated.
+        assert row["data_granularity_set"] == "match|season_proxy"
+        assert row["source_name_set"] == "statsbomb_open|understat"
+
+    def test_missing_grain_columns_produce_empty_set(self) -> None:
+        """When player_match has no data_granularity/source_name columns
+        (e.g. a legacy or test fixture), the matrix still has the _set
+        columns as empty strings so downstream consumers do not see NaN
+        or KeyError. The first-aggregated columns are absent in this
+        case because there is nothing to first-aggregate.
+        """
+        pm = pd.DataFrame({
+            "player_id": ["p1"],
+            "player_name": ["Alice"],
+            "team_id": ["t1"],
+            "team_name": ["Team A"],
+            "season_id": ["2024"],
+            "competition_id": ["PL"],
+            "position_group": ["FW"],
+            "match_date": pd.to_datetime(["2024-01-01"]),
+            "match_id": ["m1"],
+            "minutes_played": [90],
+            "goals": [1],
+            "assists": [0],
+            "shots": [3],
+            "shots_on_target": [1],
+            "npxg": [0.5],
+            "xa": [0.2],
+            "starts": [1],
+            "available_flag": [1],
+            "tackles": [0],
+            "passes": [30],
+            "xT_added": [pd.NA],
+        })
+        pr = pd.DataFrame({
+            "player_id": ["p1"],
+            "season_id": ["2024"],
+            "goals_2": [1],
+        })
+        matrix = build_rating_feature_matrix(pm, pr)
+
+        # _set columns always exist and are empty strings when the
+        # upstream columns are absent.
+        assert "data_granularity_set" in matrix.columns
+        assert "source_name_set" in matrix.columns
+        assert matrix["data_granularity_set"].iloc[0] == ""
+        assert matrix["source_name_set"].iloc[0] == ""
+        # The first-aggregated columns are absent because there was
+        # nothing to aggregate.
+        assert "data_granularity" not in matrix.columns
+        assert "source_name" not in matrix.columns
+
 
 # ---------------------------------------------------------------------------
 # write_feature_manifest
@@ -238,7 +384,15 @@ class TestBuildRatingFeatureMatrix:
 
 class TestWriteFeatureManifest:
     def test_manifest_has_required_fields(self, tmp_path: Path) -> None:
-        """Manifest JSON should contain total_rows, columns, input_hash, timestamp."""
+        """Manifest JSON should contain the new-schema fields:
+        artifact, schema_version, total_rows, column_count, columns,
+        input_hash, source_lineage, timestamp.
+
+        Upgraded from legacy schema (which only had total_rows/columns/
+        input_hash/timestamp) so the same validate_manifest_exists
+        check works uniformly across all three gold feature_store
+        manifests.
+        """
         matrix = pd.DataFrame({
             "player_id": ["p1", "p2"],
             "goals": [5, 3],
@@ -257,12 +411,18 @@ class TestWriteFeatureManifest:
         with open(manifest_path) as f:
             manifest = json.load(f)
 
+        # Aligned fields (present in both legacy and new schema).
         assert "total_rows" in manifest
         assert manifest["total_rows"] == 2
         assert "columns" in manifest
         assert "input_hash" in manifest
         assert manifest["input_hash"] == "abc123"
         assert "timestamp" in manifest
+        # New-schema fields added by build_manifest_payload.
+        assert manifest["artifact"] == "rating_feature_matrix"
+        assert manifest["schema_version"] == "1.0"
+        assert manifest["column_count"] == 4
+        assert manifest["source_lineage"] == []
 
     def test_manifest_columns_have_metadata(self, tmp_path: Path) -> None:
         """Each column entry should have name, dtype, source, missing_rate."""
@@ -303,6 +463,78 @@ class TestWriteFeatureManifest:
 
         goals_info = next(c for c in manifest["columns"] if c["name"] == "goals")
         assert goals_info["missing_rate"] == 0.5
+
+    def test_explicit_source_lineage_is_written(self, tmp_path: Path) -> None:
+        """When source_lineage is passed explicitly, the manifest
+        records it. This is how pipeline.py records player_match and
+        player_rolling as the direct upstream inputs of
+        rating_feature_matrix, closing the provenance chain
+        (rating_matrix → player_match → raw statsbomb/fbref/understat).
+        """
+        matrix = pd.DataFrame({"player_id": ["p1"], "goals": [1]})
+        output_path = tmp_path / "rating_feature_matrix.parquet"
+        matrix.to_parquet(output_path, index=False)
+        lineage = [
+            SourceLineageEntry(
+                name="player_match",
+                relative_path="gold/feature_store/player_match.parquet",
+                rows_read=100,
+                input_hash="abc123",
+            ),
+            SourceLineageEntry(
+                name="player_rolling",
+                relative_path="gold/feature_store/player_rolling.parquet",
+                rows_read=100,
+                input_hash="def456",
+            ),
+        ]
+        write_feature_manifest(matrix, output_path, source_lineage=lineage)
+
+        manifest_path = tmp_path / "rating_feature_matrix_manifest.json"
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        assert len(manifest["source_lineage"]) == 2
+        assert manifest["source_lineage"][0]["name"] == "player_match"
+        assert manifest["source_lineage"][1]["name"] == "player_rolling"
+
+    def test_source_lineage_reads_from_attrs_when_not_passed(
+        self, tmp_path: Path
+    ) -> None:
+        """When source_lineage is not passed, it is read from
+        matrix.attrs['_source_lineage'], matching the behavior of
+        write_team_match_manifest and write_player_match_manifest.
+
+        Mirrors pipeline flow where attrs are popped before to_parquet
+        (to avoid pandas JSON-serialization of SourceLineageEntry
+        dataclasses) and then passed explicitly. The attrs fallback
+        keeps the function usable by callers that don't pop attrs but
+        also don't call to_parquet with attrs populated.
+        """
+        from scoutfootball.features.manifest import extract_lineage_attrs
+
+        matrix = pd.DataFrame({"player_id": ["p1"], "goals": [1]})
+        matrix.attrs["_source_lineage"] = [
+            SourceLineageEntry(
+                name="player_match",
+                relative_path="gold/feature_store/player_match.parquet",
+                rows_read=50,
+                input_hash="attr-hash",
+            )
+        ]
+        output_path = tmp_path / "rating_feature_matrix.parquet"
+        # Pop attrs before to_parquet to avoid the JSON-serialization
+        # TypeError that the pipeline also avoids via extract_lineage_attrs.
+        lineage, _ = extract_lineage_attrs(matrix)
+        matrix.to_parquet(output_path, index=False)
+        write_feature_manifest(matrix, output_path, source_lineage=lineage)
+
+        manifest_path = tmp_path / "rating_feature_matrix_manifest.json"
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        assert len(manifest["source_lineage"]) == 1
+        assert manifest["source_lineage"][0]["name"] == "player_match"
 
 
 # ---------------------------------------------------------------------------

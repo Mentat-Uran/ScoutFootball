@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
+
+from scoutfootball.features.manifest import (
+    SourceLineageEntry,
+    build_manifest_payload,
+    compute_dataframe_hash,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +66,56 @@ RATING_CATEGORY_COLUMNS: list[str] = [
     "competition_id",
     "season_id",
 ]
+
+# Column source categories for rating_feature_matrix_manifest.json.
+# Mirrors the source-category approach in features.manifest for
+# team_match/player_match, so all three gold feature_store manifests
+# share a consistent column-source vocabulary. Columns not in this map
+# default to "derived" inside build_manifest_payload.
+RATING_MATRIX_COLUMN_SOURCES: dict[str, str] = {
+    # Identifiers and temporal keys.
+    "player_id": "identifier",
+    "season_id": "temporal",
+    "competition_id": "category",
+    # Player-profile categories.
+    "position_group": "category",
+    # Core match metrics (player_stats).
+    "goals": "metric",
+    "assists": "metric",
+    "shots": "metric",
+    "shots_on_target": "metric",
+    "npxg": "metric",
+    "xa": "metric",
+    "minutes_played": "metric",
+    "starts": "metric",
+    "available_flag": "flag",
+    # Defensive and possession metrics (FBref misc).
+    "tackles": "metric",
+    "passes": "metric",
+    "tackles_won": "metric",
+    "interceptions": "metric",
+    "fouls_committed": "metric",
+    "fouls_drawn": "metric",
+    "crosses": "metric",
+    "own_goals": "metric",
+    # Action-value metrics (xT/VAEP).
+    "xT_added": "metric",
+    "xt_total": "metric",
+    "xt_per_90": "metric",
+    "vaep_total": "metric",
+    "vaep_per_90": "metric",
+    # Grain/source metadata carried forward from player_match (PRS-1
+    # R-006/R-007). These are meta columns, not metrics: they describe
+    # the row's evidence grain and source provenance so downstream grain
+    # audit can classify missingness (NOT_RECORDED vs NOT_APPLICABLE vs
+    # ACTUAL_ZERO) without guessing from the field values alone.
+    "data_granularity": "meta",
+    "source_name": "meta",
+    "data_granularity_set": "meta",
+    "source_name_set": "meta",
+    # Missing-field and source-coverage flags written by the rating
+    # matrix builder itself (not read from any external source).
+}
 
 # Identifier columns for aggregation to player-season level.
 RATING_ID_COLUMNS: list[str] = [
@@ -297,12 +351,51 @@ def build_rating_feature_matrix(
     for col in first_cols:
         agg_dict[col] = "first"
 
+    # Carry grain/source columns forward from player_match so the feature
+    # matrix exposes per-row grain information to downstream grain audit
+    # (PRS-1 R-006/R-007). Use "first" aggregation matching player_name/
+    # team_name semantics; the _set columns below record the full set of
+    # grains/sources for the player-season so a future cross-grain row
+    # (e.g. statsbomb match-level + understat season-proxy for the same
+    # player-season) is visible rather than silently collapsed.
+    for meta_col in ("data_granularity", "source_name"):
+        if meta_col in pm.columns:
+            agg_dict[meta_col] = "first"
+
     # Missing flags: any True means the group was missing for at least one match
     missing_flag_cols = [c for c in pm.columns if c.endswith("_missing")]
     for col in missing_flag_cols:
         agg_dict[col] = "max"  # True > False, so max = any True
 
     matrix = pm.groupby(["player_id", "season_id"], as_index=False).agg(agg_dict)
+
+    # Record the full set of grains/sources for each player-season. Current
+    # data has exactly 1 grain and 1 source per player-season, but this is
+    # defensive: if a future cross-grain/source join produces a player-season
+    # with mixed grains, the _set column surfaces that while "first" only
+    # shows one. Empty string when the column is absent or all values are
+    # NaN so downstream string consumers do not see NaN.
+    if "data_granularity" in pm.columns:
+        grain_set = (
+            pm.groupby(["player_id", "season_id"])["data_granularity"]
+            .apply(lambda s: "|".join(sorted(set(str(v) for v in s.dropna()))))
+            .reset_index(name="data_granularity_set")
+        )
+        matrix = matrix.merge(grain_set, on=["player_id", "season_id"], how="left")
+        matrix["data_granularity_set"] = matrix["data_granularity_set"].fillna("")
+    else:
+        matrix["data_granularity_set"] = ""
+
+    if "source_name" in pm.columns:
+        source_set = (
+            pm.groupby(["player_id", "season_id"])["source_name"]
+            .apply(lambda s: "|".join(sorted(set(str(v) for v in s.dropna()))))
+            .reset_index(name="source_name_set")
+        )
+        matrix = matrix.merge(source_set, on=["player_id", "season_id"], how="left")
+        matrix["source_name_set"] = matrix["source_name_set"].fillna("")
+    else:
+        matrix["source_name_set"] = ""
 
     # --- Merge FBref misc defensive stats ---
     matrix = _merge_fbref_misc_defense(matrix)
@@ -355,7 +448,7 @@ def build_rating_feature_matrix(
         matrix["unknown_source_covered"] = True
 
     # --- Add input file hash ---
-    matrix.attrs["_input_hash"] = _compute_dataframe_hash(player_match, player_rolling)
+    matrix.attrs["_input_hash"] = compute_dataframe_hash(player_match, player_rolling)
 
     # --- Add has_expected_metrics and has_ball_value_data if present ---
     for flag_col in ("has_expected_metrics", "has_ball_value_data"):
@@ -369,11 +462,21 @@ def build_rating_feature_matrix(
 def write_feature_manifest(
     matrix: pd.DataFrame,
     output_path: Path,
+    *,
+    source_lineage: list[SourceLineageEntry] | None = None,
+    input_hash: str | None = None,
 ) -> None:
     """Write a JSON manifest alongside the rating feature matrix parquet.
 
-    The manifest contains column metadata, row count, input hashes, and
-    timestamp for reproducibility and audit purposes.
+    The manifest aligns with the new schema used by
+    ``features.manifest.write_team_match_manifest`` and
+    ``write_player_match_manifest``: ``artifact``, ``schema_version``,
+    ``total_rows``, ``column_count``, ``columns``, ``input_hash``,
+    ``source_lineage``, ``timestamp``. Legacy manifests written by
+    previous versions of this function (which lacked ``artifact``,
+    ``schema_version``, ``column_count`` and ``source_lineage``) are
+    forward-compatible — consumers that only read ``total_rows`` /
+    ``columns`` / ``input_hash`` / ``timestamp`` continue to work.
 
     Parameters
     ----------
@@ -382,42 +485,42 @@ def write_feature_manifest(
     output_path : Path
         Path where the parquet file was written. The manifest will be
         written as ``{stem}_manifest.json`` in the same directory.
+    source_lineage:
+        Per-input-file lineage entries. If None, reads from
+        ``matrix.attrs["_source_lineage"]`` (matching
+        ``write_team_match_manifest`` behavior). Pass explicitly when
+        the caller has popped attrs before ``to_parquet`` to avoid
+        pandas JSON-serialization of ``SourceLineageEntry`` dataclasses.
+    input_hash:
+        Combined input hash. If None, reads from
+        ``matrix.attrs["_input_hash"]``; falls back to
+        ``compute_dataframe_hash(matrix)`` when absent.
     """
-    manifest_path = output_path.parent / f"{output_path.stem}_manifest.json"
-
-    columns_info = []
+    # Per-column source category. Precedence (matching the legacy
+    # behavior callers may rely on): explicit suffix markers first, then
+    # the RATING_MATRIX_COLUMN_SOURCES map, then fallback to "derived".
+    column_sources: dict[str, str] = dict(RATING_MATRIX_COLUMN_SOURCES)
     for col in matrix.columns:
-        dtype_str = str(matrix[col].dtype)
-        missing_rate = float(matrix[col].isna().mean()) if len(matrix) > 0 else 0.0
-
-        # Determine source category
         if col.endswith("_missing"):
-            source = "missing_marker"
+            column_sources[col] = "missing_marker"
         elif col.endswith("_source_covered"):
-            source = "source_coverage"
-        elif col in RATING_NUMERIC_COLUMNS:
-            source = "player_stats"
-        elif col in RATING_CATEGORY_COLUMNS:
-            source = "category"
-        else:
-            source = "derived"
+            column_sources[col] = "source_coverage"
 
-        columns_info.append({
-            "name": col,
-            "dtype": dtype_str,
-            "source": source,
-            "missing_rate": round(missing_rate, 4),
-        })
+    if source_lineage is None:
+        source_lineage = matrix.attrs.get("_source_lineage", []) or []
+    if input_hash is None:
+        input_hash = matrix.attrs.get("_input_hash")
 
-    manifest = {
-        "total_rows": len(matrix),
-        "columns": columns_info,
-        "input_hash": matrix.attrs.get("_input_hash", "unknown"),
-        "timestamp": datetime.now(tz=UTC).isoformat(),
-    }
-
+    payload = build_manifest_payload(
+        matrix,
+        artifact_name="rating_feature_matrix",
+        column_sources=column_sources,
+        source_lineage=source_lineage,
+        input_hash=input_hash,
+    )
+    manifest_path = output_path.parent / f"{output_path.stem}_manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
+        json.dump(payload, f, indent=2, ensure_ascii=False)
 
     logger.info("Feature manifest written to %s", manifest_path)
 
@@ -612,8 +715,16 @@ def _merge_xt_vaep_data(matrix: pd.DataFrame) -> pd.DataFrame:
                     norm = normalize_person_name(str(row["player_name"]))
                     if norm and pid not in sb_id_to_norm_name:
                         sb_id_to_norm_name[pid] = norm
-        except Exception:
-            pass
+        except Exception as exc:
+            # xT name-bridge failure degrades VAEP player matching to
+            # raw player_id (no normalized names), which silently drops
+            # VAEP rows for players whose IDs don't match. Log so the
+            # degradation is visible.
+            logger.warning(
+                "Failed to build xT name bridge for VAEP merge: %s. "
+                "VAEP matching will fall back to raw player_id.",
+                exc,
+            )
 
     if vaep_path.exists():
         try:
@@ -671,19 +782,3 @@ def _merge_xt_vaep_data(matrix: pd.DataFrame) -> pd.DataFrame:
     )
 
     return matrix
-
-
-def _compute_dataframe_hash(*dfs: pd.DataFrame) -> str:
-    """Compute a SHA256 hash of DataFrame contents for reproducibility."""
-    hasher = hashlib.sha256()
-    for df in dfs:
-        if df.empty:
-            continue
-        # Use parquet bytes for stable hashing
-        try:
-            hasher.update(df.to_parquet(index=False))
-        except Exception:
-            # Fallback: hash column names and row count
-            hasher.update(",".join(df.columns).encode())
-            hasher.update(str(len(df)).encode())
-    return hasher.hexdigest()[:16]

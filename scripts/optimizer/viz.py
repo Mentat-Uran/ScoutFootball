@@ -576,7 +576,10 @@ class LiveTrainingViz:
         progress = min(step / max(total, 1), 1.0)
         bar_len = 30
         filled = int(bar_len * progress)
-        bar = "█" * filled + "░" * (bar_len - filled)
+        # Keep no-viz optimizer runs readable on Windows consoles using GBK.
+        # The shaded Unicode glyphs previously raised UnicodeEncodeError before
+        # the candidate metadata could be written.
+        bar = "#" * filled + "-" * (bar_len - filled)
         best_sp = max(s.spearman for s in self.history) if self.history else 0
         print(
             f"\r  [{bar}] {progress*100:5.1f}% | "
@@ -695,7 +698,7 @@ class ConsoleViz:
             progress = min(step / max(total, 1), 1.0)
             bar_len = 40
             filled = int(bar_len * progress)
-            bar = "█" * filled + "░" * (bar_len - filled)
+            bar = "#" * filled + "-" * (bar_len - filled)
             best_sp = max(s.spearman for s in self.history)
             print(
                 f"\r  [{bar}] {progress*100:5.1f}% | "

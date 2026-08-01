@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -108,6 +109,338 @@ def validate_no_null_keys(
     return ValidationCheckResult(name, True, "No null keys")
 
 
+def validate_no_null_values(
+    relative_path: str,
+    value_columns: tuple[str, ...],
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    """Validate that value columns contain no null values.
+
+    Distinct from ``validate_no_null_keys``: key columns identify rows and
+    must never be null, while value columns carry measurements that may
+    legitimately be NaN in some datasets (e.g. xg for matches without
+    shots). This check is for value columns where NaN indicates data
+    corruption rather than a meaningful missing measurement — for example
+    ``goals_for``/``goals_against`` in ``team_match.parquet``, where NaN
+    silently corrupts Dixon-Coles fitting (see WORKFLOW_LOG.md reference
+    workflow 3).
+    """
+    resolved = (settings or PlatformSettings.from_root()).data_root / relative_path
+    name = f"no_null_values:{relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"File missing: {resolved}")
+    df = pd.read_parquet(resolved)
+    missing_cols = [c for c in value_columns if c not in df.columns]
+    if missing_cols:
+        return ValidationCheckResult(name, False, f"Missing columns: {missing_cols}")
+    null_counts = {c: int(df[c].isnull().sum()) for c in value_columns}
+    has_nulls = any(v > 0 for v in null_counts.values())
+    if has_nulls:
+        return ValidationCheckResult(name, False, f"Null values: {null_counts}")
+    return ValidationCheckResult(name, True, "No null values")
+
+
+def validate_no_negative_values(
+    relative_path: str,
+    value_columns: tuple[str, ...],
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    resolved = (settings or PlatformSettings.from_root()).data_root / relative_path
+    name = f"no_negative_values:{relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"File missing: {resolved}")
+    df = pd.read_parquet(resolved)
+    missing_cols = [c for c in value_columns if c not in df.columns]
+    if missing_cols:
+        return ValidationCheckResult(name, False, f"Missing columns: {missing_cols}")
+    neg_counts = {c: int((df[c] < 0).sum()) for c in value_columns}
+    has_negs = any(v > 0 for v in neg_counts.values())
+    if has_negs:
+        return ValidationCheckResult(name, False, f"Negative values: {neg_counts}")
+    return ValidationCheckResult(name, True, "No negative values")
+
+
+def validate_unique_keys(
+    relative_path: str,
+    key_columns: tuple[str, ...],
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    resolved = (settings or PlatformSettings.from_root()).data_root / relative_path
+    name = f"unique_keys:{relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"File missing: {resolved}")
+    df = pd.read_parquet(resolved)
+    missing_cols = [c for c in key_columns if c not in df.columns]
+    if missing_cols:
+        return ValidationCheckResult(name, False, f"Missing columns: {missing_cols}")
+    dup_count = int(df.duplicated(subset=list(key_columns)).sum())
+    if dup_count > 0:
+        return ValidationCheckResult(
+            name,
+            False,
+            f"{dup_count} duplicate rows for keys {list(key_columns)}",
+        )
+    return ValidationCheckResult(name, True, f"Keys {list(key_columns)} are unique")
+
+
+def validate_truth_labels_schema(
+    relative_path: str,
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    """Validate player_truth_labels.parquet against its data contract.
+
+    Wires ``truth_labels.validate_truth_labels`` into the pre-training
+    gate so that schema regressions (missing columns, invalid
+    ``label_source``/``label_confidence`` enum values, duplicate
+    player+season+source keys) are caught before NN training reads the
+    file as supervision target. The NN training pipeline
+    (``train_player_rating_nn_from_files``) reads this parquet directly;
+    without this check, a corrupted label file would silently produce
+    wrong NN weights under the gate.
+    """
+    from scoutfootball.evaluation.truth_labels import validate_truth_labels
+
+    resolved = (settings or PlatformSettings.from_root()).data_root / relative_path
+    name = f"truth_labels_schema:{relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"File missing: {resolved}")
+    df = pd.read_parquet(resolved)
+    errors = validate_truth_labels(df)
+    if errors:
+        return ValidationCheckResult(name, False, "; ".join(errors))
+    return ValidationCheckResult(
+        name,
+        True,
+        f"Schema OK ({len(df)} rows, {len(df.columns)} columns)",
+    )
+
+
+def validate_manifest_exists(
+    parquet_relative_path: str,
+    settings: PlatformSettings | None = None,
+    *,
+    required_fields: tuple[str, ...] = (
+        "artifact",
+        "schema_version",
+        "total_rows",
+        "column_count",
+        "columns",
+        "input_hash",
+        "source_lineage",
+        "timestamp",
+    ),
+) -> ValidationCheckResult:
+    """Validate that a parquet file has a sidecar manifest with required fields.
+
+    Manifest is expected at ``{parquet_stem}_manifest.json`` next to the
+    parquet file (matches ``features.manifest.write_manifest`` convention).
+    Default required fields mirror the new schema in DATA_CONTRACTS.md 7.1
+    (team_match/player_match manifests). For the legacy
+    ``rating_feature_matrix_manifest.json`` schema, pass
+    ``required_fields=("total_rows", "columns", "input_hash", "timestamp")``
+    until that manifest is upgraded to the new schema.
+
+    Returns FAIL when:
+    - parquet file is missing (cannot infer manifest path reliably)
+    - manifest file is missing (build-features did not run or failed)
+    - manifest is not valid JSON
+    - manifest is missing any required field
+
+    Does NOT validate manifest freshness vs parquet content — that is
+    ``validate_manifest_freshness``'s responsibility.
+    """
+    resolved = (settings or PlatformSettings.from_root()).data_root / parquet_relative_path
+    name = f"manifest_exists:{parquet_relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"Parquet missing: {resolved}")
+    manifest_path = resolved.parent / f"{resolved.stem}_manifest.json"
+    if not manifest_path.exists():
+        return ValidationCheckResult(
+            name, False, f"Manifest missing: {manifest_path.name} (run build-features)"
+        )
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        return ValidationCheckResult(name, False, f"Manifest unreadable: {exc}")
+    missing = [f for f in required_fields if f not in payload]
+    if missing:
+        return ValidationCheckResult(
+            name, False, f"Manifest missing fields: {missing}"
+        )
+    artifact = payload.get("artifact", "<unnamed>")
+    schema_ver = payload.get("schema_version", "<legacy>")
+    return ValidationCheckResult(
+        name,
+        True,
+        f"Manifest OK ({manifest_path.name}, artifact={artifact}, "
+        f"schema={schema_ver})",
+    )
+
+
+def validate_manifest_freshness(
+    parquet_relative_path: str,
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    """Validate that the sidecar manifest row count matches the parquet.
+
+    Detects stale manifests: build-features wrote the manifest, then a
+    later partial rebuild (manual edit, separate pipeline step, or
+    failed run) changed the parquet without refreshing the manifest.
+    A stale manifest misleads consumers about input hashes and row
+    counts even when the schema is present.
+
+    Returns FAIL when:
+    - parquet file is missing
+    - manifest file is missing (delegates to validate_manifest_exists)
+    - manifest is unreadable
+    - manifest.total_rows != actual parquet row count
+    - manifest.column_count != actual parquet column count
+
+    Does NOT re-hash inputs (expensive); use ``contract-quality`` for
+    full content-level manifest verification.
+    """
+    resolved = (settings or PlatformSettings.from_root()).data_root / parquet_relative_path
+    name = f"manifest_freshness:{parquet_relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"Parquet missing: {resolved}")
+    manifest_path = resolved.parent / f"{resolved.stem}_manifest.json"
+    if not manifest_path.exists():
+        return ValidationCheckResult(
+            name, False, f"Manifest missing: {manifest_path.name}"
+        )
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        return ValidationCheckResult(name, False, f"Manifest unreadable: {exc}")
+
+    manifest_rows = payload.get("total_rows")
+    manifest_cols = payload.get("column_count")
+    if manifest_rows is None:
+        return ValidationCheckResult(
+            name, False, "Manifest missing total_rows"
+        )
+
+    df = pd.read_parquet(resolved)
+    actual_rows = int(len(df))
+    actual_cols = int(len(df.columns))
+    if int(manifest_rows) != actual_rows:
+        return ValidationCheckResult(
+            name,
+            False,
+            f"Row count drift: manifest={manifest_rows}, parquet={actual_rows}",
+        )
+    # column_count is optional: legacy rating_feature_matrix_manifest.json
+    # predates the new schema and does not include it. Only check when
+    # present so legacy manifests remain forward-compatible.
+    if manifest_cols is not None and int(manifest_cols) != actual_cols:
+        return ValidationCheckResult(
+            name,
+            False,
+            f"Column count drift: manifest={manifest_cols}, parquet={actual_cols}",
+        )
+    return ValidationCheckResult(
+        name,
+        True,
+        f"Manifest fresh (rows={actual_rows}, cols={actual_cols})",
+    )
+
+
+def validate_source_lineage_freshness(
+    parquet_relative_path: str,
+    settings: PlatformSettings | None = None,
+) -> ValidationCheckResult:
+    """Validate that manifest source_lineage hashes still match upstream files.
+
+    ``validate_manifest_freshness`` checks that a parquet's own row/column
+    counts match its manifest. This companion check goes one level deeper:
+    for each ``source_lineage`` entry in the manifest, it re-hashes the
+    referenced upstream parquet and compares to the recorded
+    ``input_hash``. This catches the partial-rebuild scenario where an
+    upstream parquet is rebuilt (new content, new hash) but the downstream
+    parquet and its manifest are not — the downstream's own freshness
+    check passes, but its source_lineage is now stale.
+
+    Returns FAIL when:
+    - parquet file is missing (delegates freshness logic; existence is
+      validate_parquet_exists's responsibility)
+    - manifest is missing or unreadable
+    - any source_lineage entry's upstream file is missing
+    - any source_lineage entry's recorded input_hash differs from the
+      current upstream file's sha256[:16]
+
+    Entries with ``input_hash=None`` are skipped (the manifest already
+      records the gap; re-checking adds no signal).
+    Empty ``source_lineage`` lists PASS with a note that there are no
+      upstream entries to verify.
+    """
+    from scoutfootball.features.manifest import hash_file
+
+    resolved = (settings or PlatformSettings.from_root()).data_root / parquet_relative_path
+    name = f"source_lineage_freshness:{parquet_relative_path}"
+    if not resolved.exists():
+        return ValidationCheckResult(name, False, f"Parquet missing: {resolved}")
+    manifest_path = resolved.parent / f"{resolved.stem}_manifest.json"
+    if not manifest_path.exists():
+        return ValidationCheckResult(
+            name, False, f"Manifest missing: {manifest_path.name}"
+        )
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        return ValidationCheckResult(name, False, f"Manifest unreadable: {exc}")
+
+    lineage = payload.get("source_lineage") or []
+    if not lineage:
+        return ValidationCheckResult(
+            name,
+            True,
+            "No source_lineage entries to verify",
+        )
+
+    settings_resolved = settings or PlatformSettings.from_root()
+    failures: list[str] = []
+    verified = 0
+    skipped = 0
+    for entry in lineage:
+        entry_name = entry.get("name", "<unnamed>")
+        recorded_hash = entry.get("input_hash")
+        if recorded_hash is None:
+            skipped += 1
+            continue
+        upstream_rel = entry.get("relative_path")
+        if not upstream_rel:
+            failures.append(f"{entry_name}: missing relative_path")
+            continue
+        upstream_path = settings_resolved.data_root / upstream_rel
+        if not upstream_path.exists():
+            failures.append(f"{entry_name}: upstream missing at {upstream_rel}")
+            continue
+        current_hash = hash_file(upstream_path)
+        if current_hash != recorded_hash:
+            failures.append(
+                f"{entry_name}: hash drift at {upstream_rel} "
+                f"(manifest={recorded_hash}, current={current_hash})"
+            )
+            continue
+        verified += 1
+
+    if failures:
+        return ValidationCheckResult(
+            name,
+            False,
+            f"{len(failures)} stale/missing upstream(s): {'; '.join(failures)}",
+        )
+    return ValidationCheckResult(
+        name,
+        True,
+        f"All {verified} upstream hash(es) match"
+        + (f", {skipped} skipped (None input_hash)" if skipped else ""),
+    )
+
+
 def run_pre_training_validation(
     settings: PlatformSettings | None = None,
 ) -> ValidationReport:
@@ -144,4 +477,183 @@ def run_pre_training_validation(
             settings,
         )
     )
+    # Goals completeness: NaN goals_for/goals_against in team_match.parquet
+    # silently corrupts Dixon-Coles fitting. The source-level filter in
+    # _build_team_match_from_football_data is the primary gate; this check
+    # is a pre-training defense-in-depth that catches source-filter regressions,
+    # manual edits, or new data sources before they reach model training.
+    report.checks.append(
+        validate_no_null_values(
+            "gold/feature_store/team_match.parquet",
+            ("goals_for", "goals_against"),
+            settings,
+        )
+    )
+    # Player-match core metric completeness: goals, assists, and minutes
+    # are the foundation of all downstream rating and projection features.
+    # NaN in these columns means the aggregation pipeline silently dropped
+    # values or a new data source introduced null measurements.
+    report.checks.append(
+        validate_no_null_values(
+            "gold/feature_store/player_match.parquet",
+            ("goals", "assists", "minutes_played"),
+            settings,
+        )
+    )
+    # Non-negativity: core count metrics can never be negative. Negative
+    # values indicate arithmetic errors, sign flips, or corrupt imports.
+    report.checks.append(
+        validate_no_negative_values(
+            "gold/feature_store/team_match.parquet",
+            ("goals_for", "goals_against"),
+            settings,
+        )
+    )
+    report.checks.append(
+        validate_no_negative_values(
+            "gold/feature_store/player_match.parquet",
+            ("goals", "assists", "minutes_played"),
+            settings,
+        )
+    )
+    # Rating matrix row uniqueness: each player-season must appear exactly
+    # once. Duplicate rows would double-count players in rating training
+    # or silently merge incompatible records from different identity
+    # resolution paths.
+    report.checks.append(
+        validate_unique_keys(
+            "gold/feature_store/rating_feature_matrix.parquet",
+            ("player_id", "season_id"),
+            settings,
+        )
+    )
+    # player_truth_labels.parquet: this is the supervision target for
+    # train_player_rating_nn_from_files, which reads it directly. Without
+    # these checks, a corrupted label file (missing rows, NaN label_value,
+    # invalid enum values, duplicate player+season+source keys, missing
+    # columns) would silently produce wrong NN weights under the gate.
+    # validate_truth_labels_schema wires in truth_labels.validate_truth_labels
+    # which enforces the schema contract defined in TRUTH_LABELS_SCHEMA.
+    report.checks.append(
+        validate_parquet_exists(
+            "gold/feature_store/player_truth_labels.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_row_count(
+            "gold/feature_store/player_truth_labels.parquet",
+            min_rows=10,
+            settings=settings,
+        )
+    )
+    report.checks.append(
+        validate_no_null_keys(
+            "gold/feature_store/player_truth_labels.parquet",
+            ("player_id", "season"),
+            settings,
+        )
+    )
+    report.checks.append(
+        validate_no_null_values(
+            "gold/feature_store/player_truth_labels.parquet",
+            ("label_value",),
+            settings,
+        )
+    )
+    report.checks.append(
+        validate_truth_labels_schema(
+            "gold/feature_store/player_truth_labels.parquet", settings
+        )
+    )
+    # Manifest existence: each gold feature_store parquet must have a
+    # sidecar manifest recording input hashes, row/column counts and
+    # source lineage. Missing manifest means build-features did not run
+    # or failed silently; consumers cannot detect input drift without it.
+    # team_match and player_match use the new schema (artifact,
+    # schema_version, source_lineage, ...); rating_feature_matrix uses
+    # the legacy schema (total_rows, columns, input_hash, timestamp)
+    # until its writer is upgraded to features.manifest.build_manifest_payload.
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/team_match.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/player_match.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/rating_feature_matrix.parquet",
+            settings,
+        )
+    )
+    # team_rolling and player_rolling manifests: these tables sit between
+    # team_match/player_match and rating_feature_matrix, and were previously
+    # the missing link in the provenance chain. Without manifests here,
+    # a partial rebuild of rolling (e.g. window change, aggregation bug
+    # fix) would silently change rating_feature_matrix inputs without any
+    # drift signal. The rating_feature_matrix_manifest.source_lineage
+    # references player_rolling.parquet, so its manifest must exist for
+    # chain-of-custody verification to be meaningful.
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/team_rolling.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_exists(
+            "gold/feature_store/player_rolling.parquet", settings
+        )
+    )
+    # Manifest freshness: detect stale manifests where the parquet was
+    # rebuilt but the manifest was not (e.g. partial rebuild, manual edit,
+    # failed run). A stale manifest misleads consumers about input hashes
+    # and row counts even when the schema is present.
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/team_match.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/player_match.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/rating_feature_matrix.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/team_rolling.parquet", settings
+        )
+    )
+    report.checks.append(
+        validate_manifest_freshness(
+            "gold/feature_store/player_rolling.parquet", settings
+        )
+    )
+    # Source lineage freshness: detect partial rebuilds where an upstream
+    # parquet was rebuilt (new content, new hash) but the downstream
+    # parquet and its manifest were not. The downstream's own
+    # manifest_freshness check passes (its parquet is unchanged), but its
+    # source_lineage now points at a stale upstream hash. This closes the
+    # last provenance gap in the pre-training gate: full chain-of-custody
+    # from raw -> match -> rolling -> rating_feature_matrix is verifiable
+    # without re-running build-features end-to-end.
+    for artifact in (
+        "team_match",
+        "player_match",
+        "team_rolling",
+        "player_rolling",
+        "rating_feature_matrix",
+    ):
+        report.checks.append(
+            validate_source_lineage_freshness(
+                f"gold/feature_store/{artifact}.parquet", settings
+            )
+        )
     return report

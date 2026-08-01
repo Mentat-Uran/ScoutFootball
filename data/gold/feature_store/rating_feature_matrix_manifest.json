@@ -1,88 +1,91 @@
 {
-  "total_rows": 8141,
+  "artifact": "rating_feature_matrix",
+  "schema_version": "1.0",
+  "total_rows": 26747,
+  "column_count": 44,
   "columns": [
     {
       "name": "player_id",
       "dtype": "object",
-      "source": "derived",
+      "source": "identifier",
       "missing_rate": 0.0
     },
     {
       "name": "season_id",
       "dtype": "object",
-      "source": "category",
+      "source": "temporal",
       "missing_rate": 0.0
     },
     {
       "name": "goals",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "assists",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "shots",
       "dtype": "object",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "shots_on_target",
       "dtype": "object",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "minutes_played",
       "dtype": "Int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "starts",
       "dtype": "int64",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 0.0
     },
     {
       "name": "npxg",
       "dtype": "object",
-      "source": "player_stats",
-      "missing_rate": 1.0
+      "source": "metric",
+      "missing_rate": 0.306
     },
     {
       "name": "xa",
-      "dtype": "object",
-      "source": "player_stats",
-      "missing_rate": 1.0
+      "dtype": "float64",
+      "source": "metric",
+      "missing_rate": 0.307
     },
     {
       "name": "available_flag",
       "dtype": "float64",
-      "source": "player_stats",
+      "source": "flag",
       "missing_rate": 0.0
     },
     {
       "name": "tackles",
       "dtype": "object",
-      "source": "player_stats",
-      "missing_rate": 0.2232
+      "source": "metric",
+      "missing_rate": 0.0679
     },
     {
       "name": "passes",
       "dtype": "object",
-      "source": "player_stats",
-      "missing_rate": 1.0
+      "source": "metric",
+      "missing_rate": 0.9974
     },
     {
       "name": "xT_added",
       "dtype": "object",
-      "source": "player_stats",
+      "source": "metric",
       "missing_rate": 1.0
     },
     {
@@ -105,7 +108,7 @@
     },
     {
       "name": "competition_id",
-      "dtype": "string",
+      "dtype": "object",
       "source": "category",
       "missing_rate": 0.0
     },
@@ -113,6 +116,18 @@
       "name": "position_group",
       "dtype": "object",
       "source": "category",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "data_granularity",
+      "dtype": "object",
+      "source": "meta",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "source_name",
+      "dtype": "object",
+      "source": "meta",
       "missing_rate": 0.0
     },
     {
@@ -140,64 +155,76 @@
       "missing_rate": 0.0
     },
     {
+      "name": "data_granularity_set",
+      "dtype": "object",
+      "source": "meta",
+      "missing_rate": 0.0
+    },
+    {
+      "name": "source_name_set",
+      "dtype": "object",
+      "source": "meta",
+      "missing_rate": 0.0
+    },
+    {
       "name": "tackles_won",
       "dtype": "Int64",
-      "source": "player_stats",
-      "missing_rate": 0.0002
+      "source": "metric",
+      "missing_rate": 0.5296
     },
     {
       "name": "interceptions",
       "dtype": "Int64",
-      "source": "player_stats",
-      "missing_rate": 0.0002
+      "source": "metric",
+      "missing_rate": 0.5296
     },
     {
       "name": "fouls_committed",
       "dtype": "Int64",
-      "source": "player_stats",
-      "missing_rate": 0.0002
+      "source": "metric",
+      "missing_rate": 0.5296
     },
     {
       "name": "fouls_drawn",
       "dtype": "Int64",
-      "source": "player_stats",
-      "missing_rate": 0.0002
+      "source": "metric",
+      "missing_rate": 0.5296
     },
     {
       "name": "crosses",
       "dtype": "Int64",
-      "source": "player_stats",
-      "missing_rate": 0.0002
+      "source": "metric",
+      "missing_rate": 0.5296
     },
     {
       "name": "own_goals",
       "dtype": "Int64",
-      "source": "player_stats",
-      "missing_rate": 0.0002
+      "source": "metric",
+      "missing_rate": 0.5296
     },
     {
       "name": "xt_total",
       "dtype": "float64",
-      "source": "player_stats",
-      "missing_rate": 0.9261
+      "source": "metric",
+      "missing_rate": 0.9775
     },
     {
       "name": "xt_per_90",
       "dtype": "float64",
-      "source": "player_stats",
-      "missing_rate": 0.9261
+      "source": "metric",
+      "missing_rate": 0.9775
     },
     {
       "name": "vaep_total",
       "dtype": "float64",
-      "source": "player_stats",
-      "missing_rate": 0.7177
+      "source": "metric",
+      "missing_rate": 0.9141
     },
     {
       "name": "vaep_per_90",
       "dtype": "float64",
-      "source": "player_stats",
-      "missing_rate": 0.7177
+      "source": "metric",
+      "missing_rate": 0.9141
     },
     {
       "name": "finishing_raw",
@@ -224,6 +251,12 @@
       "missing_rate": 0.0
     },
     {
+      "name": "understat_source_covered",
+      "dtype": "bool",
+      "source": "source_coverage",
+      "missing_rate": 0.0
+    },
+    {
       "name": "has_expected_metrics",
       "dtype": "bool",
       "source": "derived",
@@ -236,6 +269,22 @@
       "missing_rate": 0.0
     }
   ],
-  "input_hash": "unknown",
-  "timestamp": "2026-07-12T17:53:16.022391+00:00"
+  "input_hash": "15411cb601783aa3",
+  "source_lineage": [
+    {
+      "name": "player_match",
+      "relative_path": "gold/feature_store/player_match.parquet",
+      "rows_read": 27598,
+      "input_hash": "6c0a6f56ed866f5d",
+      "notes": null
+    },
+    {
+      "name": "player_rolling",
+      "relative_path": "gold/feature_store/player_rolling.parquet",
+      "rows_read": 27598,
+      "input_hash": "6fa366e4408325fc",
+      "notes": null
+    }
+  ],
+  "timestamp": "2026-07-30T17:33:49.925430+00:00"
 }

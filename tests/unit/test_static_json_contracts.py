@@ -125,3 +125,15 @@ def test_action_value_evidence_static_contract() -> None:
     assert data["coverage"]["aggregate_comparability"] == "not_directly_comparable"
     assert "5503" in data["players"]
     assert len(data["players"]["5503"]["matches"]) == 3
+
+
+def test_model_run_static_snapshot_keeps_admission_as_read_only_evidence() -> None:
+    data = _read_static_json("model_runs.json")
+    assert isinstance(data, dict)
+    runs = data["runs"]
+    assert isinstance(runs, list)
+    assert all(
+        run["admission"]["status"]
+        in {"reviewable", "not_reviewable", "not_available"}
+        for run in runs
+    )

@@ -38,6 +38,51 @@ _STYLE_FEATURES = (
     "possession_composite",
 )
 
+# Per-position weights over _STYLE_FEATURES, used by
+# compute_scouting_target_style_match when use_position_weights=True. Each
+# row sums to 1.0. Designed to emphasize the dimensions that matter most
+# for evaluating similarity at that position (e.g. defense_composite
+# dominates for CB, npg_p90 for ST). Cosine similarity is scale-invariant
+# but not rotation-invariant, so applying different weights per dimension
+# rotates both the target and candidate vectors toward the weighted axes
+# and surfaces players whose style profile aligns on the position-critical
+# dimensions. Non-additive interpretive overlay — does not modify the
+# rating model.
+_POSITION_STYLE_WEIGHTS: dict[str, dict[str, float]] = {
+    "GK": {
+        "npg_p90": 0.10, "assists_p90": 0.10,
+        "defense_composite": 0.40, "possession_composite": 0.40,
+    },
+    "CB": {
+        "npg_p90": 0.10, "assists_p90": 0.10,
+        "defense_composite": 0.50, "possession_composite": 0.30,
+    },
+    "FB": {
+        "npg_p90": 0.10, "assists_p90": 0.20,
+        "defense_composite": 0.35, "possession_composite": 0.35,
+    },
+    "DM": {
+        "npg_p90": 0.05, "assists_p90": 0.15,
+        "defense_composite": 0.45, "possession_composite": 0.35,
+    },
+    "CM": {
+        "npg_p90": 0.10, "assists_p90": 0.25,
+        "defense_composite": 0.25, "possession_composite": 0.40,
+    },
+    "AM": {
+        "npg_p90": 0.30, "assists_p90": 0.35,
+        "defense_composite": 0.10, "possession_composite": 0.25,
+    },
+    "W": {
+        "npg_p90": 0.30, "assists_p90": 0.35,
+        "defense_composite": 0.10, "possession_composite": 0.25,
+    },
+    "ST": {
+        "npg_p90": 0.50, "assists_p90": 0.25,
+        "defense_composite": 0.10, "possession_composite": 0.15,
+    },
+}
+
 _MIN_TEAMS_FOR_CLUSTERS = 4
 _DEFAULT_N_CLUSTERS = 4
 _MAX_N_CLUSTERS = 8
@@ -4390,4 +4435,885 @@ def compute_cross_league_action_comparison(
             "cross-league match outcomes. Quality tiers are heuristic "
             "and less meaningful with few leagues."
         ),
+    }
+
+
+# ── Round 82: Cross-league scouting target recommendation suite ───────────
+
+_SCOUTING_DISCLAIMER = (
+    "Cross-league scouting target recommendation is a descriptive "
+    "overlay based on the current rating matrix. Candidates are "
+    "identified by score thresholds and style similarity — this is "
+    "NOT a transfer recommendation, market valuation, or tactical "
+    "advice. League percentiles are computed from rated players in "
+    "the candidate's league and season."
+)
+
+_DEFAULT_SCOUTING_TOP_N = 10
+_MAX_SCOUTING_TOP_N = 50
+_SCOUTING_PERCENTILE_THRESHOLD = 75.0  # top quartile
+
+
+def _find_team_league(work: pd.DataFrame, team: str) -> str | None:
+    """Return the most common league for a team in the frame."""
+    sub = work[work["team"].astype(str).str.lower() == str(team).strip().lower()]
+    if sub.empty:
+        return None
+    leagues = sub["league"].astype(str).value_counts()
+    return str(leagues.index[0]) if not leagues.empty else None
+
+
+def _team_position_depth(
+    work: pd.DataFrame,
+    *,
+    min_player_minutes: float,
+) -> dict[str, dict[str, Any]]:
+    """Per-position-group depth stats for one team's filtered frame."""
+    out: dict[str, dict[str, Any]] = {}
+    for pos in _POSITION_GROUPS:
+        sub = work[work["position_group"].astype(str).str.upper() == pos]
+        if sub.empty:
+            continue
+        stats = _compute_position_depth_stats(sub, min_player_minutes=min_player_minutes)
+        if stats is None:
+            continue
+        stats["position_group"] = pos
+        out[pos] = stats
+    return out
+
+
+def compute_cross_league_team_depth(
+    df: pd.DataFrame,
+    team_a: str,
+    team_b: str,
+    *,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+) -> dict[str, Any]:
+    """Compare two teams' per-position-group depth profiles side-by-side.
+
+    For each of the 8 standard position groups, reports both teams'
+    n_players / mean_score / depth_label and an ``advantage`` flag
+    (``a`` / ``b`` / ``tie`` using a 0.5-point mean-score threshold).
+    Also lists ``complementary_positions`` where one team is deep and
+    the other is shallow — useful for identifying loan/exchange targets.
+
+    This is a descriptive overlay — it does not predict match outcomes
+    or recommend transfers.
+    """
+    if df.empty or not team_a or not team_b:
+        return {
+            "status": "no_data",
+            "team_a": team_a,
+            "team_b": team_b,
+            "disclaimer": "Empty rating matrix or missing team name.",
+        }
+
+    work = df.copy()
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return {
+                "status": "no_data",
+                "team_a": team_a,
+                "team_b": team_b,
+                "disclaimer": "No position_group column in rating matrix.",
+            }
+    work = work[
+        work["position_group"].astype(str).str.upper().isin(_POSITION_GROUPS)
+    ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+    if work.empty:
+        return {
+            "status": "no_data",
+            "team_a": team_a,
+            "team_b": team_b,
+            "season": season,
+            "disclaimer": "No rated players after filtering.",
+        }
+
+    team_a_work = work[work["team"].astype(str).str.lower() == str(team_a).strip().lower()]
+    team_b_work = work[work["team"].astype(str).str.lower() == str(team_b).strip().lower()]
+
+    if team_a_work.empty:
+        return {
+            "status": "team_a_not_found",
+            "team_a": team_a,
+            "team_b": team_b,
+            "season": season,
+            "disclaimer": f"Team '{team_a}' not found in the rating matrix.",
+        }
+    if team_b_work.empty:
+        return {
+            "status": "team_b_not_found",
+            "team_a": team_a,
+            "team_b": team_b,
+            "season": season,
+            "disclaimer": f"Team '{team_b}' not found in the rating matrix.",
+        }
+
+    league_a = _find_team_league(df, team_a)
+    league_b = _find_team_league(df, team_b)
+
+    depth_a = _team_position_depth(team_a_work, min_player_minutes=min_player_minutes)
+    depth_b = _team_position_depth(team_b_work, min_player_minutes=min_player_minutes)
+
+    position_comparison: list[dict[str, Any]] = []
+    complementary: list[dict[str, Any]] = []
+    all_positions = sorted(set(depth_a) | set(depth_b))
+
+    for pos in _POSITION_GROUPS:
+        if pos not in all_positions:
+            continue
+        a_stats = depth_a.get(pos)
+        b_stats = depth_b.get(pos)
+        a_mean = a_stats["score_mean"] if a_stats else None
+        b_mean = b_stats["score_mean"] if b_stats else None
+
+        if a_mean is not None and b_mean is not None:
+            diff = a_mean - b_mean
+            if diff > 0.5:
+                advantage = "a"
+            elif diff < -0.5:
+                advantage = "b"
+            else:
+                advantage = "tie"
+        elif a_mean is not None:
+            advantage = "a"
+        elif b_mean is not None:
+            advantage = "b"
+        else:
+            advantage = "tie"
+
+        entry: dict[str, Any] = {
+            "position_group": pos,
+            "team_a": {
+                "n_players": a_stats["n_players"] if a_stats else 0,
+                "mean_score": a_mean,
+                "depth_label": a_stats["depth_label"] if a_stats else None,
+            },
+            "team_b": {
+                "n_players": b_stats["n_players"] if b_stats else 0,
+                "mean_score": b_mean,
+                "depth_label": b_stats["depth_label"] if b_stats else None,
+            },
+            "advantage": advantage,
+        }
+        position_comparison.append(entry)
+
+        a_deep = a_stats is not None and a_stats["depth_label"] == "deep"
+        b_deep = b_stats is not None and b_stats["depth_label"] == "deep"
+        a_shallow = a_stats is None or a_stats["depth_label"] == "shallow"
+        b_shallow = b_stats is None or b_stats["depth_label"] == "shallow"
+        if a_deep and b_shallow:
+            complementary.append({
+                "position_group": pos,
+                "deep_team": "a",
+                "shallow_team": "b",
+                "reason": (
+                    f"Team A is deep ({a_stats['n_players']} players, "
+                    f"mean {a_mean}) while Team B is shallow."
+                ),
+            })
+        elif b_deep and a_shallow:
+            complementary.append({
+                "position_group": pos,
+                "deep_team": "b",
+                "shallow_team": "a",
+                "reason": (
+                    f"Team B is deep ({b_stats['n_players']} players, "
+                    f"mean {b_mean}) while Team A is shallow."
+                ),
+            })
+
+    return {
+        "status": "ok",
+        "team_a": {
+            "name": str(team_a_work["team"].iloc[0]),
+            "league": league_a,
+            "season": season,
+        },
+        "team_b": {
+            "name": str(team_b_work["team"].iloc[0]),
+            "league": league_b,
+            "season": season,
+        },
+        "same_league": league_a == league_b,
+        "position_comparison": position_comparison,
+        "complementary_positions": complementary,
+        "disclaimer": (
+            "Cross-league team depth comparison is a descriptive overlay "
+            "based on minutes-weighted rating-matrix aggregates. The "
+            "advantage flag uses a 0.5-point mean-score threshold and does "
+            "not predict match outcomes. Complementary positions identify "
+            "where one team has depth and the other is shallow — this is "
+            "not a transfer or loan recommendation."
+        ),
+    }
+
+
+def _league_position_percentiles(
+    league_df: pd.DataFrame,
+    position_group: str,
+    *,
+    min_player_minutes: float,
+) -> dict[str, float] | None:
+    """Compute p25/p50/p60/p75/p90 for one position group in one league.
+
+    ``p60`` is included so the scouting-targets flow can reuse the same
+    threshold convention as :func:`compute_position_gap_report`.
+    """
+    sub = league_df[
+        league_df["position_group"].astype(str).str.upper() == position_group
+    ]
+    if sub.empty:
+        return None
+    minutes = (
+        sub["minutes"]
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0.0)
+        .to_numpy(dtype=float)
+    )
+    mask = minutes >= min_player_minutes
+    if not mask.any():
+        return None
+    scores = (
+        sub["optimized_score"]
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0.0)
+        .to_numpy(dtype=float)[mask]
+    )
+    return {
+        "p25": round(float(np.percentile(scores, 25)), 2),
+        "p50": round(float(np.percentile(scores, 50)), 2),
+        "p60": round(float(np.percentile(scores, 60)), 2),
+        "p75": round(float(np.percentile(scores, 75)), 2),
+        "p90": round(float(np.percentile(scores, 90)), 2),
+        "n_players": int(mask.sum()),
+    }
+
+
+def compute_scouting_targets(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+    top_n: int = _DEFAULT_SCOUTING_TOP_N,
+    exclude_same_league: bool = True,
+) -> dict[str, Any]:
+    """Find players from other leagues who could fill a team's position gaps.
+
+    For each gap position (shallow / low_quality / missing) identified by
+    :func:`compute_position_gap_report`, scans players in other leagues at
+    that position group who meet all of:
+
+    * ``minutes`` >= ``min_player_minutes``
+    * ``optimized_score`` above the gap's target threshold (league p60 for
+      shallow/missing gaps, or the team's current mean for low_quality gaps)
+    * score in the top quartile (p75) of their own league at that position
+
+    Returns up to ``top_n`` candidates per gap, sorted by score descending.
+    This is a descriptive overlay — NOT a transfer recommendation.
+    """
+    if df.empty or not team:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    top_n = max(1, min(int(top_n), _MAX_SCOUTING_TOP_N))
+
+    work = df.copy()
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return {
+                "status": "no_data",
+                "team": team,
+                "disclaimer": _SCOUTING_DISCLAIMER,
+            }
+    work = work[
+        work["position_group"].astype(str).str.upper().isin(_POSITION_GROUPS)
+    ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+    if work.empty:
+        return {
+            "status": "no_data",
+            "team": team,
+            "season": season,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    # Reuse gap report to identify which positions need scouting.
+    gap_report = compute_position_gap_report(
+        df,
+        team,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    if gap_report["status"] != "ok":
+        return {
+            "status": gap_report["status"],
+            "team": team,
+            "season": season,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    gaps = gap_report.get("gaps", [])
+    if not gaps:
+        return {
+            "status": "ok",
+            "team": team,
+            "league": gap_report.get("league"),
+            "season": season,
+            "n_gaps": 0,
+            "gap_targets": [],
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    team_league = gap_report.get("league")
+
+    # Pre-compute per-league percentiles for each gap position.
+    candidate_pool = work.copy()
+    if exclude_same_league and team_league is not None:
+        candidate_pool = candidate_pool[
+            candidate_pool["league"].astype(str).str.lower()
+            != str(team_league).lower()
+        ]
+
+    gap_targets: list[dict[str, Any]] = []
+    for gap in gaps:
+        pos = gap["position_group"]
+        gap_type = gap["gap_type"]
+
+        # Determine the score threshold for candidates.
+        if gap_type == "low_quality":
+            threshold = gap.get("mean_score", 0.0)
+        elif gap_type == "shallow":
+            # Use the team's league p60 if available, else 0.
+            if team_league is not None:
+                lp = _league_position_percentiles(
+                    work[work["league"].astype(str).str.lower() == str(team_league).lower()],
+                    pos,
+                    min_player_minutes=min_player_minutes,
+                )
+                threshold = lp["p60"] if lp else 0.0
+            else:
+                threshold = 0.0
+        else:  # missing
+            threshold = 0.0
+
+        pos_candidates = candidate_pool[
+            candidate_pool["position_group"].astype(str).str.upper() == pos
+        ].copy()
+        if pos_candidates.empty:
+            gap_targets.append({
+                "position_group": pos,
+                "gap_type": gap_type,
+                "threshold": threshold,
+                "n_candidates": 0,
+                "candidates": [],
+            })
+            continue
+
+        # Filter by minutes.
+        pos_candidates["minutes_num"] = (
+            pos_candidates["minutes"]
+            .apply(pd.to_numeric, errors="coerce")
+            .fillna(0.0)
+        )
+        pos_candidates = pos_candidates[pos_candidates["minutes_num"] >= min_player_minutes]
+        if pos_candidates.empty:
+            gap_targets.append({
+                "position_group": pos,
+                "gap_type": gap_type,
+                "threshold": threshold,
+                "n_candidates": 0,
+                "candidates": [],
+            })
+            continue
+
+        pos_candidates["score_num"] = (
+            pos_candidates["optimized_score"]
+            .apply(pd.to_numeric, errors="coerce")
+            .fillna(0.0)
+        )
+
+        # Filter by score threshold.
+        pos_candidates = pos_candidates[pos_candidates["score_num"] >= threshold]
+
+        # Filter by top-quartile in the candidate's own league.
+        keep: list[bool] = []
+        for _, row in pos_candidates.iterrows():
+            row_league = str(row.get("league", ""))
+            lp = _league_position_percentiles(
+                work[work["league"].astype(str).str.lower() == row_league.lower()],
+                pos,
+                min_player_minutes=min_player_minutes,
+            )
+            if lp is None:
+                keep.append(False)
+                continue
+            keep.append(float(row["score_num"]) >= lp["p75"])
+        pos_candidates = pos_candidates.iloc[[i for i, k in enumerate(keep) if k]]
+
+        if pos_candidates.empty:
+            gap_targets.append({
+                "position_group": pos,
+                "gap_type": gap_type,
+                "threshold": threshold,
+                "n_candidates": 0,
+                "candidates": [],
+            })
+            continue
+
+        # Sort by score descending and take top_n.
+        pos_candidates = pos_candidates.sort_values("score_num", ascending=False).head(top_n)
+
+        candidates: list[dict[str, Any]] = []
+        for _, row in pos_candidates.iterrows():
+            row_league = str(row.get("league", ""))
+            lp = _league_position_percentiles(
+                work[work["league"].astype(str).str.lower() == row_league.lower()],
+                pos,
+                min_player_minutes=min_player_minutes,
+            )
+            # Percentile rank within league.
+            league_pos = work[
+                (work["league"].astype(str).str.lower() == row_league.lower())
+                & (work["position_group"].astype(str).str.upper() == pos)
+            ]
+            league_scores = (
+                league_pos["optimized_score"]
+                .apply(pd.to_numeric, errors="coerce")
+                .fillna(0.0)
+                .to_numpy(dtype=float)
+            )
+            league_minutes = (
+                league_pos["minutes"]
+                .apply(pd.to_numeric, errors="coerce")
+                .fillna(0.0)
+                .to_numpy(dtype=float)
+            )
+            mask = league_minutes >= min_player_minutes
+            if mask.any():
+                league_scores = league_scores[mask]
+                pct = float(
+                    (league_scores < float(row["score_num"])).sum()
+                    / len(league_scores)
+                    * 100
+                )
+            else:
+                pct = 0.0
+
+            candidates.append({
+                "player_name": str(row.get("player_name", row.get("player", ""))),
+                "team": str(row.get("team", "")),
+                "league": row_league,
+                "position_group": pos,
+                "optimized_score": round(float(row["score_num"]), 2),
+                "minutes": int(row["minutes_num"]),
+                "percentile_in_league": round(pct, 1),
+                "gap_reason": gap_type,
+            })
+
+        gap_targets.append({
+            "position_group": pos,
+            "gap_type": gap_type,
+            "threshold": round(threshold, 2),
+            "n_candidates": len(candidates),
+            "candidates": candidates,
+        })
+
+    return {
+        "status": "ok",
+        "team": team,
+        "league": team_league,
+        "season": season,
+        "exclude_same_league": exclude_same_league,
+        "n_gaps": len(gaps),
+        "gap_targets": gap_targets,
+        "disclaimer": _SCOUTING_DISCLAIMER,
+    }
+
+
+def compute_scouting_target_style_match(
+    df: pd.DataFrame,
+    team: str,
+    position_group: str,
+    *,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+    top_n: int = _DEFAULT_SCOUTING_TOP_N,
+    exclude_same_league: bool = True,
+    use_position_weights: bool = False,
+) -> dict[str, Any]:
+    """Find players from other leagues with similar style to the team's top player.
+
+    For the target team's highest-scored player at ``position_group``,
+    computes a 4-dim style vector (npg_p90 / assists_p90 /
+    defense_composite / possession_composite) and finds the most similar
+    players in other leagues by cosine similarity.
+
+    This bridges "find a backup who plays like your current starter but
+    in another league". Returns top-N style-matched players with
+    similarity score, league, team, score, minutes.
+
+    Descriptive overlay — NOT a transfer recommendation.
+    """
+    pos_upper = str(position_group).upper()
+    if pos_upper not in _POSITION_GROUPS:
+        return {
+            "status": "invalid_position",
+            "team": team,
+            "position_group": position_group,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    if df.empty or not team:
+        return {
+            "status": "no_data",
+            "team": team,
+            "position_group": pos_upper,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    top_n = max(1, min(int(top_n), _MAX_SCOUTING_TOP_N))
+
+    # Resolve optional per-position weights. When use_position_weights=True,
+    # look up the position's weight dict from _POSITION_STYLE_WEIGHTS and
+    # build a 4-dim weight vector aligned with _STYLE_FEATURES. If the
+    # position is missing from the table (defensive — should not happen
+    # since pos_upper was validated above), fall back to None (equal
+    # weights, identical to legacy behavior).
+    weight_vec: np.ndarray | None = None
+    weight_dict_out: dict[str, float] | None = None
+    if use_position_weights:
+        weight_dict = _POSITION_STYLE_WEIGHTS.get(pos_upper)
+        if weight_dict is not None:
+            weight_vec = np.array(
+                [float(weight_dict.get(f, 1.0)) for f in _STYLE_FEATURES],
+                dtype=float,
+            )
+            weight_dict_out = dict(weight_dict)
+
+    work = df.copy()
+    if "position_group" not in work.columns:
+        if "sub_position" in work.columns:
+            work["position_group"] = work["sub_position"]
+        else:
+            return {
+                "status": "no_data",
+                "team": team,
+                "position_group": pos_upper,
+                "disclaimer": _SCOUTING_DISCLAIMER,
+            }
+    work = work[
+        work["position_group"].astype(str).str.upper().isin(_POSITION_GROUPS)
+    ]
+    if season is not None:
+        work = work[work["season"].astype(str) == str(season)]
+    if work.empty:
+        return {
+            "status": "no_data",
+            "team": team,
+            "position_group": pos_upper,
+            "season": season,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    # Find the target team's top player at the position.
+    team_work = work[
+        work["team"].astype(str).str.lower() == str(team).strip().lower()
+    ]
+    pos_work = team_work[
+        team_work["position_group"].astype(str).str.upper() == pos_upper
+    ]
+    if pos_work.empty:
+        return {
+            "status": "team_position_not_found",
+            "team": team,
+            "position_group": pos_upper,
+            "season": season,
+            "disclaimer": (
+                f"No players found for team '{team}' at position '{pos_upper}'."
+            ),
+        }
+
+    pos_work = pos_work.copy()
+    pos_work["minutes_num"] = (
+        pos_work["minutes"].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    )
+    pos_work["score_num"] = (
+        pos_work["optimized_score"].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    )
+    pos_work = pos_work[pos_work["minutes_num"] >= min_player_minutes]
+    if pos_work.empty:
+        return {
+            "status": "team_position_not_found",
+            "team": team,
+            "position_group": pos_upper,
+            "season": season,
+            "disclaimer": (
+                f"No qualifying players (>= {min_player_minutes} min) for "
+                f"team '{team}' at position '{pos_upper}'."
+            ),
+        }
+
+    top_row = pos_work.sort_values("score_num", ascending=False).iloc[0]
+    target_name = str(top_row.get("player_name", top_row.get("player", "")))
+    target_team = str(top_row.get("team", ""))
+    team_league = str(top_row.get("league", ""))
+
+    # Build target style vector.
+    target_vec = np.array(
+        [
+            float(pd.to_numeric(top_row.get(f, 0.0), errors="coerce") or 0.0)
+            for f in _STYLE_FEATURES
+        ],
+        dtype=float,
+    )
+    # Apply per-position weights to rotate the vector toward position-critical
+    # dimensions. Cosine similarity is scale-invariant but not rotation-
+    # invariant, so weighting changes which candidates surface as "similar".
+    if weight_vec is not None:
+        target_vec = target_vec * weight_vec
+    target_norm = np.linalg.norm(target_vec)
+    if target_norm == 0:
+        return {
+            "status": "no_data",
+            "team": team,
+            "position_group": pos_upper,
+            "season": season,
+            "disclaimer": "Target player has zero style vector.",
+        }
+
+    # Candidate pool: same position, other leagues (optionally), sufficient minutes.
+    candidate_pool = work[
+        work["position_group"].astype(str).str.upper() == pos_upper
+    ].copy()
+    if exclude_same_league and team_league:
+        candidate_pool = candidate_pool[
+            candidate_pool["league"].astype(str).str.lower()
+            != team_league.lower()
+        ]
+    candidate_pool["minutes_num"] = (
+        candidate_pool["minutes"].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    )
+    candidate_pool["score_num"] = (
+        candidate_pool["optimized_score"]
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0.0)
+    )
+    candidate_pool = candidate_pool[
+        candidate_pool["minutes_num"] >= min_player_minutes
+    ]
+    # Exclude the target player themselves.
+    candidate_pool = candidate_pool[
+        candidate_pool.apply(
+            lambda r: str(r.get("player_name", r.get("player", ""))).lower()
+            != target_name.lower(),
+            axis=1,
+        )
+    ]
+
+    if candidate_pool.empty:
+        return {
+            "status": "ok",
+            "team": team,
+            "position_group": pos_upper,
+            "season": season,
+            "target_player": {
+                "name": target_name,
+                "team": target_team,
+                "league": team_league,
+                "optimized_score": round(float(top_row["score_num"]), 2),
+            },
+            "n_candidates": 0,
+            "candidates": [],
+            "weighted": weight_vec is not None,
+            "position_weights": weight_dict_out,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    # Compute cosine similarity for each candidate.
+    matches: list[dict[str, Any]] = []
+    for _, row in candidate_pool.iterrows():
+        cand_vec = np.array(
+            [
+                float(pd.to_numeric(row.get(f, 0.0), errors="coerce") or 0.0)
+                for f in _STYLE_FEATURES
+            ],
+            dtype=float,
+        )
+        # Apply the same per-position weights used for the target vector so
+        # both vectors are rotated into the same weighted space before cosine.
+        if weight_vec is not None:
+            cand_vec = cand_vec * weight_vec
+        cand_norm = np.linalg.norm(cand_vec)
+        if cand_norm == 0:
+            continue
+        sim = float(np.dot(target_vec, cand_vec) / (target_norm * cand_norm))
+        matches.append({
+            "player_name": str(row.get("player_name", row.get("player", ""))),
+            "team": str(row.get("team", "")),
+            "league": str(row.get("league", "")),
+            "position_group": pos_upper,
+            "optimized_score": round(float(row["score_num"]), 2),
+            "minutes": int(row["minutes_num"]),
+            "style_similarity": round(sim, 4),
+        })
+
+    matches.sort(key=lambda m: m["style_similarity"], reverse=True)
+    matches = matches[:top_n]
+
+    # Report the raw (unweighted) style vector for the target player so
+    # consumers can render radar charts without inverting the weight mask.
+    target_sv = {
+        "npg_p90": round(
+            float(pd.to_numeric(top_row.get("npg_p90", 0.0), errors="coerce") or 0.0),
+            3,
+        ),
+        "assists_p90": round(
+            float(pd.to_numeric(top_row.get("assists_p90", 0.0), errors="coerce") or 0.0),
+            3,
+        ),
+        "defense_composite": round(
+            float(
+                pd.to_numeric(top_row.get("defense_composite", 0.0), errors="coerce")
+                or 0.0
+            ),
+            2,
+        ),
+        "possession_composite": round(
+            float(
+                pd.to_numeric(
+                    top_row.get("possession_composite", 0.0), errors="coerce"
+                )
+                or 0.0
+            ),
+            2,
+        ),
+    }
+
+    return {
+        "status": "ok",
+        "team": team,
+        "position_group": pos_upper,
+        "season": season,
+        "target_player": {
+            "name": target_name,
+            "team": target_team,
+            "league": team_league,
+            "optimized_score": round(float(top_row["score_num"]), 2),
+            "style_vector": target_sv,
+        },
+        "n_candidates": len(matches),
+        "candidates": matches,
+        "weighted": weight_vec is not None,
+        "position_weights": weight_dict_out,
+        "disclaimer": _SCOUTING_DISCLAIMER,
+    }
+
+
+def compute_scouting_dashboard(
+    df: pd.DataFrame,
+    team: str,
+    *,
+    season: str | None = None,
+    min_player_minutes: float = _MIN_PLAYER_MINUTES_DEFAULT,
+    top_n: int = _DEFAULT_SCOUTING_TOP_N,
+    exclude_same_league: bool = True,
+    max_positions: int = 3,
+    use_position_weights: bool = False,
+) -> dict[str, Any]:
+    """Aggregate scouting targets + multi-position style match in one call.
+
+    For the target team, identifies position gaps (reusing
+    :func:`compute_scouting_targets`) and computes a style-match candidate
+    list for each of the top ``max_positions`` gap positions. Returns a
+    unified report card combining gap context + per-position style
+    candidates, suitable for a single-call dashboard view.
+
+    The style match for each gap position answers "if we lose our current
+    starter at the gap position, who plays like them in other leagues?".
+    When ``use_position_weights`` is True, the per-position weights from
+    ``_POSITION_STYLE_WEIGHTS`` are applied to both target and candidate
+    style vectors before cosine similarity (see
+    :func:`compute_scouting_target_style_match`).
+
+    Descriptive overlay — NOT a transfer recommendation.
+    """
+    if df.empty or not team:
+        return {
+            "status": "no_data",
+            "team": team,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    # Clamp max_positions to 1-8 (the 8 canonical position groups).
+    max_positions = max(
+        1, min(int(max_positions), len(_POSITION_GROUPS))
+    )
+    top_n = max(1, min(int(top_n), _MAX_SCOUTING_TOP_N))
+
+    # 1) Gap targets (reuses compute_position_gap_report internally).
+    targets = compute_scouting_targets(
+        df,
+        team,
+        season=season,
+        min_player_minutes=min_player_minutes,
+        top_n=top_n,
+        exclude_same_league=exclude_same_league,
+    )
+    if targets["status"] != "ok":
+        return {
+            "status": targets["status"],
+            "team": team,
+            "season": season,
+            "disclaimer": _SCOUTING_DISCLAIMER,
+        }
+
+    gap_targets = targets.get("gap_targets", [])
+    n_gaps = len(gap_targets)
+
+    # 2) For each of the top max_positions gap positions, compute a style
+    # match against the team's current starter at that position. This
+    # answers "if we lose our current starter at the gap position, who
+    # plays like them in other leagues?".
+    position_style_matches: list[dict[str, Any]] = []
+    for gap in gap_targets[:max_positions]:
+        pos = gap.get("position_group", "")
+        if not pos or str(pos).upper() not in _POSITION_GROUPS:
+            continue
+        style_match = compute_scouting_target_style_match(
+            df,
+            team,
+            pos,
+            season=season,
+            min_player_minutes=min_player_minutes,
+            top_n=top_n,
+            exclude_same_league=exclude_same_league,
+            use_position_weights=use_position_weights,
+        )
+        position_style_matches.append(style_match)
+
+    return {
+        "status": "ok",
+        "team": team,
+        "league": targets.get("league"),
+        "season": season,
+        "n_gaps": n_gaps,
+        "n_positions_matched": len(position_style_matches),
+        "max_positions": max_positions,
+        "use_position_weights": use_position_weights,
+        "gap_targets": gap_targets,
+        "position_style_matches": position_style_matches,
+        "disclaimer": _SCOUTING_DISCLAIMER,
     }

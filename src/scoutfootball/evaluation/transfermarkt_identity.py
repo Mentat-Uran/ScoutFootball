@@ -14,6 +14,10 @@ from typing import Any
 import pandas as pd
 
 from scoutfootball.entities.normalize import normalize_person_name, normalize_team_name
+from scoutfootball.evaluation.transfermarkt_identity_review import (
+    active_decisions_for_context,
+    read_identity_review_ledger,
+)
 
 MAPPING_COLUMNS = [
     "source_row",
@@ -174,6 +178,76 @@ def apply_resolved_transfermarkt_identities(
     resolved = resolved.loc[resolved["_canonical_player_id"].notna()].copy()
     resolved["player_id"] = resolved.pop("_canonical_player_id").astype("string")
     return resolved
+
+
+def apply_transfermarkt_identity_review_decisions(
+    result: TransfermarktIdentityResult,
+    *,
+    snapshot_sha256: str,
+    feature_matrix_sha256: str,
+    season: str,
+    ledger_path: str | None,
+) -> tuple[TransfermarktIdentityResult, dict[str, Any]]:
+    """Apply only current-context, explicitly confirmed local review decisions."""
+    if not ledger_path:
+        return result, {"status": "not_recorded", "confirmed_rows": 0}
+    records = read_identity_review_ledger(ledger_path)
+    decisions = active_decisions_for_context(
+        records,
+        {
+            "snapshot_sha256": snapshot_sha256,
+            "feature_matrix_sha256": feature_matrix_sha256,
+            "season": str(season),
+        },
+    )
+    manual_mappings: list[dict[str, Any]] = []
+    remaining_review: list[dict[str, Any]] = []
+    rejected = 0
+    revoked = 0
+    for row in result.review_queue.to_dict(orient="records"):
+        decision = decisions.get(row["source_row"])
+        if decision is None or decision["action"] == "revoked":
+            revoked += int(decision is not None)
+            remaining_review.append(row)
+            continue
+        if decision["action"] == "rejected":
+            rejected += 1
+            remaining_review.append(row)
+            continue
+        selected = decision["canonical_player_id"]
+        if selected not in row["candidate_player_ids"]:
+            raise ValueError("identity_ledger_candidate_set_mismatch")
+        manual_mappings.append(
+            {
+                "source_row": row["source_row"],
+                "player_name": row["player_name"],
+                "team_name": row["team_name"],
+                "snapshot_date": row["snapshot_date"],
+                "canonical_player_id": selected,
+                "method": "manual_review_confirmed",
+                "score": None,
+            }
+        )
+    mappings = pd.concat(
+        [result.mappings, pd.DataFrame(manual_mappings, columns=MAPPING_COLUMNS)],
+        ignore_index=True,
+    )
+    return (
+        TransfermarktIdentityResult(
+            mappings=mappings,
+            review_queue=pd.DataFrame(remaining_review, columns=DECISION_COLUMNS),
+            unresolved=result.unresolved,
+        ),
+        {
+            "status": "recorded",
+            "ledger_path": str(ledger_path),
+            "ledger_records": len(records),
+            "context_decisions": len(decisions),
+            "confirmed_rows": len(manual_mappings),
+            "rejected_rows": rejected,
+            "revoked_rows": revoked,
+        },
+    )
 
 
 def transfermarkt_identity_report(result: TransfermarktIdentityResult) -> dict[str, Any]:

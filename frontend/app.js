@@ -1,12 +1,14 @@
-const APP_VERSION = "1.0.3";
+const APP_VERSION = "1.1.0";
 const i18n = {
     zh: {
         nav_overview: "总览",
+        nav_workflow: "工作流",
         nav_players: "球员",
         nav_compare: "对比",
         nav_value: "身价",
         nav_matches: "预测",
         nav_teams: "球队",
+        nav_league: "联赛",
         nav_scouting: "球探",
         nav_actions: "动作价值",
         nav_reports: "报告",
@@ -24,6 +26,27 @@ const i18n = {
         health_proxy: "球员 match-level 覆盖不足",
         health_trends: "趋势指标契约待统一",
         health_truth: "真实标签仍为空表",
+        detailed_health_title: "本地健康详情",
+        detailed_health_force_refresh: "强制刷新",
+        detailed_health_validation: "验证",
+        detailed_health_model_admission: "模型晋级",
+        detailed_health_contract_quality: "契约质量",
+        detailed_health_source_health: "来源健康",
+        detailed_health_artifacts: "本地产物",
+        detailed_health_unavailable: "不可用",
+        detailed_health_loading: "加载中…",
+        detailed_health_offline: "API 离线 — 详情不可用",
+        detailed_health_refreshed_at: "刷新时间",
+        detailed_health_failed_sections: "失败项",
+        detailed_health_unavailable_sections: "不可用项",
+        detailed_health_reviewable: "可复核",
+        detailed_health_not_reviewable: "不可复核",
+        detailed_health_not_available: "未提供",
+        detailed_health_with_snapshot: "已存快照",
+        detailed_health_without_snapshot: "未存快照",
+        detailed_health_registered_sources: "已登记来源",
+        detailed_health_passed: "通过",
+        detailed_health_failed: "失败",
         card_players: "球员画像",
         card_players_body: "排名、位置内 percentile、雷达、置信度和详情卡。",
         card_value: "身价偏离",
@@ -98,6 +121,76 @@ const i18n = {
         teams_style_col_label: "风格",
         teams_style_col_n: "球队数",
         teams_style_col_teams: "球队",
+        league_kicker: "联赛赛季分析",
+        league_title: "表单、赛程难度与赛季投影",
+        league_note: "基于 Football-Data 赛果的描述性叠加层：近 N 场表单、Bradley-Terry 赛程难度、蒙特卡洛赛季投影。不使用 Dixon-Coles 模型或赔率数据。",
+        league_metric_teams: "球队数",
+        league_metric_top_ppg: "最高 PPG",
+        league_metric_title_prob: "头名概率",
+        league_filter_title: "联赛与赛季选择",
+        league_filter_season: "赛季",
+        league_filter_league: "联赛",
+        league_filter_last_n: "近 N 场",
+        league_refresh: "刷新",
+        league_form_title: "近 N 场表单表",
+        league_form_col_team: "球队",
+        league_form_col_ppg: "PPG",
+        league_form_col_rating: "表单评分",
+        league_form_col_trend: "趋势",
+        league_form_col_home: "主场 PPG",
+        league_form_col_away: "客场 PPG",
+        league_form_col_string: "近 N 场",
+        league_loading: "加载中...",
+        league_form_heatmap_title: "近 N 场表单热力图",
+        league_form_heatmap_no_data: "暂无热力图数据",
+        league_form_heatmap_match_n: "第 {n} 场",
+        league_form_heatmap_opponent: "对手",
+        league_form_heatmap_score: "比分",
+        league_form_heatmap_venue: "主客",
+        league_form_heatmap_date: "日期",
+        league_difficulty_title: "赛程难度评估",
+        league_difficulty_btn: "查询",
+        league_difficulty_placeholder: "输入球队名查询最近 10 场赛程难度，留空查看全联赛。",
+        league_difficulty_col_team: "球队",
+        league_difficulty_col_date: "日期",
+        league_difficulty_col_opp: "对手",
+        league_difficulty_col_venue: "主客",
+        league_difficulty_col_xpts: "期望积分",
+        league_difficulty_col_score: "难度",
+        league_difficulty_col_label: "等级",
+        league_difficulty_col_actual: "实际",
+        league_difficulty_heatmap_title: "赛程难度热力图",
+        league_difficulty_heatmap_no_data: "暂无热力图数据",
+        league_difficulty_heatmap_match_n: "第 {n} 场",
+        league_difficulty_heatmap_opponent: "对手",
+        league_difficulty_heatmap_venue: "主客",
+        league_difficulty_heatmap_date: "日期",
+        league_difficulty_heatmap_score: "难度",
+        league_difficulty_heatmap_xpts: "期望积分",
+        league_difficulty_heatmap_level: "等级",
+        league_difficulty_distribution_title: "球队难度分布",
+        league_difficulty_distribution_no_data: "暂无分布数据",
+        league_difficulty_distribution_avg: "平均难度",
+        league_projection_title: "赛季蒙特卡洛投影",
+        league_projection_sims: "模拟次数",
+        league_projection_btn: "投影",
+        league_projection_placeholder: "点击\"投影\"按钮运行模拟",
+        league_proj_col_team: "球队",
+        league_proj_col_points: "平均积分",
+        league_proj_col_position: "平均排名",
+        league_proj_col_title: "夺冠概率",
+        league_proj_col_topn: "前 4 概率",
+        league_proj_col_relegation: "降级概率",
+        league_trend_rising: "上升",
+        league_trend_declining: "下滑",
+        league_trend_stable: "稳定",
+        league_trend_insufficient: "样本不足",
+        league_trend_no_data: "无数据",
+        league_diff_very_hard: "极难",
+        league_diff_hard: "困难",
+        league_diff_moderate: "中等",
+        league_diff_easy: "容易",
+        league_diff_very_easy: "极易",
         risers_decliners_title: "上升/下滑球员观察",
         risers_season: "赛季",
         risers_top_n: "前 N",
@@ -116,6 +209,109 @@ const i18n = {
         style_fit_title: "球员风格适配球队簇",
         style_fit_player: "球员姓名",
         style_fit_button: "计算",
+        cross_scouting_title: "跨联赛球探分析",
+        cross_scouting_boundary: "基于评分矩阵的描述性叠加：按位置深度对比、按缺口推荐候选、按风格相似度匹配。非转会建议。",
+        cross_scouting_season: "赛季",
+        cross_scouting_min_minutes: "最低分钟",
+        cross_scouting_team_a: "球队 A",
+        cross_scouting_team_b: "球队 B",
+        cross_scouting_depth_btn: "对比深度",
+        cross_scouting_targets_btn: "推荐目标",
+        cross_scouting_style_btn: "风格匹配",
+        cross_scouting_exclude_same_league: "排除同联赛",
+        cross_scouting_col_pos: "位置组",
+        cross_scouting_col_a: "球队 A",
+        cross_scouting_col_b: "球队 B",
+        cross_scouting_col_n: "人数",
+        cross_scouting_col_mean: "均分",
+        cross_scouting_col_depth: "深度",
+        cross_scouting_col_advantage: "优势",
+        cross_scouting_complementary: "互补位置",
+        cross_scouting_col_player: "球员",
+        cross_scouting_col_team: "球队",
+        cross_scouting_col_league: "联赛",
+        cross_scouting_col_score: "评分",
+        cross_scouting_col_minutes: "分钟",
+        cross_scouting_col_pct: "联赛百分位",
+        cross_scouting_col_gap: "缺口类型",
+        cross_scouting_col_sim: "风格相似度",
+        cross_scouting_target_player: "目标球员",
+        cross_scouting_no_data: "无数据",
+        cross_scouting_no_candidates: "无符合条件的候选",
+        cross_scouting_status_ok: "正常",
+        cross_scouting_status_no_data: "无数据",
+        cross_scouting_status_not_found: "未找到球队",
+        cross_scouting_status_invalid_pos: "无效位置组",
+        cross_scouting_col_actions: "操作",
+        cross_scouting_add_shortlist: "加入短名单",
+        cross_scouting_add_compare: "加入对比",
+        cross_scouting_compare_tray: "对比栏",
+        cross_scouting_compare_clear: "清空",
+        cross_scouting_compare_run: "对比",
+        cross_scouting_compare_need_two: "至少选择 2 名球员",
+        cross_scouting_compare_max: "最多选择 6 名球员",
+        cross_scouting_style_weighted: "位置加权",
+        cross_scouting_dashboard_btn: "仪表盘",
+        cross_scouting_dashboard_title: "球探仪表盘",
+        cross_scouting_dashboard_loading: "正在汇总球探数据…",
+        cross_scouting_dashboard_no_data: "暂无球探数据",
+        cross_scouting_dashboard_depth: "阵容深度",
+        cross_scouting_dashboard_targets: "缺口目标",
+        cross_scouting_dashboard_style: "风格匹配",
+        cross_scouting_dashboard_max_positions: "最大位置数",
+        cross_scouting_dashboard_weighted: "位置加权",
+        cross_scouting_dashboard_n_gaps: "缺口数",
+        cross_scouting_dashboard_n_matched: "已匹配位置",
+        cross_scouting_dashboard_export: "导出仪表盘",
+        cross_scouting_dashboard_batch_add: "批量加入短名单",
+        cross_scouting_dashboard_batch_added: "已加入 {n} 名候选",
+        cross_scouting_dashboard_batch_none: "无可加入的新候选",
+        all_sources: "全部来源",
+        remove_source: "移除此来源",
+        source_filter_hint: "点击来源筛选",
+        no_source_filter: "无来源筛选",
+        shortlist_compare_btn: "对比选中 ({n})",
+        shortlist_compare_clear: "清除选择",
+        shortlist_compare_min: "至少选择 2 名球员",
+        shortlist_compare_max: "最多选择 6 名球员",
+        shortlist_compare_loading: "正在对比…",
+        shortlist_compare_unavailable: "对比数据不可用",
+        shortlist_compare_failed: "对比请求失败",
+        shortlist_compare_sync_tray: "加入跨球探对比盘",
+        shortlist_compare_sync_tray_title: "将选中的球员同步到跨球探对比盘（最多 6 名）",
+        shortlist_compare_sync_added: "已加入 {n} 名",
+        shortlist_compare_sync_dup: "{n} 名已在对比盘中",
+        shortlist_compare_sync_cap: "{n} 名因对比盘已满跳过",
+        shortlist_compare_sync_empty: "未选择可同步的球员",
+        shortlist_decision_pack_import: "导入候选决策包",
+        shortlist_decision_pack_import_title: "从 JSON 文件恢复候选名单（合并 reason_codes 与档案，不覆盖既有数据）",
+        shortlist_decision_pack_import_ok: "已导入 {n} 名球员（{merged} 名合并，{added} 名新增）",
+        shortlist_decision_pack_import_empty: "决策包中没有球员可导入",
+        shortlist_decision_pack_import_invalid: "决策包格式无效：{reason}",
+        shortlist_decision_pack_import_read_fail: "读取文件失败",
+        shortlist_decision_pack_import_provenance: "（合并 {provenance} 条来源日志）",
+        shortlist_decision_pack_import_watchlist: "（观察名单 {n} 名：{added} 新增，{merged} 合并）",
+        shortlist_decision_pack_migrated: "（从 v{from} 迁移至 v1.2.0）",
+        shortlist_decision_pack_preview: "👁 预览决策包",
+        shortlist_decision_pack_preview_title: "预览 JSON 决策包将如何合并到当前候选名单（只读，不修改数据）",
+        shortlist_decision_pack_preview_ok: "预览：候选名单 {n} 名（{added} 新增，{merged} 合并），观察名单 {wn} 名（{w_added} 新增，{w_merged} 合并），来源日志 {prov} 条",
+        shortlist_decision_pack_preview_empty: "预览：决策包中没有可合并的条目",
+        shortlist_provenance_log_title: "来源审计日志",
+        shortlist_provenance_empty: "暂无来源事件",
+        shortlist_provenance_count: "{n} 条来源事件",
+        shortlist_provenance_col_time: "时间",
+        shortlist_provenance_col_player: "球员",
+        shortlist_provenance_col_action: "操作",
+        shortlist_provenance_col_code: "来源码",
+        shortlist_provenance_col_result: "结果来源码",
+        shortlist_provenance_action_merged: "合并",
+        shortlist_provenance_action_removed: "移除",
+        shortlist_provenance_clear: "清空日志",
+        shortlist_reset_ui_state: "重置界面状态",
+        shortlist_reset_ui_state_title: "清除筛选与对比选择",
+        cross_scouting_export_csv: "导出 CSV",
+        cross_scouting_export_json: "导出 JSON",
+        cross_scouting_export_no_data: "无可导出数据",
         scouting_metric_review: "待复核",
         scouting_metric_short: "候选",
         scouting_search: "搜索球员、球队或原因",
@@ -211,6 +407,58 @@ const i18n = {
         wc_avg_rating: "均分",
         wc_no_data: "无数据",
         wc_low_coverage: "评分覆盖率低于50%，结论置信度较低",
+        wc_scouting_need_col: "球探需求",
+        wc_scouting_need_title: "球探需求概览",
+        wc_scouting_need_loading: "正在加载球探需求...",
+        wc_scouting_need_no_data: "暂无球探需求数据",
+        wc_scouting_need_fetch_fail: "球探需求加载失败",
+        wc_scouting_need_summary: "共 {n} 名球员存在位置缺口（{shallow} 人手不足，{low_q} 质量偏低，{missing} 完全缺失）",
+        wc_scouting_need_summary_empty: "所有位置均无显著缺口",
+        wc_scouting_need_team_not_found: "俱乐部未纳入评分矩阵",
+        wc_scouting_need_open_dashboard: "在球探面板中查看 {team}",
+        wc_scouting_need_pill_shallow: "人手不足",
+        wc_scouting_need_pill_low_quality: "质量偏低",
+        wc_scouting_need_pill_missing: "完全缺失",
+        wc_scouting_need_reason_label: "原因",
+        wc_scouting_need_players_label: "人数",
+        wc_scouting_need_mean_score_label: "均分",
+        wc_scouting_need_disclaimer: "球探需求胶囊反映球员所在俱乐部在其位置的阵容深度，仅为描述性叠加层，不构成转会建议。非五大联赛球员可能不在评分矩阵中，因此不显示胶囊。",
+        wc_match_pred_col: "预测",
+        wc_match_pred_home: "主胜",
+        wc_match_pred_draw: "平",
+        wc_match_pred_away: "客胜",
+        wc_match_pred_expected: "预期 {score}",
+        wc_match_pred_as_expected: "如预期",
+        wc_match_pred_upset: "爆冷",
+        wc_match_pred_hold: "未中",
+        wc_match_pred_team_not_found: "球队未纳入模型",
+        wc_match_pred_disclaimer: "每场预测使用 world_cup_strength_poisson 基线模型，为赛前预测，不反映比赛中状态。偏差分类将实际结果与 argmax 预测对比；赛前概率 < 0.30 的结果被标记为爆冷。",
+        wc_standings_prob_advance_col: "出线%",
+        wc_standings_prob_win_col: "头名%",
+        wc_standings_prob_disclaimer: "出线概率基于实力加权蒙特卡洛模拟剩余小组赛，仅供参考。",
+        wc_standings_prob_loading: "模拟中...",
+        wc_overall_title: "全部球队总榜",
+        wc_overall_sort_advance: "按出线概率",
+        wc_overall_sort_win_group: "按头名概率",
+        wc_overall_sort_points: "按积分",
+        wc_overall_sort_gd: "按净胜球",
+        wc_overall_sort_gf: "按进球数",
+        wc_overall_disclaimer: "全部48支球队按实力加权蒙特卡洛模拟排序，仅供参考。",
+        wc_impact_title: "关键战役",
+        wc_impact_subtitle: "按对出线概率影响排序的剩余比赛",
+        wc_impact_match: "比赛",
+        wc_impact_group: "小组",
+        wc_impact_total_impact: "影响指数",
+        wc_impact_max_swing: "最大变动",
+        wc_impact_team: "球队",
+        wc_impact_home_win: "主胜",
+        wc_impact_draw: "平局",
+        wc_impact_away_win: "客胜",
+        wc_impact_swing: "变动幅度",
+        wc_impact_no_data: "世界杯名单数据不可用，无法计算关键战役。",
+        wc_impact_loading: "加载中...",
+        wc_impact_no_matches: "没有剩余小组赛可分析。",
+        wc_impact_disclaimer: "影响指数基于实力加权蒙特卡洛模拟。每场比赛模拟三种结果（主胜/平/客胜），计算各队出线概率的变化幅度总和。仅供参考。",
         sort_priority: "优先级",
         sort_date: "日期",
         sort_name: "姓名",
@@ -1008,14 +1256,232 @@ const i18n = {
         compare_multi_err_not_found: "未找到球员",
         compare_multi_err_no_data: "无评分数据",
         compare_multi_loading: "加载中...",
+        workflow_kicker: "工作流导航",
+        workflow_title: "下一步、缺失证据与阻断原因",
+        workflow_boundary: "本地优先：基于已加载的 brief / briefing / 复核队列状态推断可执行的下一步；标注缺失证据和阻断原因。",
+        workflow_metric_next: "可执行下一步",
+        workflow_metric_blocker: "阻断项",
+        workflow_metric_evidence_gap: "缺失证据",
+        workflow_next_steps: "下一步",
+        workflow_blockers: "阻断原因",
+        workflow_evidence_gaps: "缺失证据",
+        workflow_sources: "数据来源",
+        workflow_empty_next: "暂无可执行下一步；完成 brief / briefing 创建后会出现推荐步骤。",
+        workflow_empty_blocker: "暂无阻断项。",
+        workflow_empty_evidence: "暂无缺失证据标注。",
+        workflow_action_goto: "前往",
+        workflow_action_create: "新建",
+        workflow_sources_local: "本地产物：复核队列、watchlist、shortlist、本地 API 的 recruitment brief 与 opposition briefing。",
+        workflow_sources_offline: "（离线模式：使用浏览器内存状态推断；启用本地 API 后可看到 brief / briefing 状态。）",
+        tactical_desktop_only: "战术编辑为桌面限定：屏幕窄于 760px 时仅可阅读，编辑控件已禁用。",
+        nav_versions: "版本",
+        versions_kicker: "版本与备份",
+        versions_title: "版本时间线、diff 与恢复",
+        versions_boundary: "本地优先：列出每个 brief / briefing 的备份时间线，查看任意两个版本的字段级 diff，并从备份恢复（遵守 If-Match 乐观并发）。",
+        versions_metric_briefs: "Recruitment briefs",
+        versions_metric_briefings: "Opposition briefings",
+        versions_metric_backups: "备份总数",
+        versions_select: "选择记录",
+        versions_type: "类型",
+        versions_type_brief: "Recruitment brief",
+        versions_type_briefing: "Opposition briefing",
+        versions_type_dossier: "球探决策档案",
+        versions_type_review: "赛后复盘",
+        versions_record: "记录",
+        versions_timeline: "时间线",
+        versions_refresh: "刷新",
+        versions_load_backup: "加载备份",
+        versions_diff_vs_current: "与当前 diff",
+        versions_restore: "恢复",
+        versions_diff: "字段级 diff",
+        versions_portable_pack: "可移植离线包",
+        versions_export_pack: "导出 portable pack JSON",
+        versions_pack_note: "便携包包含所有本地产物（recruitment briefs、opposition briefings），并附带每节的 sha256 哈希用于完整性校验。",
+        versions_empty_timeline: "暂无备份；对该记录进行更新或删除后会出现备份。",
+        versions_empty_records: "暂无记录；先在球探/比赛视图创建 brief / briefing。",
+        versions_offline: "本地 API 不可用，无法读取版本信息。",
+        versions_diff_empty: "选择一个备份后点击“与当前 diff”查看字段差异。",
+        versions_diff_no_change: "无字段差异。",
+        versions_restore_confirm: "确认从该备份恢复？将基于备份内容创建一个新版本（需要当前版本号）。",
+        versions_restore_missing_revision: "无法恢复：需要当前记录的 server_revision（请在球探/比赛视图加载后重试）。",
+        versions_restore_success: "恢复成功，新版本号：",
+        versions_restore_failed: "恢复失败：",
+        versions_pack_exported: "已导出便携包（共",
+        versions_pack_failed: "导出失败：",
+        versions_import_pack: "导入 portable pack JSON",
+        versions_pack_imported: "已导入便携包（新增 {imported} 条，冲突 {conflicts} 条，跳过 {skipped} 条）",
+        versions_pack_import_failed: "导入失败：",
+        versions_pack_import_confirm_overwrite: "检测到 {conflicts} 条冲突记录。点击“确定”以覆盖本地记录（基于本地版本号创建新版本并备份），或“取消”以保留本地记录（仅导入新记录）。",
+        versions_pack_invalid_json: "无法解析 JSON 文件：",
+        versions_pack_invalid_structure: "文件结构无效：缺少 pack 字段或非有效对象。",
+        versions_pack_section_errors: "部分节校验失败：{errors}",
+        versions_current_revision: "当前版本",
+        versions_backup_revision: "备份版本",
+        versions_backup_deletion: "删除备份",
+        versions_kind_revision: "版本",
+        versions_kind_deletion: "删除",
+        versions_create: "创建",
+        versions_create_brief: "创建 Recruitment brief",
+        versions_create_briefing: "创建 Opposition briefing",
+        versions_create_dossier: "创建 Decision dossier",
+        versions_create_review: "创建 Post-match review",
+        versions_create_hint_brief: "从工具栏直接起草新的需求 brief（位置、角色、预算、年龄、风险）。",
+        versions_create_hint_briefing: "从工具栏直接起草新的源受限赛前 briefing（空 sections，可在创建后追加）。",
+        versions_create_hint_dossier: "从工具栏直接起草新的决策档案（draft 状态）。",
+        versions_create_hint_review: "从工具栏直接起草新的赛后复盘（draft 状态）。",
+        versions_create_hint_disabled: "该类型暂不支持在此处创建。",
+        versions_create_note: "本地优先：新记录以 draft 状态写入本地存储；证据、对比、风险等子项可在创建后追加。",
+        versions_create_cancel: "取消",
+        versions_create_submit: "创建",
+        versions_create_no_link: "不关联",
+        versions_create_required_missing: "必填字段缺失：",
+        versions_create_failed: "创建失败：",
+        versions_create_success: "创建成功，新记录 ID：",
+        versions_create_field_brief_id: "Brief ID",
+        versions_create_field_brief_id_ph: "留空将自动生成 brief-YYYYMMDD-xxxxxxxx",
+        versions_create_field_briefing_id: "Briefing ID",
+        versions_create_field_briefing_id_ph: "留空将自动生成 briefing-YYYYMMDD-xxxxxxxx",
+        versions_create_field_dossier_id: "Dossier ID",
+        versions_create_field_dossier_id_ph: "留空将自动生成 dossier-YYYYMMDD-xxxxxxxx",
+        versions_create_field_review_id: "Review ID",
+        versions_create_field_review_id_ph: "留空将自动生成 review-YYYYMMDD-xxxxxxxx",
+        versions_create_field_id_note: "留空时自动生成；可自定义（字母、数字、-、_，1-128 字符）。",
+        versions_create_field_title: "标题",
+        versions_create_field_title_ph: "如：Decision dossier: Player X for Arsenal LB",
+        versions_create_field_title_ph_brief: "如：Recruitment brief: Arsenal LB backup",
+        versions_create_field_title_ph_briefing: "如：Opposition briefing: Arsenal vs Chelsea",
+        versions_create_field_link_brief_id: "关联的 Recruitment brief",
+        versions_create_field_link_briefing_id: "关联的 Opposition briefing",
+        versions_create_field_team: "目标球队",
+        versions_create_field_team_ph: "如：Arsenal",
+        versions_create_field_position_group: "位置组",
+        versions_create_pos_df: "后卫（DF）",
+        versions_create_pos_mf: "中场（MF）",
+        versions_create_pos_fw: "前锋（FW）",
+        versions_create_pos_gk: "门将（GK）",
+        versions_create_field_role: "角色",
+        versions_create_field_role_ph: "如：attacking_fullback",
+        versions_create_field_budget_eur: "预算（EUR）",
+        versions_create_field_budget_eur_ph: "如：30000000",
+        versions_create_field_minimum_minutes: "最低出场分钟",
+        versions_create_field_minimum_minutes_ph: "如：1500",
+        versions_create_field_age_min: "年龄下限",
+        versions_create_field_age_max: "年龄上限",
+        versions_create_field_risk_tolerance: "风险偏好",
+        versions_create_risk_low: "低（low）",
+        versions_create_risk_medium: "中（medium）",
+        versions_create_risk_high: "高（high）",
+        versions_create_field_match_id: "比赛 ID",
+        versions_create_field_match_id_ph: "如：wc_2026_final",
+        versions_create_field_competition: "赛事",
+        versions_create_field_competition_ph: "如：World Cup 2026",
+        versions_create_field_season: "赛季",
+        versions_create_field_season_ph: "如：2026",
+        versions_create_field_notes: "备注",
+        versions_create_field_candidate_name: "候选球员姓名",
+        versions_create_field_candidate_name_ph: "如：Player X",
+        versions_create_field_candidate_team: "候选球员当前球队",
+        versions_create_field_candidate_team_ph: "如：Current Club Y",
+        versions_create_field_home_team: "主队",
+        versions_create_field_home_team_ph: "如：Arsenal",
+        versions_create_field_away_team: "客队",
+        versions_create_field_away_team_ph: "如：Chelsea",
+        versions_create_field_human_opinion: "人工意见",
+        versions_create_field_recommendation: "建议",
+        versions_edit: "编辑",
+        versions_edit_dossier: "编辑 Decision dossier",
+        versions_edit_review: "编辑 Post-match review",
+        versions_edit_briefing: "编辑 Opposition briefing",
+        versions_edit_note: "本地优先：编辑会写入本地存储并创建备份；evidence、comparisons、risks 等子项不在编辑范围内。",
+        versions_edit_cancel: "取消",
+        versions_edit_submit: "保存",
+        versions_edit_required_missing: "必填字段缺失：",
+        versions_edit_failed: "保存失败：",
+        versions_edit_success: "已保存，新版本号：",
+        versions_edit_load_failed: "加载当前记录失败：",
+        versions_edit_no_record: "请先在上方选择要编辑的记录。",
+        versions_edit_conflict: "版本冲突：当前已变更，请刷新后重试。",
+        versions_edit_decision_required: "状态为 decided 时必须填写 decision。",
+        versions_edit_decision_required_finalized: "状态为 finalized 时必须填写 decision。",
+        versions_edit_decision_not_allowed: "非 decided 状态不能设置 decision；请先将状态改为 decided。",
+        versions_edit_decision_not_allowed_review: "非 finalized 状态不能设置 decision；请先将状态改为 finalized。",
+        versions_edit_field_status: "状态",
+        versions_edit_field_decision: "决策",
+        versions_edit_field_decision_note: "决策说明",
+        versions_edit_field_notes: "备注",
+        versions_edit_field_match_id: "比赛 ID",
+        versions_edit_field_competition: "赛事",
+        versions_edit_field_season: "赛季",
+        versions_edit_field_final_score_home: "主队终场进球",
+        versions_edit_field_final_score_away: "客队终场进球",
+        versions_edit_status_draft: "草稿",
+        versions_edit_status_decided: "已决策",
+        versions_edit_status_rejected: "已拒绝",
+        versions_edit_status_superseded: "已废弃",
+        versions_edit_status_finalized: "已定稿",
+        versions_edit_decision_proceed: "推进（proceed）",
+        versions_edit_decision_hold: "搁置（hold）",
+        versions_edit_decision_reject: "否决（reject）",
+        versions_edit_decision_defer: "延后（defer）",
+        versions_edit_decision_confirmed: "确认（confirmed）",
+        versions_edit_decision_falsified: "证伪（falsified）",
+        versions_edit_decision_partial: "部分确认（partial）",
+        versions_edit_decision_inconclusive: "无法定论（inconclusive）",
+        versions_edit_decision_none: "（无）",
+        versions_edit_list_supporting_evidence: "支持证据",
+        versions_edit_list_counter_evidence: "反证",
+        versions_edit_list_comparisons: "对比对象",
+        versions_edit_list_risks: "风险",
+        versions_edit_list_hypothesis_results: "假设对照",
+        versions_edit_list_falsified_patterns: "被证伪的模式",
+        versions_edit_list_new_questions: "新问题",
+        versions_edit_list_sections: "事实分节",
+        versions_edit_field_evidence_id: "证据 ID",
+        versions_edit_field_comparison_id: "对比 ID",
+        versions_edit_field_risk_id: "风险 ID",
+        versions_edit_field_hypothesis_id: "假设 ID",
+        versions_edit_field_pattern_id: "模式 ID",
+        versions_edit_field_question_id: "问题 ID",
+        versions_edit_field_section_id: "分节 ID",
+        versions_edit_field_kickoff_at: "开球时间（ISO 8601）",
+        versions_edit_field_linked_scenario_tree_id: "关联情景树 ID",
+        versions_edit_field_linked_post_match_review_id: "关联赛后复盘 ID",
+        versions_edit_field_linked_pattern_card_ids: "关联模式卡 ID（每行一条）",
+        versions_edit_field_fact_tier: "事实层级",
+        versions_edit_field_severity: "严重度",
+        versions_edit_field_outcome: "结果",
+        versions_edit_field_summary: "摘要",
+        versions_edit_field_comparison_player_id: "对比球员 ID",
+        versions_edit_field_comparison_player_name: "对比球员姓名",
+        versions_edit_field_planned: "计划",
+        versions_edit_field_observed: "实际观察",
+        versions_edit_field_scope: "范围",
+        versions_edit_field_evidence_refs: "证据引用（每行一条）",
+        versions_edit_fact_tier_official: "官方（official）",
+        versions_edit_fact_tier_recorded: "已记录（recorded）",
+        versions_edit_fact_tier_estimated: "估算（estimated）",
+        versions_edit_fact_tier_unknown: "未知（unknown）",
+        versions_edit_severity_low: "低（low）",
+        versions_edit_severity_medium: "中（medium）",
+        versions_edit_severity_high: "高（high）",
+        versions_edit_outcome_confirmed: "确认（confirmed）",
+        versions_edit_outcome_falsified: "证伪（falsified）",
+        versions_edit_outcome_partial: "部分（partial）",
+        versions_edit_list_add: "新增条目",
+        versions_edit_list_remove: "移除",
+        versions_edit_list_empty: "（暂无条目）",
+        versions_edit_list_required: "每个条目必须填写 ID 和必填字段；枚举值必须合法。",
+        versions_edit_list_dup_id: "存在重复 ID：",
     },
     en: {
         nav_overview: "Overview",
+        nav_workflow: "Workflow",
         nav_players: "Players",
         nav_compare: "Compare",
         nav_value: "Value",
         nav_matches: "Prediction",
         nav_teams: "Teams",
+        nav_league: "League",
         nav_scouting: "Scouting",
         nav_actions: "Action Value",
         nav_reports: "Reports",
@@ -1033,6 +1499,27 @@ const i18n = {
         health_proxy: "player match-level coverage is thin",
         health_trends: "trend metric contract pending",
         health_truth: "truth labels are still empty",
+        detailed_health_title: "Local detailed health",
+        detailed_health_force_refresh: "Force refresh",
+        detailed_health_validation: "Validation",
+        detailed_health_model_admission: "Model admission",
+        detailed_health_contract_quality: "Contract quality",
+        detailed_health_source_health: "Source health",
+        detailed_health_artifacts: "Local artifacts",
+        detailed_health_unavailable: "Unavailable",
+        detailed_health_loading: "Loading…",
+        detailed_health_offline: "API offline — detail unavailable",
+        detailed_health_refreshed_at: "Refreshed",
+        detailed_health_failed_sections: "Failed",
+        detailed_health_unavailable_sections: "Unavailable",
+        detailed_health_reviewable: "Reviewable",
+        detailed_health_not_reviewable: "Not reviewable",
+        detailed_health_not_available: "Not available",
+        detailed_health_with_snapshot: "With snapshot",
+        detailed_health_without_snapshot: "Without snapshot",
+        detailed_health_registered_sources: "Registered sources",
+        detailed_health_passed: "Passed",
+        detailed_health_failed: "Failed",
         card_players: "Player profile",
         card_players_body: "Rankings, percentiles, radar, confidence, detail cards.",
         card_value: "Value deviation",
@@ -1107,6 +1594,76 @@ const i18n = {
         teams_style_col_label: "Style",
         teams_style_col_n: "Teams",
         teams_style_col_teams: "Teams",
+        league_kicker: "League Season Analysis",
+        league_title: "Form, Fixture Difficulty & Season Projection",
+        league_note: "Descriptive overlay on Football-Data results: last-N form, Bradley-Terry fixture difficulty, Monte Carlo season projection. Does not use the Dixon-Coles model or odds data.",
+        league_metric_teams: "Teams",
+        league_metric_top_ppg: "Top PPG",
+        league_metric_title_prob: "Title Prob",
+        league_filter_title: "League & Season Selection",
+        league_filter_season: "Season",
+        league_filter_league: "League",
+        league_filter_last_n: "Last N",
+        league_refresh: "Refresh",
+        league_form_title: "Last-N Form Table",
+        league_form_col_team: "Team",
+        league_form_col_ppg: "PPG",
+        league_form_col_rating: "Form Rating",
+        league_form_col_trend: "Trend",
+        league_form_col_home: "Home PPG",
+        league_form_col_away: "Away PPG",
+        league_form_col_string: "Last N",
+        league_loading: "Loading...",
+        league_form_heatmap_title: "Last-N Form Heatmap",
+        league_form_heatmap_no_data: "No heatmap data",
+        league_form_heatmap_match_n: "Match {n}",
+        league_form_heatmap_opponent: "Opponent",
+        league_form_heatmap_score: "Score",
+        league_form_heatmap_venue: "Venue",
+        league_form_heatmap_date: "Date",
+        league_difficulty_title: "Fixture Difficulty",
+        league_difficulty_btn: "Query",
+        league_difficulty_placeholder: "Enter a team name for last-10 fixture difficulty, or leave blank for full league.",
+        league_difficulty_col_team: "Team",
+        league_difficulty_col_date: "Date",
+        league_difficulty_col_opp: "Opponent",
+        league_difficulty_col_venue: "Venue",
+        league_difficulty_col_xpts: "Exp Pts",
+        league_difficulty_col_score: "Difficulty",
+        league_difficulty_col_label: "Level",
+        league_difficulty_col_actual: "Actual",
+        league_difficulty_heatmap_title: "Fixture Difficulty Heatmap",
+        league_difficulty_heatmap_no_data: "No heatmap data",
+        league_difficulty_heatmap_match_n: "Match {n}",
+        league_difficulty_heatmap_opponent: "Opponent",
+        league_difficulty_heatmap_venue: "Venue",
+        league_difficulty_heatmap_date: "Date",
+        league_difficulty_heatmap_score: "Difficulty",
+        league_difficulty_heatmap_xpts: "Exp Pts",
+        league_difficulty_heatmap_level: "Level",
+        league_difficulty_distribution_title: "Team Difficulty Distribution",
+        league_difficulty_distribution_no_data: "No distribution data",
+        league_difficulty_distribution_avg: "Avg Difficulty",
+        league_projection_title: "Season Monte Carlo Projection",
+        league_projection_sims: "Simulations",
+        league_projection_btn: "Project",
+        league_projection_placeholder: "Click \"Project\" to run simulation",
+        league_proj_col_team: "Team",
+        league_proj_col_points: "Avg Points",
+        league_proj_col_position: "Avg Position",
+        league_proj_col_title: "Title Prob",
+        league_proj_col_topn: "Top-4 Prob",
+        league_proj_col_relegation: "Relegation Prob",
+        league_trend_rising: "Rising",
+        league_trend_declining: "Declining",
+        league_trend_stable: "Stable",
+        league_trend_insufficient: "Insufficient",
+        league_trend_no_data: "No Data",
+        league_diff_very_hard: "Very Hard",
+        league_diff_hard: "Hard",
+        league_diff_moderate: "Moderate",
+        league_diff_easy: "Easy",
+        league_diff_very_easy: "Very Easy",
         risers_decliners_title: "Risers / Decliners Watch",
         risers_season: "Season",
         risers_top_n: "Top N",
@@ -1125,6 +1682,109 @@ const i18n = {
         style_fit_title: "Player Style-Fit to Team Clusters",
         style_fit_player: "Player name",
         style_fit_button: "Compute",
+        cross_scouting_title: "Cross-League Scouting",
+        cross_scouting_boundary: "Descriptive overlay on the rating matrix: per-position depth comparison, gap-based candidate recommendation, and style-similarity matching. NOT a transfer recommendation.",
+        cross_scouting_season: "Season",
+        cross_scouting_min_minutes: "Min minutes",
+        cross_scouting_team_a: "Team A",
+        cross_scouting_team_b: "Team B",
+        cross_scouting_depth_btn: "Compare depth",
+        cross_scouting_targets_btn: "Recommend targets",
+        cross_scouting_style_btn: "Style match",
+        cross_scouting_exclude_same_league: "Exclude same league",
+        cross_scouting_col_pos: "Position",
+        cross_scouting_col_a: "Team A",
+        cross_scouting_col_b: "Team B",
+        cross_scouting_col_n: "Players",
+        cross_scouting_col_mean: "Mean",
+        cross_scouting_col_depth: "Depth",
+        cross_scouting_col_advantage: "Edge",
+        cross_scouting_complementary: "Complementary positions",
+        cross_scouting_col_player: "Player",
+        cross_scouting_col_team: "Team",
+        cross_scouting_col_league: "League",
+        cross_scouting_col_score: "Score",
+        cross_scouting_col_minutes: "Minutes",
+        cross_scouting_col_pct: "League pct",
+        cross_scouting_col_gap: "Gap type",
+        cross_scouting_col_sim: "Style similarity",
+        cross_scouting_target_player: "Target player",
+        cross_scouting_no_data: "No data",
+        cross_scouting_no_candidates: "No qualifying candidates",
+        cross_scouting_status_ok: "OK",
+        cross_scouting_status_no_data: "No data",
+        cross_scouting_status_not_found: "Team not found",
+        cross_scouting_status_invalid_pos: "Invalid position group",
+        cross_scouting_col_actions: "Actions",
+        cross_scouting_add_shortlist: "Add to shortlist",
+        cross_scouting_add_compare: "Add to compare",
+        cross_scouting_compare_tray: "Compare tray",
+        cross_scouting_compare_clear: "Clear",
+        cross_scouting_compare_run: "Compare",
+        cross_scouting_compare_need_two: "Select at least 2 players to compare",
+        cross_scouting_compare_max: "Max 6 players",
+        cross_scouting_style_weighted: "Position weighted",
+        cross_scouting_dashboard_btn: "Dashboard",
+        cross_scouting_dashboard_title: "Scouting dashboard",
+        cross_scouting_dashboard_loading: "Aggregating scouting data…",
+        cross_scouting_dashboard_no_data: "No scouting data",
+        cross_scouting_dashboard_depth: "Depth",
+        cross_scouting_dashboard_targets: "Gap targets",
+        cross_scouting_dashboard_style: "Style match",
+        cross_scouting_dashboard_max_positions: "Max positions",
+        cross_scouting_dashboard_weighted: "Position weighted",
+        cross_scouting_dashboard_n_gaps: "Gaps",
+        cross_scouting_dashboard_n_matched: "Matched positions",
+        cross_scouting_dashboard_export: "Export dashboard",
+        cross_scouting_dashboard_batch_add: "Batch add to shortlist",
+        cross_scouting_dashboard_batch_added: "Added {n} candidates",
+        cross_scouting_dashboard_batch_none: "No new candidates to add",
+        all_sources: "All sources",
+        remove_source: "Remove this source",
+        source_filter_hint: "Click a source to filter",
+        no_source_filter: "No source filter",
+        shortlist_compare_btn: "Compare selected ({n})",
+        shortlist_compare_clear: "Clear selection",
+        shortlist_compare_min: "Select at least 2 players",
+        shortlist_compare_max: "Select at most 6 players",
+        shortlist_compare_loading: "Comparing…",
+        shortlist_compare_unavailable: "Comparison unavailable",
+        shortlist_compare_failed: "Comparison fetch failed",
+        shortlist_compare_sync_tray: "Send to compare tray",
+        shortlist_compare_sync_tray_title: "Sync selected players to the cross-scouting compare tray (max 6)",
+        shortlist_compare_sync_added: "Added {n}",
+        shortlist_compare_sync_dup: "{n} already in tray",
+        shortlist_compare_sync_cap: "{n} skipped (tray full)",
+        shortlist_compare_sync_empty: "No players selected to sync",
+        shortlist_decision_pack_import: "Import decision pack",
+        shortlist_decision_pack_import_title: "Restore shortlist from JSON file (merges reason_codes and dossiers, does not overwrite existing data)",
+        shortlist_decision_pack_import_ok: "Imported {n} players ({merged} merged, {added} added)",
+        shortlist_decision_pack_import_empty: "No players in decision pack to import",
+        shortlist_decision_pack_import_invalid: "Invalid decision pack format: {reason}",
+        shortlist_decision_pack_import_read_fail: "Failed to read file",
+        shortlist_decision_pack_import_provenance: "({provenance} provenance log entries merged)",
+        shortlist_decision_pack_import_watchlist: "(watchlist {n}: {added} added, {merged} merged)",
+        shortlist_decision_pack_migrated: "(migrated from v{from} to v1.2.0)",
+        shortlist_decision_pack_preview: "👁 Preview decision pack",
+        shortlist_decision_pack_preview_title: "Preview how the JSON decision pack would merge into the current shortlist (read-only, does not modify data)",
+        shortlist_decision_pack_preview_ok: "Preview: shortlist {n} ({added} added, {merged} merged), watchlist {wn} ({w_added} added, {w_merged} merged), provenance {prov}",
+        shortlist_decision_pack_preview_empty: "Preview: no entries in decision pack to merge",
+        shortlist_provenance_log_title: "Provenance Log",
+        shortlist_provenance_empty: "No provenance events recorded",
+        shortlist_provenance_count: "{n} provenance events",
+        shortlist_provenance_col_time: "Time",
+        shortlist_provenance_col_player: "Player",
+        shortlist_provenance_col_action: "Action",
+        shortlist_provenance_col_code: "Code",
+        shortlist_provenance_col_result: "Resulting codes",
+        shortlist_provenance_action_merged: "Merged",
+        shortlist_provenance_action_removed: "Removed",
+        shortlist_provenance_clear: "Clear log",
+        shortlist_reset_ui_state: "Reset UI state",
+        shortlist_reset_ui_state_title: "Clear filters and compare selection",
+        cross_scouting_export_csv: "Export CSV",
+        cross_scouting_export_json: "Export JSON",
+        cross_scouting_export_no_data: "No data to export",
         scouting_metric_review: "To review",
         scouting_metric_short: "Shortlist",
         scouting_search: "Search player, team, or reason",
@@ -1220,6 +1880,58 @@ const i18n = {
         wc_avg_rating: "Avg",
         wc_no_data: "No data",
         wc_low_coverage: "Rating coverage below 50%, low confidence",
+        wc_scouting_need_col: "Scouting",
+        wc_scouting_need_title: "Scouting Need Overview",
+        wc_scouting_need_loading: "Loading scouting needs...",
+        wc_scouting_need_no_data: "No scouting need data",
+        wc_scouting_need_fetch_fail: "Scouting needs fetch failed",
+        wc_scouting_need_summary: "{n} players have a position gap ({shallow} shallow, {low_q} low quality, {missing} missing)",
+        wc_scouting_need_summary_empty: "No significant position gaps",
+        wc_scouting_need_team_not_found: "Club not in rating matrix",
+        wc_scouting_need_open_dashboard: "View {team} in scouting panel",
+        wc_scouting_need_pill_shallow: "Shallow",
+        wc_scouting_need_pill_low_quality: "Low Quality",
+        wc_scouting_need_pill_missing: "Missing",
+        wc_scouting_need_reason_label: "Reason",
+        wc_scouting_need_players_label: "Players",
+        wc_scouting_need_mean_score_label: "Mean Score",
+        wc_scouting_need_disclaimer: "Scouting-need pills reflect the player's club team depth at their position; they are descriptive overlays and do not constitute transfer recommendations. Players at non-Big5 clubs may have no rating-matrix coverage and show no pill.",
+        wc_match_pred_col: "Prediction",
+        wc_match_pred_home: "Home",
+        wc_match_pred_draw: "Draw",
+        wc_match_pred_away: "Away",
+        wc_match_pred_expected: "Expected {score}",
+        wc_match_pred_as_expected: "As Expected",
+        wc_match_pred_upset: "Upset",
+        wc_match_pred_hold: "Hold",
+        wc_match_pred_team_not_found: "Team not in model",
+        wc_match_pred_disclaimer: "Per-match predictions use the world_cup_strength_poisson baseline model. Pre-recording only; does not reflect in-play state. Delta classification compares actual result to argmax prediction; outcomes with pre-match probability < 0.30 are flagged as upsets.",
+        wc_standings_prob_advance_col: "Adv%",
+        wc_standings_prob_win_col: "Win Grp%",
+        wc_standings_prob_disclaimer: "Advancement probabilities use strength-weighted Monte Carlo simulation of remaining group matches. Illustrative only.",
+        wc_standings_prob_loading: "Simulating...",
+        wc_overall_title: "Overall Leaderboard",
+        wc_overall_sort_advance: "by Adv. Prob.",
+        wc_overall_sort_win_group: "by Group Win",
+        wc_overall_sort_points: "by Points",
+        wc_overall_sort_gd: "by Goal Diff",
+        wc_overall_sort_gf: "by Goals For",
+        wc_overall_disclaimer: "All 48 teams ranked by strength-weighted Monte Carlo simulation. Illustrative only.",
+        wc_impact_title: "Key Matches",
+        wc_impact_subtitle: "Remaining matches ranked by advancement probability impact",
+        wc_impact_match: "Match",
+        wc_impact_group: "Group",
+        wc_impact_total_impact: "Impact Index",
+        wc_impact_max_swing: "Max Swing",
+        wc_impact_team: "Team",
+        wc_impact_home_win: "Home Win",
+        wc_impact_draw: "Draw",
+        wc_impact_away_win: "Away Win",
+        wc_impact_swing: "Swing",
+        wc_impact_no_data: "World Cup squad data unavailable; match impact estimates cannot be computed.",
+        wc_impact_loading: "Loading...",
+        wc_impact_no_matches: "No remaining group-stage matches to analyze.",
+        wc_impact_disclaimer: "Impact index uses strength-weighted Monte Carlo simulation. Each match is simulated with three outcomes (home win / draw / away win); impact = sum of advancement probability swings across all teams. Illustrative only.",
         sort_priority: "Priority",
         sort_date: "Date",
         sort_name: "Name",
@@ -2017,6 +2729,222 @@ const i18n = {
         compare_multi_err_not_found: "Players not found",
         compare_multi_err_no_data: "No rating data available",
         compare_multi_loading: "Loading...",
+        workflow_kicker: "Workflow navigation",
+        workflow_title: "Next steps, missing evidence and blockers",
+        workflow_boundary: "Local-first: infers actionable next steps from loaded brief / briefing / review queue state; flags missing evidence and blockers.",
+        workflow_metric_next: "Next steps",
+        workflow_metric_blocker: "Blockers",
+        workflow_metric_evidence_gap: "Evidence gaps",
+        workflow_next_steps: "Next steps",
+        workflow_blockers: "Blockers",
+        workflow_evidence_gaps: "Missing evidence",
+        workflow_sources: "Sources",
+        workflow_empty_next: "No actionable next step yet; create a brief / briefing to surface recommended steps.",
+        workflow_empty_blocker: "No blockers detected.",
+        workflow_empty_evidence: "No evidence gaps flagged.",
+        workflow_action_goto: "Open",
+        workflow_action_create: "New",
+        workflow_sources_local: "Local artifacts: review queue, watchlist, shortlist, and local-API recruitment briefs and opposition briefings.",
+        workflow_sources_offline: "(Offline mode: inferred from in-browser state; enable local API to see brief / briefing status.)",
+        tactical_desktop_only: "Tactical editing is desktop-only: below 760px the board is read-only and editing controls are disabled.",
+        nav_versions: "Versions",
+        versions_kicker: "Versions & backups",
+        versions_title: "Version timeline, diff and restore",
+        versions_boundary: "Local-first: lists the backup timeline for each brief / briefing, shows field-level diff between any two versions, and restores from a backup (respecting If-Match optimistic concurrency).",
+        versions_metric_briefs: "Recruitment briefs",
+        versions_metric_briefings: "Opposition briefings",
+        versions_metric_backups: "Total backups",
+        versions_select: "Select record",
+        versions_type: "Type",
+        versions_type_brief: "Recruitment brief",
+        versions_type_briefing: "Opposition briefing",
+        versions_type_dossier: "Recruitment decision dossier",
+        versions_type_review: "Opposition post-match review",
+        versions_record: "Record",
+        versions_timeline: "Timeline",
+        versions_refresh: "Refresh",
+        versions_load_backup: "Load backup",
+        versions_diff_vs_current: "Diff vs current",
+        versions_restore: "Restore",
+        versions_diff: "Field-level diff",
+        versions_portable_pack: "Portable offline pack",
+        versions_export_pack: "Export portable pack JSON",
+        versions_pack_note: "The pack bundles all local artifacts (recruitment briefs, opposition briefings) with a sha256 hash per section for integrity checks.",
+        versions_empty_timeline: "No backups yet; updating or deleting the record will create one.",
+        versions_empty_records: "No records yet; create a brief / briefing in Scouting / Matches first.",
+        versions_offline: "Local API unavailable; cannot read version information.",
+        versions_diff_empty: "Select a backup and click \"Diff vs current\" to see field-level changes.",
+        versions_diff_no_change: "No field differences.",
+        versions_restore_confirm: "Restore from this backup? A new revision will be created from the backup payload (current revision required).",
+        versions_restore_missing_revision: "Cannot restore: current server_revision is required (load the record in Scouting / Matches first).",
+        versions_restore_success: "Restore succeeded, new revision: ",
+        versions_restore_failed: "Restore failed: ",
+        versions_pack_exported: "Portable pack exported (",
+        versions_pack_failed: "Export failed: ",
+        versions_import_pack: "Import portable pack JSON",
+        versions_pack_imported: "Portable pack imported (new: {imported}, conflicts: {conflicts}, skipped: {skipped})",
+        versions_pack_import_failed: "Import failed: ",
+        versions_pack_import_confirm_overwrite: "{conflicts} conflicting record(s) detected. Click OK to overwrite local records (creates a new revision with backup), or Cancel to keep local records (only new records will be imported).",
+        versions_pack_invalid_json: "Could not parse JSON file: ",
+        versions_pack_invalid_structure: "Invalid file structure: missing pack field or not a valid object.",
+        versions_pack_section_errors: "Some sections failed validation: {errors}",
+        versions_current_revision: "Current revision",
+        versions_backup_revision: "Backup revision",
+        versions_backup_deletion: "Deletion backup",
+        versions_kind_revision: "Revision",
+        versions_kind_deletion: "Deletion",
+        versions_create: "Create",
+        versions_create_brief: "Create recruitment brief",
+        versions_create_briefing: "Create opposition briefing",
+        versions_create_dossier: "Create decision dossier",
+        versions_create_review: "Create post-match review",
+        versions_create_hint_brief: "Draft a new requirement brief (position, role, budget, age, risk) from the toolbar.",
+        versions_create_hint_briefing: "Draft a new source-limited pre-match briefing (empty sections; can be added after creation) from the toolbar.",
+        versions_create_hint_dossier: "Draft a new decision dossier (draft status) from the toolbar.",
+        versions_create_hint_review: "Draft a new post-match review (draft status) from the toolbar.",
+        versions_create_hint_disabled: "This type cannot be created here yet.",
+        versions_create_note: "Local-first: the new record is saved locally in draft status; evidence, comparisons and risks can be added after creation.",
+        versions_create_cancel: "Cancel",
+        versions_create_submit: "Create",
+        versions_create_no_link: "No link",
+        versions_create_required_missing: "Required field missing: ",
+        versions_create_failed: "Create failed: ",
+        versions_create_success: "Created, new record ID: ",
+        versions_create_field_brief_id: "Brief ID",
+        versions_create_field_brief_id_ph: "Leave blank to auto-generate brief-YYYYMMDD-xxxxxxxx",
+        versions_create_field_briefing_id: "Briefing ID",
+        versions_create_field_briefing_id_ph: "Leave blank to auto-generate briefing-YYYYMMDD-xxxxxxxx",
+        versions_create_field_dossier_id: "Dossier ID",
+        versions_create_field_dossier_id_ph: "Leave blank to auto-generate dossier-YYYYMMDD-xxxxxxxx",
+        versions_create_field_review_id: "Review ID",
+        versions_create_field_review_id_ph: "Leave blank to auto-generate review-YYYYMMDD-xxxxxxxx",
+        versions_create_field_id_note: "Auto-generated when blank; custom values allowed (alphanumeric, -, _, 1-128 chars).",
+        versions_create_field_title: "Title",
+        versions_create_field_title_ph: "e.g. Decision dossier: Player X for Arsenal LB",
+        versions_create_field_title_ph_brief: "e.g. Recruitment brief: Arsenal LB backup",
+        versions_create_field_title_ph_briefing: "e.g. Opposition briefing: Arsenal vs Chelsea",
+        versions_create_field_link_brief_id: "Linked recruitment brief",
+        versions_create_field_link_briefing_id: "Linked opposition briefing",
+        versions_create_field_team: "Target team",
+        versions_create_field_team_ph: "e.g. Arsenal",
+        versions_create_field_position_group: "Position group",
+        versions_create_pos_df: "Defender (DF)",
+        versions_create_pos_mf: "Midfielder (MF)",
+        versions_create_pos_fw: "Forward (FW)",
+        versions_create_pos_gk: "Goalkeeper (GK)",
+        versions_create_field_role: "Role",
+        versions_create_field_role_ph: "e.g. attacking_fullback",
+        versions_create_field_budget_eur: "Budget (EUR)",
+        versions_create_field_budget_eur_ph: "e.g. 30000000",
+        versions_create_field_minimum_minutes: "Minimum minutes",
+        versions_create_field_minimum_minutes_ph: "e.g. 1500",
+        versions_create_field_age_min: "Age min",
+        versions_create_field_age_max: "Age max",
+        versions_create_field_risk_tolerance: "Risk tolerance",
+        versions_create_risk_low: "Low",
+        versions_create_risk_medium: "Medium",
+        versions_create_risk_high: "High",
+        versions_create_field_match_id: "Match ID",
+        versions_create_field_match_id_ph: "e.g. wc_2026_final",
+        versions_create_field_competition: "Competition",
+        versions_create_field_competition_ph: "e.g. World Cup 2026",
+        versions_create_field_season: "Season",
+        versions_create_field_season_ph: "e.g. 2026",
+        versions_create_field_notes: "Notes",
+        versions_create_field_candidate_name: "Candidate player name",
+        versions_create_field_candidate_name_ph: "e.g. Player X",
+        versions_create_field_candidate_team: "Candidate player's current club",
+        versions_create_field_candidate_team_ph: "e.g. Current Club Y",
+        versions_create_field_home_team: "Home team",
+        versions_create_field_home_team_ph: "e.g. Arsenal",
+        versions_create_field_away_team: "Away team",
+        versions_create_field_away_team_ph: "e.g. Chelsea",
+        versions_create_field_human_opinion: "Human opinion",
+        versions_create_field_recommendation: "Recommendation",
+        versions_edit: "Edit",
+        versions_edit_dossier: "Edit decision dossier",
+        versions_edit_review: "Edit post-match review",
+        versions_edit_briefing: "Edit opposition briefing",
+        versions_edit_note: "Local-first: edits are saved locally with a backup; evidence, comparisons and risks are not editable here.",
+        versions_edit_cancel: "Cancel",
+        versions_edit_submit: "Save",
+        versions_edit_required_missing: "Required field missing: ",
+        versions_edit_failed: "Save failed: ",
+        versions_edit_success: "Saved, new revision: ",
+        versions_edit_load_failed: "Failed to load current record: ",
+        versions_edit_no_record: "Please pick a record to edit above first.",
+        versions_edit_conflict: "Revision conflict: the record changed. Please refresh and retry.",
+        versions_edit_decision_required: "decision is required when status is 'decided'.",
+        versions_edit_decision_required_finalized: "decision is required when status is 'finalized'.",
+        versions_edit_decision_not_allowed: "decision can only be set when status='decided'; switch status first.",
+        versions_edit_decision_not_allowed_review: "decision can only be set when status='finalized'; switch status first.",
+        versions_edit_field_status: "Status",
+        versions_edit_field_decision: "Decision",
+        versions_edit_field_decision_note: "Decision note",
+        versions_edit_field_notes: "Notes",
+        versions_edit_field_match_id: "Match ID",
+        versions_edit_field_competition: "Competition",
+        versions_edit_field_season: "Season",
+        versions_edit_field_final_score_home: "Final score (home)",
+        versions_edit_field_final_score_away: "Final score (away)",
+        versions_edit_status_draft: "Draft",
+        versions_edit_status_decided: "Decided",
+        versions_edit_status_rejected: "Rejected",
+        versions_edit_status_superseded: "Superseded",
+        versions_edit_status_finalized: "Finalized",
+        versions_edit_decision_proceed: "Proceed",
+        versions_edit_decision_hold: "Hold",
+        versions_edit_decision_reject: "Reject",
+        versions_edit_decision_defer: "Defer",
+        versions_edit_decision_confirmed: "Confirmed",
+        versions_edit_decision_falsified: "Falsified",
+        versions_edit_decision_partial: "Partial",
+        versions_edit_decision_inconclusive: "Inconclusive",
+        versions_edit_decision_none: "(none)",
+        versions_edit_list_supporting_evidence: "Supporting evidence",
+        versions_edit_list_counter_evidence: "Counter evidence",
+        versions_edit_list_comparisons: "Comparisons",
+        versions_edit_list_risks: "Risks",
+        versions_edit_list_hypothesis_results: "Hypothesis results",
+        versions_edit_list_falsified_patterns: "Falsified patterns",
+        versions_edit_list_new_questions: "New questions",
+        versions_edit_list_sections: "Sections",
+        versions_edit_field_evidence_id: "Evidence ID",
+        versions_edit_field_comparison_id: "Comparison ID",
+        versions_edit_field_risk_id: "Risk ID",
+        versions_edit_field_hypothesis_id: "Hypothesis ID",
+        versions_edit_field_pattern_id: "Pattern ID",
+        versions_edit_field_question_id: "Question ID",
+        versions_edit_field_section_id: "Section ID",
+        versions_edit_field_kickoff_at: "Kickoff (ISO 8601)",
+        versions_edit_field_linked_scenario_tree_id: "Linked scenario tree ID",
+        versions_edit_field_linked_post_match_review_id: "Linked post-match review ID",
+        versions_edit_field_linked_pattern_card_ids: "Linked pattern card IDs (one per line)",
+        versions_edit_field_fact_tier: "Fact tier",
+        versions_edit_field_severity: "Severity",
+        versions_edit_field_outcome: "Outcome",
+        versions_edit_field_summary: "Summary",
+        versions_edit_field_comparison_player_id: "Comparison player ID",
+        versions_edit_field_comparison_player_name: "Comparison player name",
+        versions_edit_field_planned: "Planned",
+        versions_edit_field_observed: "Observed",
+        versions_edit_field_scope: "Scope",
+        versions_edit_field_evidence_refs: "Evidence refs (one per line)",
+        versions_edit_fact_tier_official: "Official",
+        versions_edit_fact_tier_recorded: "Recorded",
+        versions_edit_fact_tier_estimated: "Estimated",
+        versions_edit_fact_tier_unknown: "Unknown",
+        versions_edit_severity_low: "Low",
+        versions_edit_severity_medium: "Medium",
+        versions_edit_severity_high: "High",
+        versions_edit_outcome_confirmed: "Confirmed",
+        versions_edit_outcome_falsified: "Falsified",
+        versions_edit_outcome_partial: "Partial",
+        versions_edit_list_add: "Add entry",
+        versions_edit_list_remove: "Remove",
+        versions_edit_list_empty: "(no entries)",
+        versions_edit_list_required: "Each entry must have an ID and required fields; enum values must be valid.",
+        versions_edit_list_dup_id: "Duplicate ID: ",
     },
 };
 
@@ -2185,6 +3113,8 @@ let reviews = [];
 let matches = [];
 let ratingsMeta = { model_meta: {}, league_metrics: [] };
 let artifactSummary = { data_health: {}, artifacts: [] };
+let detailedHealth = null; // populated by fetchDetailedHealth(); null = never fetched
+let detailedHealthState = "idle"; // "idle" | "loading" | "ok" | "error"
 let predictionMeta = { status: "no_data" };
 let predictionCalibration = {};
 let valueSummaryMeta = { sample_count: 0, metrics: {} };
@@ -2570,6 +3500,89 @@ async function fetchPositionGapReport(team, season) {
     }
 }
 
+async function fetchCrossLeagueTeamDepth(teamA, teamB, season, minMinutes) {
+    if (!teamA || !teamB) return { status: "no_data", team_a: teamA, team_b: teamB };
+    const params = new URLSearchParams();
+    params.set("team_a", teamA);
+    params.set("team_b", teamB);
+    if (season) params.set("season", season);
+    if (minMinutes !== undefined && minMinutes !== null && !Number.isNaN(Number(minMinutes))) {
+        params.set("min_player_minutes", String(minMinutes));
+    }
+    try {
+        const data = await fetchJson("/teams/cross-league-depth", { params });
+        return data || { status: "no_data", team_a: teamA, team_b: teamB };
+    } catch (err) {
+        console.warn("Failed to fetch cross-league team depth:", err);
+        return { status: "fetch_failed", team_a: teamA, team_b: teamB, error: "fetch_failed" };
+    }
+}
+
+async function fetchScoutingTargets(team, season, minMinutes, topN, excludeSameLeague) {
+    if (!team) return { status: "no_data", team };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (minMinutes !== undefined && minMinutes !== null && !Number.isNaN(Number(minMinutes))) {
+        params.set("min_player_minutes", String(minMinutes));
+    }
+    if (topN !== undefined && topN !== null && !Number.isNaN(Number(topN))) {
+        params.set("top_n", String(topN));
+    }
+    params.set("exclude_same_league", excludeSameLeague ? "true" : "false");
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/scouting-targets`, { params });
+        return data || { status: "no_data", team, gap_targets: [] };
+    } catch (err) {
+        console.warn("Failed to fetch scouting targets:", err);
+        return { status: "fetch_failed", team, gap_targets: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague, usePositionWeights) {
+    if (!team || !positionGroup) return { status: "no_data", team, position_group: positionGroup };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (minMinutes !== undefined && minMinutes !== null && !Number.isNaN(Number(minMinutes))) {
+        params.set("min_player_minutes", String(minMinutes));
+    }
+    if (topN !== undefined && topN !== null && !Number.isNaN(Number(topN))) {
+        params.set("top_n", String(topN));
+    }
+    params.set("exclude_same_league", excludeSameLeague ? "true" : "false");
+    if (usePositionWeights) params.set("use_position_weights", "true");
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/scouting-style-match/${encodeURIComponent(positionGroup)}`, { params });
+        return data || { status: "no_data", team, position_group: positionGroup, candidates: [] };
+    } catch (err) {
+        console.warn("Failed to fetch scouting style match:", err);
+        return { status: "fetch_failed", team, position_group: positionGroup, candidates: [], error: "fetch_failed" };
+    }
+}
+
+async function fetchScoutingDashboard(team, season, minMinutes, topN, excludeSameLeague, maxPositions, usePositionWeights) {
+    if (!team) return { status: "no_data", team };
+    const params = new URLSearchParams();
+    if (season) params.set("season", season);
+    if (minMinutes !== undefined && minMinutes !== null && !Number.isNaN(Number(minMinutes))) {
+        params.set("min_player_minutes", String(minMinutes));
+    }
+    if (topN !== undefined && topN !== null && !Number.isNaN(Number(topN))) {
+        params.set("top_n", String(topN));
+    }
+    params.set("exclude_same_league", excludeSameLeague ? "true" : "false");
+    if (maxPositions !== undefined && maxPositions !== null && !Number.isNaN(Number(maxPositions))) {
+        params.set("max_positions", String(maxPositions));
+    }
+    if (usePositionWeights) params.set("use_position_weights", "true");
+    try {
+        const data = await fetchJson(`/teams/${encodeURIComponent(team)}/scouting-dashboard`, { params });
+        return data || { status: "no_data", team, gap_targets: [], position_style_matches: [] };
+    } catch (err) {
+        console.warn("Failed to fetch scouting dashboard:", err);
+        return { status: "fetch_failed", team, gap_targets: [], position_style_matches: [], error: "fetch_failed" };
+    }
+}
+
 async function fetchPositionActionProfile(league, season) {
     const params = new URLSearchParams();
     if (league) params.set("league", league);
@@ -2779,7 +3792,7 @@ const LICENSE_SOURCES = [
     { key: "football_data", name: "Football-Data.co.uk", license: "Free (non-commercial)", attribution: "Attribution appreciated", url: "https://www.football-data.co.uk" },
     { key: "fbref", name: "FBref", license: "Restricted (personal research)", attribution: "No redistribution", url: "https://fbref.com" },
     { key: "understat", name: "Understat", license: "Public", attribution: "Attribution appreciated", url: "https://understat.com" },
-    { key: "club_elo", name: "Club Elo", license: "Public", attribution: "Attribution appreciated", url: "https://clubelo.com" },
+    { key: "clubelo", name: "Club Elo", license: "Public", attribution: "Attribution appreciated", url: "https://clubelo.com" },
     { key: "transfermarkt", name: "Transfermarkt", license: "Manual import only", attribution: "No automated scraping", url: "https://www.transfermarkt.com" },
 ];
 
@@ -3063,6 +4076,12 @@ function applyLocale() {
         element.placeholder = t(element.dataset.i18nPlaceholder);
     });
     document.getElementById("lang-toggle").textContent = appState.lang === "zh" ? "EN" : "中";
+    // Re-render the detailed-health panel so the labels follow the new
+    // language. Safe to call when the panel doesn't exist yet (e.g. on
+    // initial load before the overview view is rendered).
+    if (typeof renderDetailedHealth === "function") {
+        renderDetailedHealth();
+    }
 }
 
 async function setView(view) {
@@ -3245,7 +4264,7 @@ async function renderPlayerProfile() {
             if (!trend) return '';
             const trendDir = typeof trend === 'string' ? trend : (trend > 0 ? 'up' : trend < 0 ? 'down' : 'stable');
             const trendSym = trendDir === 'up' ? '\u25B2' : trendDir === 'down' ? '\u25BC' : '\u25CB';
-            const trendColor = trendDir === 'up' ? '#57d68d' : trendDir === 'down' ? '#ff6b6b' : 'var(--text-muted)';
+            const trendColor = trendDir === 'up' ? '#34c759' : trendDir === 'down' ? '#ff3b30' : 'var(--text-muted)';
             const trendLabel = appState.lang === 'zh' ? '赛季趋势' : 'Season trend';
             return `<div><span>${escapeHtml(trendLabel)}</span><strong style="color:${trendColor}">${trendSym} ${escapeHtml(trendDir)}</strong></div>`;
         })()}
@@ -3297,10 +4316,10 @@ async function renderPlayerProfile() {
             const cells = entries.map(([key, info]) => {
                 const label = info.label || key;
                 const pct = Math.round(info.percentile);
-                const color = pct >= 80 ? '#57d68d' : pct >= 60 ? '#4f9cff' : pct >= 40 ? '#f5a623' : '#ff6b6b';
+                const color = pct >= 80 ? '#34c759' : pct >= 60 ? '#007aff' : pct >= 40 ? '#ff9500' : '#ff3b30';
                 const isOverall = key === 'overall_score';
-                const highlight = isOverall ? 'border:1px solid var(--accent, #4f9cff);background:rgba(79,156,255,0.08)' : 'background:rgba(255,255,255,0.03)';
-                return `<div style="text-align:center;padding:6px 4px;${highlight};border-radius:6px">
+                const highlight = isOverall ? 'border:1px solid var(--accent, #007aff);background:rgba(79,156,255,0.08)' : 'background:rgba(255,255,255,0.03)';
+                return `<div style="text-align:center;padding:6px 4px;${highlight};border-radius:var(--radius-sm)">
                     <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:2px">${escapeHtml(label)}</div>
                     <div style="font-size:1.1rem;font-weight:700;color:${color}">${pct}<span style="font-size:0.65rem;color:var(--text-muted)">pct</span></div>
                 </div>`;
@@ -3329,7 +4348,7 @@ async function renderPlayerProfile() {
                     const conf = info.confidence || '';
                     const pctStr = (pct !== undefined && pct !== null) ? Math.round(pct) + '%' : '—';
                     const contribStr = (contrib !== undefined && contrib !== null) ? Math.round(contrib * 10) / 10 + '' : '—';
-                    const confColor = conf === 'HIGH' ? '#57d68d' : conf === 'MEDIUM' ? '#f5a623' : '#ff6b6b';
+                    const confColor = conf === 'HIGH' ? '#34c759' : conf === 'MEDIUM' ? '#ff9500' : '#ff3b30';
                     return `<tr>
                         <td style="padding:3px 6px;font-size:0.78rem">${escapeHtml(label)}</td>
                         <td style="padding:3px 6px;font-size:0.78rem;text-align:right">${pctStr}</td>
@@ -3359,7 +4378,7 @@ async function renderPlayerProfile() {
             const seasons = trend.seasons;
             const delta = trend.delta;
             const cells = seasons.map(s => {
-                return `<div style="text-align:center;padding:6px 4px;background:rgba(255,255,255,0.03);border-radius:6px">
+                return `<div style="text-align:center;padding:6px 4px;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm)">
                     <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:2px">${escapeHtml(String(s.season))}</div>
                     <div style="font-size:1rem;font-weight:600">${escapeHtml(String(s.optimized_score))}</div>
                     <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(String(s.minutes))}min</div>
@@ -3368,7 +4387,7 @@ async function renderPlayerProfile() {
             let deltaHtml = '';
             if (delta) {
                 const sc = delta.score_change;
-                const scColor = sc > 0 ? '#57d68d' : sc < 0 ? '#ff6b6b' : 'var(--text-muted)';
+                const scColor = sc > 0 ? '#34c759' : sc < 0 ? '#ff3b30' : 'var(--text-muted)';
                 const scSym = sc > 0 ? '\u25B2' : sc < 0 ? '\u25BC' : '\u25CB';
                 deltaHtml = `<div style="margin-top:6px;font-size:0.75rem;color:var(--text-muted)">
                     ${escapeHtml(delta.season_from)} \u2192 ${escapeHtml(delta.season_to)}:
@@ -3427,7 +4446,7 @@ async function renderPlayerProfile() {
             if (!reasons || reasons.length === 0) return '';
             const z = appState.lang === 'zh';
             const header = z ? '低置信度原因' : 'Low Confidence Reasons';
-            const items = reasons.map(r => `<li style="font-size:0.75rem;color:#f5a623;margin:2px 0">${escapeHtml(String(r))}</li>`).join('');
+            const items = reasons.map(r => `<li style="font-size:0.75rem;color:#ff9500;margin:2px 0">${escapeHtml(String(r))}</li>`).join('');
             return `<div style="grid-column:1/-1">
                 <span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.2rem">${escapeHtml(header)}</span>
                 <ul style="margin:0;padding-left:1.2rem;list-style:none">${items}</ul>
@@ -3442,7 +4461,7 @@ async function renderPlayerProfile() {
             if (profile && profile.has_gk === false) missing.push('gk');
             if (missing.length === 0) return '';
             const label = appState.lang === 'zh' ? '缺失字段' : 'Missing fields';
-            return `<div><span>${escapeHtml(label)}</span><strong style="color:#ff6b6b">\u25CB ${escapeHtml(missing.join(', '))}</strong></div>`;
+            return `<div><span>${escapeHtml(label)}</span><strong style="color:#ff3b30">\u25CB ${escapeHtml(missing.join(', '))}</strong></div>`;
         })()}
         ${/* Watchlist/Shortlist notes */ (() => {
             const wlNote = watchlistNotes[player.name] || "";
@@ -3492,7 +4511,7 @@ async function renderPlayerProfile() {
             if (phases.length > 0) {
                 const items = phases.map(p => {
                     const name = phaseNames[p.phase] || p.phase;
-                    return `<span style="display:inline-block;padding:2px 8px;background:rgba(74,144,217,0.12);border-radius:10px;font-size:0.7rem;margin-right:4px;margin-bottom:2px">${escapeHtml(name)} · ${escapeHtml(String(p.season_start || ''))}–${escapeHtml(String(p.season_end || ''))}</span>`;
+                    return `<span style="display:inline-block;padding:2px 8px;background:rgba(0,122,255,0.12);border-radius:var(--radius-md);font-size:0.7rem;margin-right:4px;margin-bottom:2px">${escapeHtml(name)} · ${escapeHtml(String(p.season_start || ''))}–${escapeHtml(String(p.season_end || ''))}</span>`;
                 }).join('');
                 phasesHtml = `<div style="margin-bottom:0.3rem"><span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(phasesLabel)}:</span> ${items}</div>`;
             }
@@ -3501,8 +4520,8 @@ async function renderPlayerProfile() {
                 const cells = yoy.map(d => {
                     const change = d.score_change;
                     const arrow = change === null || change === undefined ? '\u2014' : (change > 0 ? '\u2197' : change < 0 ? '\u2198' : '\u2192');
-                    const color = change === null || change === undefined ? 'var(--text-muted)' : (change > 0 ? '#4ade80' : change < 0 ? '#f87171' : 'var(--text-muted)');
-                    return `<div style="text-align:center;padding:4px 4px;background:rgba(255,255,255,0.03);border-radius:4px">
+                    const color = change === null || change === undefined ? 'var(--text-muted)' : (change > 0 ? '#34c759' : change < 0 ? '#ff3b30' : 'var(--text-muted)');
+                    return `<div style="text-align:center;padding:4px 4px;background:rgba(255,255,255,0.03);border-radius:var(--radius-xs)">
                         <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(String(d.from_season || d.season_from || ''))}\u2192${escapeHtml(String(d.to_season || d.season_to || ''))}</div>
                         <div style="font-size:0.85rem;font-weight:600;color:${color}">${arrow} ${change === null || change === undefined ? '\u2014' : (change > 0 ? '+' : '') + change}</div>
                     </div>`;
@@ -3553,11 +4572,11 @@ async function renderPlayerProfile() {
                 const isPrimary = primary && primary.position === pos;
                 const isAlt = alt.some(a => a.position === pos);
                 const isStretch = stretch.some(s => s.position === pos);
-                const color = isPrimary ? '#4ade80' : isAlt ? '#60a5fa' : isStretch ? '#fbbf24' : '#6b7280';
+                const color = isPrimary ? '#34c759' : isAlt ? '#5ac8fa' : isStretch ? '#ff9500' : '#8e8e93';
                 const tag = isPrimary ? (z ? '主' : 'P') : isAlt ? (z ? '备' : 'A') : isStretch ? (z ? '试' : 'S') : '';
                 return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:0.72rem">
                     <span style="width:28px;color:var(--text-muted)">${escapeHtml(labels[pos])}</span>
-                    <div style="flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden">
+                    <div style="flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:var(--radius-xs);overflow:hidden">
                         <div style="width:${Math.max(0, Math.min(100, v))}%;height:100%;background:${color}"></div>
                     </div>
                     <span style="width:32px;text-align:right;font-weight:600">${Math.round(v)}</span>
@@ -3613,7 +4632,7 @@ async function renderPlayerProfile() {
                     return `<tr style="border-bottom:1px solid var(--border,rgba(255,255,255,0.04))">
                         <td style="padding:2px 4px;font-size:0.7rem">${escapeHtml(String(m.label || m.metric || ''))}</td>
                         <td style="padding:2px 4px;font-size:0.7rem;text-align:right">${escapeHtml(String(m.value ?? '\u2014'))}</td>
-                        <td style="padding:2px 4px;font-size:0.7rem;text-align:right;color:#60a5fa">${escapeHtml(String(m.percentile ?? '\u2014'))}</td>
+                        <td style="padding:2px 4px;font-size:0.7rem;text-align:right;color:#5ac8fa">${escapeHtml(String(m.percentile ?? '\u2014'))}</td>
                         <td style="padding:2px 4px;font-size:0.7rem;text-align:right;color:var(--text-muted)">${escapeHtml(String(m.rank ?? '\u2014'))}</td>
                     </tr>`;
                 }).join('');
@@ -3630,7 +4649,7 @@ async function renderPlayerProfile() {
             let topPeersHtml = '';
             if (topPeers.length > 0) {
                 const items = topPeers.map((p, i) => {
-                    return `<span style="display:inline-block;font-size:0.7rem;margin-right:6px;margin-bottom:2px;padding:2px 6px;background:rgba(255,255,255,0.04);border-radius:8px">
+                    return `<span style="display:inline-block;font-size:0.7rem;margin-right:6px;margin-bottom:2px;padding:2px 6px;background:rgba(255,255,255,0.04);border-radius:var(--radius-sm)">
                         ${i + 1}. ${escapeHtml(String(p.player || p.name || ''))} <span style="color:var(--text-muted)">${escapeHtml(String(p.optimized_score ?? ''))}</span>
                     </span>`;
                 }).join('');
@@ -3699,7 +4718,7 @@ async function renderPlayerProfile() {
                     x: 50,
                     y: 50,
                     radius: 3,
-                    color: "#4a90d9",
+                    color: "#007aff",
                     label: escapeHtml(player.name),
                     number: String(Math.round(detailScore || player.rating || 0)),
                     rating: detailScore || player.rating || null,
@@ -3755,7 +4774,7 @@ function _renderCareerTrajectoryChart(trajectory) {
             name: z ? '峰值' : 'Peak',
             coord: [String(peak.season || ''), peak.optimized_score],
             symbolSize: 28,
-            itemStyle: { color: '#4ade80' },
+            itemStyle: { color: '#34c759' },
             label: { show: false },
         }],
     } : undefined;
@@ -3816,15 +4835,15 @@ function _renderCareerTrajectoryChart(trajectory) {
                 smooth: true,
                 symbol: 'circle',
                 symbolSize: 6,
-                lineStyle: { color: '#4a90d9', width: 2 },
-                itemStyle: { color: '#4a90d9' },
+                lineStyle: { color: '#007aff', width: 2 },
+                itemStyle: { color: '#007aff' },
                 areaStyle: {
                     color: {
                         type: 'linear',
                         x: 0, y: 0, x2: 0, y2: 1,
                         colorStops: [
-                            { offset: 0, color: 'rgba(74,144,217,0.25)' },
-                            { offset: 1, color: 'rgba(74,144,217,0)' },
+                            { offset: 0, color: 'rgba(0,122,255,0.25)' },
+                            { offset: 1, color: 'rgba(0,122,255,0)' },
                         ],
                     },
                 },
@@ -3838,8 +4857,8 @@ function _renderCareerTrajectoryChart(trajectory) {
                 smooth: false,
                 symbol: 'diamond',
                 symbolSize: 4,
-                lineStyle: { color: '#9ca3af', width: 1, type: 'dashed' },
-                itemStyle: { color: '#9ca3af' },
+                lineStyle: { color: '#8e8e93', width: 1, type: 'dashed' },
+                itemStyle: { color: '#8e8e93' },
             },
         ],
     });
@@ -3930,14 +4949,14 @@ async function _fetchAndRenderSimilarPlayers(playerName, profile) {
         const target = data.target || {};
         let html = '<div style="display:flex;flex-wrap:wrap;gap:0.4rem">';
         for (const p of data.similar) {
-            const simColor = p.similarity >= 80 ? 'var(--accent)' : p.similarity >= 60 ? '#5b9fd6' : 'var(--text-muted)';
+            const simColor = p.similarity >= 80 ? 'var(--accent)' : p.similarity >= 60 ? '#5ac8fa' : 'var(--text-muted)';
             const strengths = (p.shared_strengths || []).length > 0
                 ? `<span style="font-size:0.65rem;color:var(--accent)">+${escapeHtml(p.shared_strengths.join('/'))}</span>` : '';
             const weaknesses = (p.shared_weaknesses || []).length > 0
-                ? `<span style="font-size:0.65rem;color:#ff6b6b">-${escapeHtml(p.shared_weaknesses.join('/'))}</span>` : '';
+                ? `<span style="font-size:0.65rem;color:#ff3b30">-${escapeHtml(p.shared_weaknesses.join('/'))}</span>` : '';
             const posBadge = p.position_group && p.position_group !== (target.position_group || '')
-                ? `<span style="font-size:0.6rem;background:rgba(91,159,214,0.2);padding:0.05rem 0.3rem;border-radius:4px;margin-left:0.2rem">${escapeHtml(p.position_group)}</span>` : '';
-            html += `<div class="similar-player-card" data-player="${escapeAttr(p.name)}" style="cursor:pointer;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:0.4rem 0.5rem;min-width:120px;background:rgba(255,255,255,0.03)">
+                ? `<span style="font-size:0.6rem;background:rgba(90,200,250,0.2);padding:0.05rem 0.3rem;border-radius:var(--radius-xs);margin-left:0.2rem">${escapeHtml(p.position_group)}</span>` : '';
+            html += `<div class="similar-player-card" data-player="${escapeAttr(p.name)}" style="cursor:pointer;border:1px solid rgba(255,255,255,0.1);border-radius:var(--radius-sm);padding:0.4rem 0.5rem;min-width:120px;background:rgba(255,255,255,0.03)">
                 <div style="font-weight:600;font-size:0.8rem">${escapeHtml(p.name)}${posBadge}</div>
                 <div style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(p.team || '')} · ${escapeHtml(p.league || '')}</div>
                 <div style="font-size:0.75rem;color:${simColor};font-weight:600">${p.similarity.toFixed(0)}% ${z ? '相似' : 'sim.'}</div>
@@ -4280,11 +5299,11 @@ function getChart(id) {
 }
 
 function chartTextColor() {
-    return document.body.classList.contains("dark-mode") ? "rgba(247,248,251,.68)" : "rgba(21,23,28,.65)";
+    return document.body.classList.contains("dark-mode") ? "rgba(235,235,245,.60)" : "rgba(60,60,67,.60)";
 }
 
 function chartGridColor() {
-    return document.body.classList.contains("dark-mode") ? "rgba(247,248,251,.13)" : "rgba(21,23,28,.12)";
+    return document.body.classList.contains("dark-mode") ? "rgba(84,84,88,.36)" : "rgba(60,60,67,.12)";
 }
 
 function renderRadar(player) {
@@ -4350,13 +5369,13 @@ function renderComparePanel() {
 
     // Info cards
     let html = `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.8rem;gap:0.5rem">`;
-    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:8px;background:rgba(74,144,217,.12)">`;
+    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:var(--radius-sm);background:rgba(0,122,255,.12)">`;
     html += `<div style="font-weight:700;font-size:0.95rem">${escapeHtml(p1.name)}</div>`;
     html += `<div style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(p1.team)} · ${escapeHtml(p1.position)}</div>`;
     html += `<div style="font-size:1.1rem;font-weight:700;margin-top:0.2rem">${p1.rating.toFixed(1)}</div>`;
     html += `</div>`;
     html += `<div style="flex:0 0 auto;align-self:center;font-size:0.8rem;color:var(--text-muted);font-weight:700">VS</div>`;
-    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:8px;background:rgba(255,159,67,.12)">`;
+    html += `<div style="flex:1;text-align:center;padding:0.4rem 0.6rem;border-radius:var(--radius-sm);background:rgba(255,149,0,.12)">`;
     html += `<div style="font-weight:700;font-size:0.95rem">${escapeHtml(p2.name)}</div>`;
     html += `<div style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(p2.team)} · ${escapeHtml(p2.position)}</div>`;
     html += `<div style="font-size:1.1rem;font-weight:700;margin-top:0.2rem">${p2.rating.toFixed(1)}</div>`;
@@ -4365,7 +5384,7 @@ function renderComparePanel() {
 
     // Position mismatch warning
     if (p1.position !== p2.position) {
-        html += `<div style="font-size:0.72rem;color:#ff9f43;margin-bottom:0.5rem;text-align:center">${escapeHtml(t("compare_no_same_pos"))}</div>`;
+        html += `<div style="font-size:0.72rem;color:#ff9500;margin-bottom:0.5rem;text-align:center">${escapeHtml(t("compare_no_same_pos"))}</div>`;
     }
 
     // Radar chart container
@@ -4386,7 +5405,7 @@ function renderComparePanel() {
         const v1 = r1[i] ?? 0;
         const v2 = r2[i] ?? 0;
         const diff = v1 - v2;
-        const diffColor = diff > 0 ? "#57d68d" : diff < 0 ? "#ff6b6b" : "var(--text-muted)";
+        const diffColor = diff > 0 ? "#34c759" : diff < 0 ? "#ff3b30" : "var(--text-muted)";
         html += `<tr style="border-bottom:1px solid rgba(255,255,255,.05)">`;
         html += `<td style="padding:0.3rem 0.4rem">${escapeHtml(radarLabels[i])}</td>`;
         html += `<td style="text-align:center;padding:0.3rem 0.4rem">${Math.round(v1)}pct</td>`;
@@ -4406,7 +5425,7 @@ function renderComparePanel() {
         const v1 = p1[m.k] ?? 0;
         const v2 = p2[m.k] ?? 0;
         const diff = v1 - v2;
-        const diffColor = diff > 0 ? "#57d68d" : diff < 0 ? "#ff6b6b" : "var(--text-muted)";
+        const diffColor = diff > 0 ? "#34c759" : diff < 0 ? "#ff3b30" : "var(--text-muted)";
         html += `<tr style="border-bottom:1px solid rgba(255,255,255,.05)">`;
         html += `<td style="padding:0.3rem 0.4rem">${escapeHtml(m.label)}</td>`;
         html += `<td style="text-align:center;padding:0.3rem 0.4rem">${typeof v1 === "number" ? (m.k === "npg_p90" || m.k === "assists_p90" ? v1.toFixed(3) : v1) : escapeHtml(String(v1))}</td>`;
@@ -4443,16 +5462,16 @@ function renderComparePanel() {
                         {
                             value: r1,
                             name: p1.name,
-                            areaStyle: { color: "rgba(74,144,217,.18)" },
-                            lineStyle: { color: "#4a90d9", width: 2 },
-                            itemStyle: { color: "#4a90d9" },
+                            areaStyle: { color: "rgba(0,122,255,.18)" },
+                            lineStyle: { color: "#007aff", width: 2 },
+                            itemStyle: { color: "#007aff" },
                         },
                         {
                             value: r2,
                             name: p2.name,
-                            areaStyle: { color: "rgba(255,159,67,.18)" },
-                            lineStyle: { color: "#ff9f43", width: 2 },
-                            itemStyle: { color: "#ff9f43" },
+                            areaStyle: { color: "rgba(255,149,0,.18)" },
+                            lineStyle: { color: "#ff9500", width: 2 },
+                            itemStyle: { color: "#ff9500" },
                         },
                     ],
                 }],
@@ -4528,6 +5547,22 @@ async function fetchPlayerComparison(a, b) {
     } catch (err) {
         console.warn("Failed to fetch comparison:", err);
         return { error: "Failed to load comparison" };
+    }
+}
+
+async function fetchPlayerComparisonMulti(names, season) {
+    if (!Array.isArray(names) || names.length < 2) {
+        return { error: "need_at_least_two_players", n_players: Array.isArray(names) ? names.length : 0 };
+    }
+    const params = new URLSearchParams();
+    params.set("names", names.join(","));
+    if (season) params.set("season", season);
+    try {
+        const data = await fetchJson(`/players/compare-multi`, { params });
+        return data || { error: "no_data" };
+    } catch (err) {
+        console.warn("Failed to fetch multi-comparison:", err);
+        return { error: "Failed to load multi-comparison" };
     }
 }
 
@@ -4657,7 +5692,7 @@ function _renderFormTrendCard(teamName, trend) {
     html += `<div class="h2h-form-team">${teamName}</div>`;
 
     // Form rating bar (0-100)
-    const ratingColor = rating >= 60 ? "var(--accent,#5fd4a8)" : rating >= 35 ? "var(--warn,#f0c869)" : "var(--danger,#f0877a)";
+    const ratingColor = rating >= 60 ? "var(--accent,#34c759)" : rating >= 35 ? "var(--warn,#ff9500)" : "var(--danger,#ff3b30)";
     html += `<div class="trend-rating">`;
     html += `<div class="trend-rating-bar" role="img" aria-label="状态评分 ${rating.toFixed(0)}">`;
     html += `<span style="width:${Math.max(2, Math.min(100, rating))}%;background:${ratingColor}"></span>`;
@@ -4757,7 +5792,7 @@ async function renderMomentum(home, away) {
             <div><span>${escapeHtml(z ? "分钟" : "Minute")}</span><strong>${escapeHtml(String(data.current_minute))}'</strong></div>
             <div><span>${escapeHtml(z ? "主胜" : "Home")}</span><strong style="color:var(--accent)">${(current.home_win * 100).toFixed(1)}%</strong></div>
             <div><span>${escapeHtml(z ? "平" : "Draw")}</span><strong>${(current.draw * 100).toFixed(1)}%</strong></div>
-            <div><span>${escapeHtml(z ? "客胜" : "Away")}</span><strong style="color:var(--warn, #f59e0b)">${(current.away_win * 100).toFixed(1)}%</strong></div>
+            <div><span>${escapeHtml(z ? "客胜" : "Away")}</span><strong style="color:var(--warn, #ff9500)">${(current.away_win * 100).toFixed(1)}%</strong></div>
         </div>`;
 
     // ECharts timeline chart
@@ -4799,7 +5834,7 @@ async function renderMomentum(home, away) {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 2 },
-                itemStyle: { color: "#64b5f6" },
+                itemStyle: { color: "#5ac8fa" },
                 areaStyle: { opacity: 0.1 },
             },
             {
@@ -4810,7 +5845,7 @@ async function renderMomentum(home, away) {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 2 },
-                itemStyle: { color: "#9e9e9e" },
+                itemStyle: { color: "#8e8e93" },
             },
             {
                 name: z ? "客胜" : "Away Win",
@@ -4820,7 +5855,7 @@ async function renderMomentum(home, away) {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 2 },
-                itemStyle: { color: "#ff9800" },
+                itemStyle: { color: "#ff9500" },
                 areaStyle: { opacity: 0.1 },
             },
         ],
@@ -4868,7 +5903,7 @@ async function fetchAndRenderPredictionAttribution(home, away) {
 
     const deltaColor = (d) => {
         if (d == null || Number.isNaN(d)) return "var(--text-muted)";
-        return d > 0 ? "var(--accent, #64b5f6)" : "var(--warn, #f59e0b)";
+        return d > 0 ? "var(--accent, #007aff)" : "var(--warn, #ff9500)";
     };
     const fmtPct = (v) => v != null && !Number.isNaN(Number(v)) ? `${(Number(v) * 100).toFixed(2)}%` : "—";
     const fmtDeltaPct = (d) => d != null && !Number.isNaN(Number(d))
@@ -4966,7 +6001,7 @@ async function fetchAndRenderPredictionAttributionCI(home, away) {
             const hi = Number(c.delta_high);
             const mean = Number(c.delta_mean);
             const crossesZero = (!Number.isNaN(lo) && !Number.isNaN(hi) && lo <= 0 && hi >= 0);
-            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #64b5f6)";
+            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #007aff)";
             return `<tr>
                 <td><strong>${escapeHtml(c.factor || "—")}</strong></td>
                 <td style="color:${ciColor}">${fmtCI(lo, hi)}</td>
@@ -5067,7 +6102,7 @@ async function fetchAndRenderDiagnostics(home, away) {
         const rows = factors.map((f) => {
             const delta = Number(f.delta);
             const dStr = !Number.isNaN(delta) ? `${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(2)}pp` : "—";
-            const color = delta > 0 ? "var(--accent, #64b5f6)" : (delta < 0 ? "var(--warn, #f59e0b)" : "var(--text-muted)");
+            const color = delta > 0 ? "var(--accent, #007aff)" : (delta < 0 ? "var(--warn, #ff9500)" : "var(--text-muted)");
             return `<tr><td><strong>${escapeHtml(f.factor || "—")}</strong></td><td style="color:${color}">${dStr}</td></tr>`;
         }).join("");
         attrHtml += `<table class="data-table" style="width:100%;font-size:0.76rem"><tbody>${rows}</tbody></table>`;
@@ -5089,7 +6124,7 @@ async function fetchAndRenderDiagnostics(home, away) {
             </div>
         </div>`;
 
-    body.innerHTML = `${calHtml}${driftHtml}${attrHtml}${ciCacheHtml}`;
+    body.innerHTML = [calHtml, driftHtml, attrHtml, ciCacheHtml].join("");
     if (btn) btn.disabled = false;
 }
 
@@ -5133,7 +6168,7 @@ async function fetchAndRenderEnsembleAttribution(home, away) {
         : "—";
     const deltaColor = (d) => {
         if (d == null || Number.isNaN(d)) return "var(--text-muted)";
-        return d > 0 ? "var(--accent, #64b5f6)" : "var(--warn, #f59e0b)";
+        return d > 0 ? "var(--accent, #007aff)" : "var(--warn, #ff9500)";
     };
 
     // Weights header
@@ -5210,7 +6245,7 @@ async function fetchAndRenderEnsembleAttribution(home, away) {
             </div>`;
     }
 
-    body.innerHTML = `${weightsHtml}${blendedHtml}${perModelHtml}`;
+    body.innerHTML = [weightsHtml, blendedHtml, perModelHtml].join("");
     if (btn) btn.disabled = false;
 }
 
@@ -5264,7 +6299,7 @@ async function fetchAndRenderEnsembleAttributionCI(home, away) {
             const hi = Number(c.delta_high);
             const mean = Number(c.delta_mean);
             const crossesZero = (!Number.isNaN(lo) && !Number.isNaN(hi) && lo <= 0 && hi >= 0);
-            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #64b5f6)";
+            const ciColor = crossesZero ? "var(--text-muted)" : "var(--accent, #007aff)";
             return `<tr>
                 <td><strong>${escapeHtml(c.factor || "—")}</strong></td>
                 <td style="color:${ciColor}">${fmtCI(lo, hi)}</td>
@@ -5407,7 +6442,7 @@ async function fetchAndRenderDriftTimeline() {
                 symbol: "circle",
                 symbolSize: 5,
                 lineStyle: { width: 2 },
-                itemStyle: { color: "#64b5f6" },
+                itemStyle: { color: "#5ac8fa" },
             },
             {
                 name: "Brier",
@@ -5417,7 +6452,7 @@ async function fetchAndRenderDriftTimeline() {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 1.5, type: "dashed" },
-                itemStyle: { color: "#f59e0b" },
+                itemStyle: { color: "#ff9500" },
             },
             {
                 name: "LogLoss",
@@ -5427,15 +6462,15 @@ async function fetchAndRenderDriftTimeline() {
                 symbol: "circle",
                 symbolSize: 4,
                 lineStyle: { width: 1.5, type: "dotted" },
-                itemStyle: { color: "#10b981" },
+                itemStyle: { color: "#34c759" },
             },
             {
                 name: "Threshold",
                 type: "line",
                 data: thresholdLine,
                 symbol: "none",
-                lineStyle: { width: 1, type: "dashed", color: "#ef4444" },
-                itemStyle: { color: "#ef4444" },
+                lineStyle: { width: 1, type: "dashed", color: "#ff3b30" },
+                itemStyle: { color: "#ff3b30" },
             },
         ],
     });
@@ -5492,26 +6527,26 @@ async function fetchAndRenderValueBet(home, away) {
         const evPct = (o.expected_value * 100).toFixed(1);
         const edgePct = (o.edge * 100).toFixed(1);
         const kellyPct = (o.kelly_fraction * 100).toFixed(1);
-        const recColor = isValue ? "var(--status-high, #10b981)" : "var(--text-muted)";
+        const recColor = isValue ? "var(--status-high, #34c759)" : "var(--text-muted)";
         const recText = isValue ? (z ? "有价值" : "Value") : (z ? "无价值" : "No Value");
         return `<tr style="border-bottom:1px solid var(--border)">
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem">${escapeHtml(outcomeLabels[o.outcome] || o.outcome)}</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${(o.model_probability * 100).toFixed(1)}%</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${o.decimal_odds.toFixed(2)}</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${(o.implied_probability * 100).toFixed(1)}%</td>
-            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.expected_value >= 0 ? "var(--status-high, #10b981)" : "var(--status-low, #ef4444)"}">${evPct >= 0 ? "+" : ""}${evPct}%</td>
-            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.edge >= 0 ? "var(--status-high, #10b981)" : "var(--status-low, #ef4444)"}">${edgePct >= 0 ? "+" : ""}${edgePct}%</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.expected_value >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${evPct >= 0 ? "+" : ""}${evPct}%</td>
+            <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right;color:${o.edge >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${edgePct >= 0 ? "+" : ""}${edgePct}%</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;text-align:right">${kellyPct}%</td>
             <td style="padding:0.3rem 0.4rem;font-size:0.78rem;color:${recColor};font-weight:600">${recText}</td>
         </tr>`;
     }).join("");
 
     const bestBetHtml = data.best_bet
-        ? `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:6px;border-left:3px solid var(--status-high, #10b981)">
+        ? `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:var(--radius-sm);border-left:3px solid var(--status-high, #34c759)">
             <span style="font-size:0.75rem;font-weight:600">${escapeHtml(t("value_bet_best_bet"))}: ${escapeHtml(outcomeLabels[data.best_bet.outcome] || data.best_bet.outcome)}</span>
             <span style="font-size:0.72rem;color:var(--text-muted);margin-left:0.5rem">EV: ${(data.best_bet.expected_value * 100).toFixed(1)}% · Kelly: ${(data.best_bet.kelly_fraction * 100).toFixed(1)}%</span>
           </div>`
-        : `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:6px">
+        : `<div style="margin-top:0.5rem;padding:0.4rem 0.6rem;background:var(--bg-elevated,rgba(0,0,0,0.05));border-radius:var(--radius-sm)">
             <span style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("value_bet_no_value"))}</span>
           </div>`;
 
@@ -5597,7 +6632,7 @@ async function fetchAndRenderReliabilityDiagram() {
     const diagonal = [[0, 0], [1, 1]];
 
     // Build per-outcome series
-    const outcomeColors = { home_win: "#64b5f6", draw: "#f59e0b", away_win: "#10b981" };
+    const outcomeColors = { home_win: "#5ac8fa", draw: "#ff9500", away_win: "#34c759" };
     const outcomeLabels = {
         home_win: z ? "主胜" : "Home Win",
         draw: z ? "平局" : "Draw",
@@ -5610,8 +6645,8 @@ async function fetchAndRenderReliabilityDiagram() {
             type: "line",
             data: diagonal,
             symbol: "none",
-            lineStyle: { width: 1, type: "dashed", color: "#999" },
-            itemStyle: { color: "#999" },
+            lineStyle: { width: 1, type: "dashed", color: "#8e8e93" },
+            itemStyle: { color: "#8e8e93" },
         },
     ];
 
@@ -5623,7 +6658,7 @@ async function fetchAndRenderReliabilityDiagram() {
             type: "scatter",
             data: pts,
             symbolSize: (bins.length > 0 ? 8 : 5),
-            itemStyle: { color: outcomeColors[outcome] || "#888" },
+            itemStyle: { color: outcomeColors[outcome] || "#8e8e93" },
         });
         // Also add a connecting line
         const sorted = pts.slice().sort((a, b) => a[0] - b[0]);
@@ -5632,8 +6667,8 @@ async function fetchAndRenderReliabilityDiagram() {
             type: "line",
             data: sorted,
             symbol: "none",
-            lineStyle: { width: 1, color: outcomeColors[outcome] || "#888", opacity: 0.5 },
-            itemStyle: { color: outcomeColors[outcome] || "#888" },
+            lineStyle: { width: 1, color: outcomeColors[outcome] || "#8e8e93", opacity: 0.5 },
+            itemStyle: { color: outcomeColors[outcome] || "#8e8e93" },
         });
     }
 
@@ -5704,15 +6739,15 @@ async function fetchAndRenderModelComparison() {
         ];
         const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(4) : String(v));
         let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.2rem;font-weight:600">${data.n_aligned ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("model_comparison_n_aligned"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.2rem;font-weight:600">${data.n_models ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("model_comparison_n_models"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.2rem;font-weight:600">${models.length}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">Models Listed</div>
             </div>
@@ -5858,15 +6893,15 @@ async function fetchAndRenderConfidenceDistribution() {
         const buckets = Array.isArray(data.buckets) ? data.buckets : [];
         const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
         let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">Predictions</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_accuracy)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("confidence_dist_overall_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_confidence)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("confidence_dist_overall_conf"))}</div>
             </div>
@@ -5918,19 +6953,19 @@ async function fetchAndRenderErrorAnalysis() {
         const fmt = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(4) : String(v));
         const fmtPct = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">N</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmtPct(data.overall_accuracy)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_analysis_overall_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_avg_brier)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_analysis_overall_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmt(data.overall_avg_log_loss)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_analysis_overall_log_loss"))}</div>
             </div>
@@ -6021,11 +7056,11 @@ async function fetchAndRenderOutcomeDistribution() {
         const entries = Array.isArray(data.entries) ? data.entries : [];
         const biasColor = (data.dominant_bias && data.dominant_bias !== "none") ? "var(--status-medium)" : "var(--status-high)";
         let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">N</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${biasColor}">${escapeHtml(data.dominant_bias || "none")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("outcome_dist_dominant_bias"))}</div>
             </div>
@@ -6094,11 +7129,11 @@ async function fetchAndRenderH2HBiasCorrection() {
         const adj = data.adjustments || {};
         const rates = data.h2h_rates || {};
         let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_meetings ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("h2h_bias_n_meetings"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${appliedColor}">${escapeHtml(appliedText)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("h2h_bias_applied"))}</div>
             </div>
@@ -6165,15 +7200,15 @@ async function fetchAndRenderTemporalValidation() {
         const fmtNum = (v, d) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(d) : String(v));
         const trendColor = data.trend === "improving" ? "var(--status-medium)" : (data.trend === "degrading" ? "var(--status-low)" : "var(--text-muted)");
         let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_windows ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("temporal_val_n_windows"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("temporal_val_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${trendColor}">${escapeHtml(data.trend || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("temporal_val_trend"))}</div>
             </div>
@@ -6236,15 +7271,15 @@ async function fetchAndRenderProbabilityHeatmap() {
         const cells = data.cells || [];
         const fmtPct = (v) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? (v * 100).toFixed(1) + "%" : String(v));
         let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("prob_heatmap_n_predictions"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_bins ?? 0}×${data.n_bins ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("prob_heatmap_grid"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmtPct(data.total_density)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("prob_heatmap_coverage"))}</div>
             </div>
@@ -6305,11 +7340,11 @@ async function fetchAndRenderPredictionStaleness() {
         }
         const levelColor = data.staleness_level === "fresh" ? "var(--status-medium)" : (data.staleness_level === "stale" ? "var(--status-low)" : "var(--status-high)");
         let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${levelColor}">${escapeHtml(data.staleness_level || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("staleness_level"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.days_since_backtest_end ?? "–"}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("staleness_days"))}</div>
             </div>
@@ -6366,19 +7401,19 @@ async function fetchAndRenderConfidenceIntervalPlot() {
             ? "–"
             : Number(data.correlation).toFixed(3);
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_predictions ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_n_points"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_confidence || 0).toFixed(3)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_avg_conf"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_ci_width || 0).toFixed(3)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_avg_width"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${corrText}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_plot_corr"))}</div>
             </div>
@@ -6456,19 +7491,19 @@ async function fetchAndRenderFoldComparison() {
             ? "var(--status-medium)"
             : (data.stability === "unstable" ? "var(--status-low)" : "var(--status-high)");
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600;color:${stabilityColor}">${escapeHtml(data.stability || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_stability"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_folds ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_n_folds"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.accuracy_std || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("fold_comparison_acc_std"))}</div>
             </div>
@@ -6533,19 +7568,19 @@ async function fetchAndRenderLeagueErrorAnalysis() {
             return;
         }
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_leagues ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_n_leagues"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_accuracy"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("league_error_brier"))}</div>
             </div>
@@ -6554,7 +7589,7 @@ async function fetchAndRenderLeagueErrorAnalysis() {
         if (leagues.length > 0) {
             for (const lg of leagues) {
                 const ll = (lg.log_loss === null || lg.log_loss === undefined) ? "–" : Number(lg.log_loss).toFixed(4);
-                html += `<details style="margin-bottom:0.6rem;border:1px solid var(--border-color);border-radius:6px;padding:0.4rem 0.6rem">
+                html += `<details style="margin-bottom:0.6rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:0.4rem 0.6rem">
                     <summary style="cursor:pointer;font-size:0.85rem;font-weight:600">
                         ${escapeHtml(lg.league || "–")} — acc ${Number(lg.accuracy || 0).toFixed(4)} / brier ${Number(lg.brier || 0).toFixed(4)} / n ${lg.n_matches ?? 0}
                     </summary>
@@ -6619,19 +7654,19 @@ async function fetchAndRenderFeatureImportance() {
             return;
         }
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_features ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_n_features"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_overall_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.features && data.features.length > 0 ? Number(data.features[0].importance || 0).toFixed(6) : "–"}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("feature_importance_top"))}</div>
             </div>
@@ -6699,27 +7734,27 @@ async function fetchAndRenderCICoverage() {
             return;
         }
         const assessmentColors = {
-            well_calibrated: "var(--status-high, #4ade80)",
-            undercoverage: "var(--status-low, #f87171)",
-            overcoverage: "var(--status-medium, #fbbf24)",
+            well_calibrated: "var(--status-high, #34c759)",
+            undercoverage: "var(--status-low, #ff3b30)",
+            overcoverage: "var(--status-medium, #ff9500)",
             insufficient_data: "var(--text-muted)",
         };
         const assessmentColor = assessmentColors[data.coverage_assessment] || "var(--text-muted)";
         const nominalText = (data.nominal_level === null || data.nominal_level === undefined) ? "–" : Number(data.nominal_level).toFixed(2);
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${assessmentColor}">${escapeHtml(data.coverage_assessment || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_assessment"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_coverage || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_overall"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_ci_width || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_avg_width"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${nominalText}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_coverage_nominal"))}</div>
             </div>
@@ -6780,22 +7815,22 @@ async function fetchAndRenderDriftHeatmap() {
             if (btn) btn.disabled = false;
             return;
         }
-        const driftColor = data.drift_detected ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+        const driftColor = data.drift_detected ? "var(--status-low, #ff3b30)" : "var(--status-high, #34c759)";
         const driftText = data.drift_detected ? t("drift_heatmap_drift_yes") : t("drift_heatmap_drift_no");
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${driftColor}">${escapeHtml(driftText)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_drift"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_windows ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_n_windows"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_confidence_buckets ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_n_buckets"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("drift_heatmap_n_matches"))}</div>
             </div>
@@ -6864,19 +7899,19 @@ async function fetchAndRenderErrorClustering() {
             return;
         }
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_clusters ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_n_clusters"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_worst_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_n_worst"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_features_used ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_n_features"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_avg_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("error_clustering_avg_brier"))}</div>
             </div>
@@ -6885,7 +7920,7 @@ async function fetchAndRenderErrorClustering() {
         if (clusters.length > 0) {
             for (const c of clusters) {
                 const brierColor = `hsl(${Math.max(0, 120 - Number(c.avg_brier || 0) * 500)}, 70%, 45%)`;
-                html += `<details style="margin-bottom:0.5rem;border:1px solid var(--border-color);border-radius:6px;padding:0.4rem">
+                html += `<details style="margin-bottom:0.5rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:0.4rem">
                     <summary style="cursor:pointer;font-size:0.8rem;font-weight:600">
                         ${escapeHtml(t("error_clustering_cluster"))} #${c.cluster_id} · ${c.n_matches} ${escapeHtml(t("error_clustering_matches"))} · ${escapeHtml(t("error_clustering_brier"))}: <span style="color:${brierColor}">${Number(c.avg_brier || 0).toFixed(4)}</span>
                     </summary>
@@ -6905,7 +7940,7 @@ async function fetchAndRenderErrorClustering() {
                             <tbody>`;
                 const feats = Array.isArray(c.top_centroid_features) ? c.top_centroid_features : [];
                 for (const f of feats) {
-                    const valColor = f.centroid_value >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                    const valColor = f.centroid_value >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
                     html += `<tr style="border-bottom:1px solid var(--border-color)">
                         <td style="padding:0.2rem">${escapeHtml(f.feature || "–")}</td>
                         <td style="padding:0.2rem;text-align:right;color:${valColor}">${Number(f.centroid_value || 0).toFixed(4)}</td>
@@ -6946,21 +7981,21 @@ async function fetchAndRenderDataDrift() {
             return;
         }
         const driftRatio = Number(data.drift_ratio || 0);
-        const driftColor = driftRatio > 0.3 ? "var(--status-low, #f87171)" : (driftRatio > 0.1 ? "var(--status-medium, #fbbf24)" : "var(--status-high, #4ade80)");
+        const driftColor = driftRatio > 0.3 ? "var(--status-low, #ff3b30)" : (driftRatio > 0.1 ? "var(--status-medium, #ff9500)" : "var(--status-high, #34c759)");
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${driftColor}">${(driftRatio * 100).toFixed(1)}%</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_ratio"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_drifted ?? 0}/${data.n_features ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_drifted"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_train ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_n_train"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_holdout ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("data_drift_n_holdout"))}</div>
             </div>
@@ -6984,9 +8019,9 @@ async function fetchAndRenderDataDrift() {
                 </thead>
                 <tbody>`;
             for (const f of features) {
-                const statusColor = f.drifted ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+                const statusColor = f.drifted ? "var(--status-low, #ff3b30)" : "var(--status-high, #34c759)";
                 const statusText = f.drifted ? t("data_drift_drifted_yes") : t("data_drift_drifted_no");
-                const deltaColor = (f.mean_delta || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                const deltaColor = (f.mean_delta || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
                 html += `<tr style="border-bottom:1px solid var(--border-color)">
                     <td style="padding:0.25rem">${escapeHtml(f.feature || "–")}</td>
                     <td style="padding:0.25rem;text-align:right">${Number(f.ks_statistic || 0).toFixed(4)}</td>
@@ -7030,28 +8065,28 @@ async function fetchAndRenderCIWidth() {
             return;
         }
         const assessmentColors = {
-            "expected_narrowing": "var(--status-high, #4ade80)",
-            "weak_correlation": "var(--status-medium, #fbbf24)",
-            "anomalous_widening": "var(--status-low, #f87171)",
+            "expected_narrowing": "var(--status-high, #34c759)",
+            "weak_correlation": "var(--status-medium, #ff9500)",
+            "anomalous_widening": "var(--status-low, #ff3b30)",
             "insufficient_data": "var(--text-muted)",
         };
         const assessmentColor = assessmentColors[data.assessment] || "var(--text-muted)";
         const corr = data.width_confidence_correlation;
-        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #4ade80)" : (corr > 0.3 ? "var(--status-low, #f87171)" : "var(--status-medium, #fbbf24)")) : "var(--text-muted)";
+        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #34c759)" : (corr > 0.3 ? "var(--status-low, #ff3b30)" : "var(--status-medium, #ff9500)")) : "var(--text-muted)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${assessmentColor}">${escapeHtml(data.assessment || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_assessment"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_avg_ci_width || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_avg"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_avg_confidence || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_avg_conf"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${corrColor}">${corr !== null && corr !== undefined ? Number(corr).toFixed(4) : "–"}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("ci_width_corr"))}</div>
             </div>
@@ -7116,27 +8151,27 @@ async function fetchAndRenderStressTest() {
             return;
         }
         const assessmentColors = {
-            "severe": "var(--status-low, #f87171)",
-            "moderate": "var(--status-medium, #fbbf24)",
-            "mild": "var(--status-high, #4ade80)",
-            "negligible": "var(--status-high, #4ade80)",
+            "severe": "var(--status-low, #ff3b30)",
+            "moderate": "var(--status-medium, #ff9500)",
+            "mild": "var(--status-high, #34c759)",
+            "negligible": "var(--status-high, #34c759)",
         };
         const assessmentColor = assessmentColors[data.assessment] || "var(--text-muted)";
-        const degColor = data.degradation_score >= 0.5 ? "var(--status-low, #f87171)" : (data.degradation_score >= 0.2 ? "var(--status-medium, #fbbf24)" : "var(--status-high, #4ade80)");
+        const degColor = data.degradation_score >= 0.5 ? "var(--status-low, #ff3b30)" : (data.degradation_score >= 0.2 ? "var(--status-medium, #ff9500)" : "var(--status-high, #34c759)");
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${assessmentColor}">${escapeHtml(data.assessment || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_assessment"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${degColor}">${Number(data.degradation_score || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_degradation"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(data.shift_type || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_shift_type"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_shifted ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("stress_test_n_shifted"))}</div>
             </div>
@@ -7144,7 +8179,7 @@ async function fetchAndRenderStressTest() {
         const baseline = data.baseline || {};
         const stressed = data.stressed || {};
         const fmt = (v) => v !== null && v !== undefined ? Number(v).toFixed(4) : "–";
-        const deltaColor = (d) => d > 0 ? "var(--status-low, #f87171)" : (d < 0 ? "var(--status-high, #4ade80)" : "var(--text-muted)");
+        const deltaColor = (d) => d > 0 ? "var(--status-low, #ff3b30)" : (d < 0 ? "var(--status-high, #34c759)" : "var(--text-muted)");
         html += `<table class="data-table" style="width:100%;font-size:0.72rem;border-collapse:collapse;margin-bottom:0.4rem">
             <thead>
                 <tr style="border-bottom:1px solid var(--border-color);text-align:left">
@@ -7206,7 +8241,7 @@ async function fetchAndRenderTeamDrift() {
     if (!teamName) {
         body.innerHTML = `<div style="margin-bottom:0.4rem">
             <label style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(t("stress_test_team_input"))}</label>
-            <input id="team-drift-input" type="text" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-base);color:var(--text-primary)" />
+            <input id="team-drift-input" type="text" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:var(--radius-xs);background:var(--bg-base);color:var(--text-primary)" />
         </div>
         <p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_drift_not_available"))}</p>`;
         if (btn) btn.disabled = false;
@@ -7218,7 +8253,7 @@ async function fetchAndRenderTeamDrift() {
         const data = await apiFetch(`/predictions/calibration/team-drift?${params.toString()}`);
         const inputHtml = `<div style="margin-bottom:0.4rem">
             <label style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(t("stress_test_team_input"))}</label>
-            <input id="team-drift-input" type="text" value="${escapeHtml(teamName)}" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:4px;background:var(--bg-base);color:var(--text-primary)" />
+            <input id="team-drift-input" type="text" value="${escapeHtml(teamName)}" placeholder="${escapeHtml(t("stress_test_team_input_ph"))}" style="margin-left:0.4rem;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid var(--border-color);border-radius:var(--radius-xs);background:var(--bg-base);color:var(--text-primary)" />
         </div>`;
         if (!data || data.status === "not_available") {
             body.innerHTML = inputHtml + `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("team_drift_not_available"))}</p>`;
@@ -7230,42 +8265,42 @@ async function fetchAndRenderTeamDrift() {
             if (btn) btn.disabled = false;
             return;
         }
-        const driftColor = data.drift_detected ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+        const driftColor = data.drift_detected ? "var(--status-low, #ff3b30)" : "var(--status-high, #34c759)";
         const trendColors = {
-            "improving": "var(--status-high, #4ade80)",
-            "degrading": "var(--status-low, #f87171)",
-            "stable": "var(--status-medium, #fbbf24)",
+            "improving": "var(--status-high, #34c759)",
+            "degrading": "var(--status-low, #ff3b30)",
+            "stable": "var(--status-medium, #ff9500)",
             "insufficient_data": "var(--text-muted)",
         };
         const trendColor = trendColors[data.trend] || "var(--text-muted)";
         let html = inputHtml + `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${driftColor}">${data.drift_detected ? escapeHtml(t("team_drift_drift_yes")) : escapeHtml(t("team_drift_drift_no"))}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_drift_detected"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_total_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_windows ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_n_windows"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:${trendColor}">${escapeHtml(data.trend || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_trend"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.latest_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_latest_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.historical_avg_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_hist_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600;color:${driftColor}">${Number(data.relative_change || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("team_drift_rel_change"))}</div>
             </div>
@@ -7326,36 +8361,36 @@ async function fetchAndRenderUncertainty() {
             return;
         }
         const corr = data.entropy_accuracy_correlation;
-        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #4ade80)" : (corr > 0.3 ? "var(--status-low, #f87171)" : "var(--status-medium, #fbbf24)")) : "var(--text-muted)";
-        const highAccColor = data.high_uncertainty_accuracy < 0.5 ? "var(--status-low, #f87171)" : "var(--status-high, #4ade80)";
+        const corrColor = corr !== null && corr !== undefined ? (corr < -0.3 ? "var(--status-high, #34c759)" : (corr > 0.3 ? "var(--status-low, #ff3b30)" : "var(--status-medium, #ff9500)")) : "var(--text-muted)";
+        const highAccColor = data.high_uncertainty_accuracy < 0.5 ? "var(--status-low, #ff3b30)" : "var(--status-high, #34c759)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_entropy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_avg_entropy"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_margin || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_avg_margin"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.avg_dispersion || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_avg_dispersion"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.high_uncertainty_count ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_high_count"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600;color:${highAccColor}">${Number(data.high_uncertainty_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_high_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.low_uncertainty_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_low_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600;color:${corrColor}">${corr !== null && corr !== undefined ? Number(corr).toFixed(4) : "–"}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("uncertainty_entropy_corr"))}</div>
             </div>
@@ -7379,14 +8414,14 @@ async function fetchAndRenderUncertainty() {
             const shown = points.slice(0, 50);
             for (const p of shown) {
                 const labelColors = {
-                    "high": "var(--status-low, #f87171)",
-                    "medium": "var(--status-medium, #fbbf24)",
-                    "low": "var(--status-high, #4ade80)",
+                    "high": "var(--status-low, #ff3b30)",
+                    "medium": "var(--status-medium, #ff9500)",
+                    "low": "var(--status-high, #34c759)",
                 };
                 const labelColor = labelColors[p.uncertainty_label] || "var(--text-muted)";
                 const matchLabel = p.home_team && p.away_team ? `${escapeHtml(p.home_team)} vs ${escapeHtml(p.away_team)}` : (p.match_id ? escapeHtml(p.match_id) : "–");
                 const correctMark = p.correct === true ? "✓" : (p.correct === false ? "✗" : "–");
-                const correctColor = p.correct === true ? "var(--status-high, #4ade80)" : (p.correct === false ? "var(--status-low, #f87171)" : "var(--text-muted)");
+                const correctColor = p.correct === true ? "var(--status-high, #34c759)" : (p.correct === false ? "var(--status-low, #ff3b30)" : "var(--text-muted)");
                 html += `<tr style="border-bottom:1px solid var(--border-color)">
                     <td style="padding:0.25rem">${matchLabel}</td>
                     <td style="padding:0.25rem;text-align:right">${Number(p.confidence || 0).toFixed(4)}</td>
@@ -7434,44 +8469,44 @@ async function fetchAndRenderProfitLoss() {
             return;
         }
         const assessmentColors = {
-            "profitable": "var(--status-high, #4ade80)",
-            "breakeven": "var(--status-medium, #fbbf24)",
-            "unprofitable": "var(--status-low, #f87171)",
+            "profitable": "var(--status-high, #34c759)",
+            "breakeven": "var(--status-medium, #ff9500)",
+            "unprofitable": "var(--status-low, #ff3b30)",
         };
         const assColor = assessmentColors[data.assessment] || "var(--text-muted)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.win_rate || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_win_rate"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.flat_roi || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.flat_roi || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.flat_roi || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.flat_roi || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_flat_roi"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${assColor}">${escapeHtml(data.assessment || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_assessment"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_flat_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.total_flat_profit || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_flat_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.total_flat_profit || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_flat_profit"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.max_flat_drawdown || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_max_dd"))} (Flat)</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_kelly_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.total_kelly_profit || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.total_kelly_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.total_kelly_profit || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_kelly_profit"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.kelly_roi || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.kelly_roi || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.kelly_roi || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.kelly_roi || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("profit_loss_kelly_roi"))}</div>
             </div>
         </div>`;
@@ -7496,9 +8531,9 @@ async function fetchAndRenderProfitLoss() {
             const shown = points.slice(0, 50);
             for (const p of shown) {
                 const correctMark = p.correct ? "✓" : "✗";
-                const correctColor = p.correct ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
-                const flatColor = Number(p.flat_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
-                const kellyColor = Number(p.kelly_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                const correctColor = p.correct ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
+                const flatColor = Number(p.flat_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
+                const kellyColor = Number(p.kelly_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
                 html += `<tr style="border-bottom:1px solid var(--border-color)">
                     <td style="padding:0.25rem">${p.match_index ?? 0}</td>
                     <td style="padding:0.25rem;text-align:right">${escapeHtml(p.predicted_outcome || "–")}</td>
@@ -7548,44 +8583,44 @@ async function fetchAndRenderTrajectory() {
             return;
         }
         const trendColors = {
-            "improving": "var(--status-high, #4ade80)",
-            "degrading": "var(--status-low, #f87171)",
-            "stable": "var(--status-medium, #fbbf24)",
+            "improving": "var(--status-high, #34c759)",
+            "degrading": "var(--status-low, #ff3b30)",
+            "stable": "var(--status-medium, #ff9500)",
             "insufficient_data": "var(--text-muted)",
         };
         const trendColor = trendColors[data.trend] || "var(--text-muted)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.final_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_final_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.final_brier || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_final_brier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600;color:${trendColor}">${escapeHtml(data.trend || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_trend"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.final_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)"}">${Number(data.final_profit || 0).toFixed(4)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:${Number(data.final_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)"}">${Number(data.final_profit || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_final_profit"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.best_window_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_best_win"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.worst_window_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_worst_win"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${data.n_change_points ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("trajectory_change_points"))}</div>
             </div>
@@ -7607,7 +8642,7 @@ async function fetchAndRenderTrajectory() {
                 <tbody>`;
             const shown = points.slice(0, 50);
             for (const p of shown) {
-                const profitColor = Number(p.cumulative_profit || 0) >= 0 ? "var(--status-high, #4ade80)" : "var(--status-low, #f87171)";
+                const profitColor = Number(p.cumulative_profit || 0) >= 0 ? "var(--status-high, #34c759)" : "var(--status-low, #ff3b30)";
                 html += `<tr style="border-bottom:1px solid var(--border-color)">
                     <td style="padding:0.25rem">${p.match_index ?? 0}</td>
                     <td style="padding:0.25rem;text-align:right">${Number(p.cumulative_accuracy || 0).toFixed(4)}</td>
@@ -7654,19 +8689,19 @@ async function fetchAndRenderDifficulty() {
             return;
         }
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${data.n_matches ?? 0}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${Number(data.overall_accuracy || 0).toFixed(4)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_overall_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${escapeHtml(data.best_tier || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_best_tier"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${escapeHtml(data.worst_tier || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("difficulty_worst_tier"))}</div>
             </div>
@@ -7689,9 +8724,9 @@ async function fetchAndRenderDifficulty() {
                 </thead>
                 <tbody>`;
             const assessmentColors = {
-                "strong": "var(--status-high, #4ade80)",
-                "average": "var(--status-medium, #fbbf24)",
-                "weak": "var(--status-low, #f87171)",
+                "strong": "var(--status-high, #34c759)",
+                "average": "var(--status-medium, #ff9500)",
+                "weak": "var(--status-low, #ff3b30)",
                 "no_data": "var(--text-muted)",
             };
             for (const tr of tiers) {
@@ -8014,7 +9049,7 @@ async function _renderMultiCompareResult(names) {
     const playersEl = document.getElementById("compare-multi-players");
     if (playersEl) {
         const chips = (data.players || []).map(p => {
-            return `<span style="display:inline-block;padding:4px 10px;background:rgba(74,144,217,0.12);border-radius:12px;font-size:0.78rem">
+            return `<span style="display:inline-block;padding:4px 10px;background:rgba(0,122,255,0.12);border-radius:var(--radius-md);font-size:0.78rem">
                 <strong>${escapeHtml(String(p.name || ''))}</strong>
                 <span style="color:var(--text-muted);margin-left:4px">${escapeHtml(String(p.position_group || ''))} · ${escapeHtml(String(p.team || ''))}</span>
             </span>`;
@@ -8037,7 +9072,7 @@ async function _renderMultiCompareResult(names) {
                     if (v === null || v === undefined) {
                         return `<td style="padding:4px 8px;font-size:0.78rem;color:var(--text-muted);text-align:right">—</td>`;
                     }
-                    const color = v >= 80 ? '#4ade80' : v >= 50 ? '#60a5fa' : v >= 20 ? '#fbbf24' : '#f87171';
+                    const color = v >= 80 ? '#34c759' : v >= 50 ? '#5ac8fa' : v >= 20 ? '#ff9500' : '#ff3b30';
                     return `<td style="padding:4px 8px;font-size:0.78rem;text-align:right;font-weight:600;color:${color}">${v}</td>`;
                 }))
                 .join('');
@@ -8052,9 +9087,9 @@ async function _renderMultiCompareResult(names) {
         const rankings = data.composite_ranking || [];
         const items = rankings.map((r, i) => {
             const medal = i === 0 ? '\uD83E\uDD47' : i === 1 ? '\uD83E\uDD48' : i === 2 ? '\uD83E\uDD49' : '';
-            return `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:3px">
+            return `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);margin-bottom:3px">
                 <span>${medal} <strong>${escapeHtml(String(r.player || r.name || ''))}</strong> <span style="color:var(--text-muted);font-size:0.7rem">#${r.rank || (i + 1)}</span></span>
-                <span style="color:#60a5fa;font-weight:600">${escapeHtml(String(r.avg_percentile ?? ''))}</span>
+                <span style="color:#5ac8fa;font-weight:600">${escapeHtml(String(r.avg_percentile ?? ''))}</span>
             </div>`;
         }).join('');
         rankingEl.innerHTML = items || '—';
@@ -8079,7 +9114,7 @@ async function _renderMultiCompareResult(names) {
                     if (v === null || v === undefined) {
                         return `<td style="padding:4px 8px;font-size:0.78rem;text-align:right;color:var(--text-muted)">—</td>`;
                     }
-                    const color = v >= 0.8 ? '#4ade80' : v >= 0.6 ? '#60a5fa' : v >= 0.4 ? '#fbbf24' : '#f87171';
+                    const color = v >= 0.8 ? '#34c759' : v >= 0.6 ? '#5ac8fa' : v >= 0.4 ? '#ff9500' : '#ff3b30';
                     const display = (v * 100).toFixed(0);
                     return `<td style="padding:4px 8px;font-size:0.78rem;text-align:right;color:${color}">${display}</td>`;
                 }))
@@ -8513,7 +9548,7 @@ function renderValue() {
                     const r = params.data.residual;
                     if (r > 0.5) return "#34d399";
                     if (r > 0.15) return "#6ee7b7";
-                    if (r < -0.5) return "#f87171";
+                    if (r < -0.5) return "#ff3b30";
                     if (r < -0.15) return "#fca5a5";
                     return "rgba(216,221,231,.86)";
                 },
@@ -8556,8 +9591,8 @@ function renderValue() {
 
 // ── Age Curve Scatter Chart ──────────────────────────────────────
 const POS_COLORS = {
-    GK: "#f59e0b", CB: "#3b82f6", FB: "#06b6d4", DM: "#8b5cf6",
-    CM: "#6366f1", AM: "#ec4899", W: "#10b981", ST: "#ef4444",
+    GK: "#ff9500", CB: "#3b82f6", FB: "#06b6d4", DM: "#8b5cf6",
+    CM: "#6366f1", AM: "#ec4899", W: "#34c759", ST: "#ff3b30",
 };
 
 function renderAgeCurveScatter(data) {
@@ -8878,7 +9913,7 @@ async function renderMatches() {
 
         // Coverage gate warning
         if (coverage != null && Number(coverage) < 0.90) {
-            calibHtml += `<div style="font-size:0.78rem;color:#ff6b6b;margin:0.3rem 0;padding:0.25rem 0.4rem;background:rgba(255,107,107,.1);border-radius:4px">`;
+            calibHtml += `<div style="font-size:0.78rem;color:#ff3b30;margin:0.3rem 0;padding:0.25rem 0.4rem;background:rgba(255,107,107,.1);border-radius:var(--radius-xs)">`;
             calibHtml += `\u25B2 ${z ? '覆盖率低于90%，预测可能不可靠' : 'Coverage below 90% \u2014 predictions may be unreliable'} (${(Number(coverage) * 100).toFixed(1)}%)`;
             calibHtml += `</div>`;
         }
@@ -8978,7 +10013,7 @@ async function renderMatches() {
             const ciLevel = ciData.confidence_level ? `${(ciData.confidence_level * 100).toFixed(0)}%` : '90%';
             const ciN = ciData.n_bootstrap || '?';
             const ciFailed = ciData.failed_iterations || 0;
-            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(100,180,255,0.06);border-radius:6px">`;
+            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(0,122,255,0.06);border-radius:var(--radius-sm)">`;
             calibHtml += `<p style="margin:0 0 0.3rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">`;
             calibHtml += `${z ? '置信区间' : 'Confidence Intervals'} (${escapeHtml(ciLevel)}, n=${escapeHtml(String(ciN))})`;
             if (ciFailed > 0) calibHtml += ` <span style="opacity:0.6">(${ciFailed} ${z ? '失败' : 'failed'})</span>`;
@@ -9017,7 +10052,7 @@ async function renderMatches() {
         if (match.model_type === "ensemble" && match.weights && match.model_predictions) {
             const weights = match.weights;
             const mp = match.model_predictions;
-            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(100,180,255,0.06);border-radius:6px">`;
+            calibHtml += `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(0,122,255,0.06);border-radius:var(--radius-sm)">`;
             calibHtml += `<p style="margin:0 0 0.3rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">`;
             calibHtml += `${z ? '集成模型分解' : 'Ensemble Breakdown'}</p>`;
             const modelNames = Object.keys(weights);
@@ -9148,7 +10183,7 @@ function renderScoreMatrixInto(chartId, match) {
             min: 0,
             max: 0.18,
             show: false,
-            inRange: { color: ["rgba(255,255,255,.05)", "rgba(124,168,255,.82)"] },
+            inRange: { color: ["rgba(255,255,255,.05)", "rgba(0,122,255,.82)"] },
         },
         series: [{
             type: "heatmap",
@@ -9169,7 +10204,7 @@ function renderOutcomeBarInto(chartId, match) {
     const z = appState.lang === "zh";
     const labels = [z ? "主胜" : "Home", z ? "平局" : "Draw", z ? "客胜" : "Away"];
     const values = [match.hw, match.draw, match.aw];
-    const colors = ["#4a90d9", "#8e8e93", "#ff9f43"];
+    const colors = ["#007aff", "#8e8e93", "#ff9500"];
     chart.setOption({
         tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
         grid: { left: 60, right: 20, top: 20, bottom: 36 },
@@ -9322,7 +10357,7 @@ function renderScouting() {
             const statusClass = "status-" + status;
             const icon = STATUS_ICONS[status] || "\u25CB";
             const conf = (p.confidence_level || p.confidence || "LOW").toUpperCase();
-            const meta = [p.team, p.position_group || p.position, `${p.minutes || 0}min`, p.reason_code, p.as_of_date]
+            const meta = [p.team, p.position_group || p.position, `${p.minutes || 0}min`, _entryReasonCodes(p).join(", ") || p.reason_code, p.as_of_date]
                 .filter(Boolean).join(" \u00B7 ");
             reviewHtml += `
                 <div class="rank-item" data-review-state="${escapeAttr(status)}">
@@ -9370,72 +10405,100 @@ function renderScouting() {
         }
     }
 
-    document.getElementById("watchlist").innerHTML = combinedWatchlist.length > 0 ? combinedWatchlist.map((player) => {
-        const pName = player.player_name || player.name || "";
-        const conf = (player.confidence_level || player.confidence || "LOW").toUpperCase();
-        const wlNote = watchlistNotes[pName] || "";
-        return `
-        <div class="watch-card">
-            <div>
-                <strong>${escapeHtml(pName)}</strong>
-                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")} \u00B7 ${escapeHtml(player.reason_code || "")}</span>
-            </div>
-            <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
-            <div class="watch-card-extra">
-                ${wlNote ? `<div class="scout-note-display">\u25B8 ${escapeHtml(wlNote)}</div>` : ""}
-                <textarea class="scout-note-textarea" data-wl-note-player="${escapeAttr(pName)}" rows="2" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(wlNote)}</textarea>
-            </div>
-        </div>`;
-    }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
+    document.getElementById("watchlist").innerHTML = (() => {
+        const summary = _renderSourceSummary(combinedWatchlist, _watchlistSourceFilter, "watchlist");
+        const filtered = _filterBySource(combinedWatchlist, _watchlistSourceFilter);
+        const body = filtered.length > 0 ? filtered.map((player) => {
+            const pName = player.player_name || player.name || "";
+            const conf = (player.confidence_level || player.confidence || "LOW").toUpperCase();
+            const wlNote = watchlistNotes[pName] || "";
+            return `
+            <div class="watch-card">
+                <div>
+                    <strong>${escapeHtml(pName)}</strong>
+                    <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player, "watchlist")}
+                </div>
+                <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
+                <div class="watch-card-extra">
+                    ${wlNote ? `<div class="scout-note-display">\u25B8 ${escapeHtml(wlNote)}</div>` : ""}
+                    <textarea class="scout-note-textarea" data-wl-note-player="${escapeAttr(pName)}" rows="2" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(wlNote)}</textarea>
+                </div>
+            </div>`;
+        }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in watchlist</div>';
+        return summary + body;
+    })();
+    _wireSourceSummary(document.getElementById("watchlist"), "watchlist");
+    _wireReasonPillRemovals(document.getElementById("watchlist"), "watchlist");
 
     // Shortlist dossiers: local-only decision context with a stable player key.
     document.getElementById("shortlist-count").textContent = String(combinedShortlist.length);
-    document.getElementById("shortlist").innerHTML = combinedShortlist.length > 0 ? combinedShortlist.map((player) => {
-        const pName = player.player_name || player.name || "";
-        const conf = (player.confidence_level || player.confidence || "HIGH").toUpperCase();
-        const dossierKey = scoutingPlayerKey(player);
-        const dossier = getShortlistDossier(player);
-        const note = dossier.rationale;
-        const zh = appState.lang === "zh";
-        return `
-        <div class="watch-card">
-            <div>
-                <strong>${escapeHtml(pName)}</strong>
-                <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")} \u00B7 ${escapeHtml(player.reason_code || "")}</span>
-            </div>
-            <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
-            <div class="watch-card-extra">
-                <div class="scout-dossier-grid" data-shortlist-dossier="${escapeAttr(dossierKey)}">
-                    <label><span>${escapeHtml(zh ? "优先级" : "Priority")}</span>
-                        <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="priority">
-                            <option value="urgent"${dossier.priority === "urgent" ? " selected" : ""}>${escapeHtml(zh ? "紧急" : "Urgent")}</option>
-                            <option value="standard"${dossier.priority === "standard" ? " selected" : ""}>${escapeHtml(zh ? "标准" : "Standard")}</option>
-                            <option value="monitor"${dossier.priority === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "持续观察" : "Monitor")}</option>
-                        </select>
-                    </label>
-                    <label><span>${escapeHtml(zh ? "建议" : "Recommendation")}</span>
-                        <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="recommendation">
-                            <option value="target"${dossier.recommendation === "target" ? " selected" : ""}>${escapeHtml(zh ? "重点引进" : "Target")}</option>
-                            <option value="monitor"${dossier.recommendation === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "继续观察" : "Monitor")}</option>
-                            <option value="decline"${dossier.recommendation === "decline" ? " selected" : ""}>${escapeHtml(zh ? "暂不推进" : "Decline")}</option>
-                        </select>
-                    </label>
-                    <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "目标角色" : "Target role")}</span>
-                        <input class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="target_role" maxlength="120" value="${escapeAttr(dossier.target_role)}" placeholder="${escapeAttr(zh ? "例如：高压体系的右侧中卫" : "e.g. right-sided centre-back in a high press")}">
-                    </label>
-                    <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "理由与风险" : "Rationale and risks")}</span>
-                        <textarea class="scout-note-textarea scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="rationale" maxlength="2000" rows="3" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(note)}</textarea>
-                    </label>
+    // Round 89: prune compare selection against current shortlist keys so
+    // removed players don't linger in the quick-compare selection.
+    _pruneShortlistCompareSelection(combinedShortlist.map(scoutingPlayerKey));
+    document.getElementById("shortlist").innerHTML = (() => {
+        const summary = _renderSourceSummary(combinedShortlist, _shortlistSourceFilter, "shortlist");
+        const filtered = _filterBySource(combinedShortlist, _shortlistSourceFilter);
+        const body = filtered.length > 0 ? filtered.map((player) => {
+            const pName = player.player_name || player.name || "";
+            const conf = (player.confidence_level || player.confidence || "HIGH").toUpperCase();
+            const dossierKey = scoutingPlayerKey(player);
+            const dossier = getShortlistDossier(player);
+            const note = dossier.rationale;
+            const zh = appState.lang === "zh";
+            const cmpChecked = _shortlistCompareSelection.includes(dossierKey) ? "checked" : "";
+            return `
+            <div class="watch-card">
+                <div>
+                    <label style="display:inline-flex;align-items:center;gap:0.15rem;margin-right:0.4rem;font-size:0.7rem;color:var(--text-muted);cursor:pointer;vertical-align:middle"><input type="checkbox" data-shortlist-compare-key="${escapeAttr(dossierKey)}" data-shortlist-compare-name="${escapeAttr(pName)}" data-shortlist-compare-team="${escapeAttr(player.team || "")}" ${cmpChecked}>${escapeHtml(zh ? "对比" : "Cmp")}</label>
+                    <strong>${escapeHtml(pName)}</strong>
+                    <span class="rank-meta">${escapeHtml(player.team)} \u00B7 ${escapeHtml(player.position_group || player.position || "")}</span>${_renderReasonCodePills(player, "shortlist")}
                 </div>
-                <button class="text-button scout-tactical-role-btn" data-tactical-role="${escapeAttr(pName)}" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem;margin-top:0.2rem">\u25C6 ${escapeHtml(t("generate_tactical_role"))}</button>
-            </div>
-        </div>`;
-    }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in shortlist</div>';
+                <span class="status-pill ${confidenceClass(conf)}">${safeNum(player.optimized_score || player.rating || 0)}</span>
+                <div class="watch-card-extra">
+                    <div class="scout-dossier-grid" data-shortlist-dossier="${escapeAttr(dossierKey)}">
+                        <label><span>${escapeHtml(zh ? "优先级" : "Priority")}</span>
+                            <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="priority">
+                                <option value="urgent"${dossier.priority === "urgent" ? " selected" : ""}>${escapeHtml(zh ? "紧急" : "Urgent")}</option>
+                                <option value="standard"${dossier.priority === "standard" ? " selected" : ""}>${escapeHtml(zh ? "标准" : "Standard")}</option>
+                                <option value="monitor"${dossier.priority === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "持续观察" : "Monitor")}</option>
+                            </select>
+                        </label>
+                        <label><span>${escapeHtml(zh ? "建议" : "Recommendation")}</span>
+                            <select class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="recommendation">
+                                <option value="target"${dossier.recommendation === "target" ? " selected" : ""}>${escapeHtml(zh ? "重点引进" : "Target")}</option>
+                                <option value="monitor"${dossier.recommendation === "monitor" ? " selected" : ""}>${escapeHtml(zh ? "继续观察" : "Monitor")}</option>
+                                <option value="decline"${dossier.recommendation === "decline" ? " selected" : ""}>${escapeHtml(zh ? "暂不推进" : "Decline")}</option>
+                            </select>
+                        </label>
+                        <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "目标角色" : "Target role")}</span>
+                            <input class="glass-control scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="target_role" maxlength="120" value="${escapeAttr(dossier.target_role)}" placeholder="${escapeAttr(zh ? "例如：高压体系的右侧中卫" : "e.g. right-sided centre-back in a high press")}">
+                        </label>
+                        <label class="scout-dossier-wide"><span>${escapeHtml(zh ? "理由与风险" : "Rationale and risks")}</span>
+                            <textarea class="scout-note-textarea scout-dossier-input" data-dossier-player="${escapeAttr(dossierKey)}" data-dossier-legacy-name="${escapeAttr(pName)}" data-dossier-field="rationale" maxlength="2000" rows="3" placeholder="${escapeAttr(t("scout_note_placeholder"))}">${escapeHtml(note)}</textarea>
+                        </label>
+                    </div>
+                    <button class="text-button scout-tactical-role-btn" data-tactical-role="${escapeAttr(pName)}" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem;margin-top:0.2rem">\u25C6 ${escapeHtml(t("generate_tactical_role"))}</button>
+                </div>
+            </div>`;
+        }).join("") : '<div style="color:var(--text-muted);text-align:center;padding:1rem">No players in shortlist</div>';
+        return summary + body;
+    })();
+    _wireSourceSummary(document.getElementById("shortlist"), "shortlist");
+    _wireReasonPillRemovals(document.getElementById("shortlist"), "shortlist");
+    // Round 89: wire quick-compare checkboxes and action bar.
+    _wireShortlistCompareCheckboxes(document.getElementById("shortlist"));
+    _renderShortlistCompareBar();
+    _wireShortlistCompareBar();
+    // Round 91: render provenance audit log + wire reset UI state button.
+    _renderProvenanceLog();
+    _wireProvenanceLog();
+    _wireResetShortlistUiState();
 
     updateSnapshotStatus();
     renderScoutingWorkspaceStatus();
     initRisersDeclinersControls();
     initStyleFitControls();
+    initCrossScoutingControls();
 }
 
 function queueStatusKey(player) {
@@ -9492,7 +10555,7 @@ function filterReviewQueue(queue) {
     const query = appState.scoutingQuery.trim().toLowerCase();
     return queue.filter((player) => {
         const statusMatch = appState.scoutingStatus === "ALL" || getQueueStatus(player) === appState.scoutingStatus;
-        const haystack = [player.player_name, player.name, player.team, player.league, player.position_group, player.reason_code]
+        const haystack = [player.player_name, player.name, player.team, player.league, player.position_group, player.reason_code, _entryReasonCodes(player).join(" ")]
             .join(" ").toLowerCase();
         return statusMatch && (!query || haystack.includes(query));
     });
@@ -9684,6 +10747,241 @@ function renderOverview() {
     }
 }
 
+// ── Detailed health (/health/detailed) ───────────────────────────────
+//
+// The detailed-health panel surfaces the backend's composite health
+// snapshot (validation / model-admission / contract-quality / source-health
+// / artifacts) on the overview page. It is hidden by default and only
+// shown after the first successful fetch, so static/offline users never
+// see a broken panel. A "force refresh" button lets the operator bypass
+// the backend's TTL cache after a model retrain or build-features run.
+//
+// Fail-soft: if the endpoint is offline, the panel stays hidden and the
+// browser console gets a debug log — no banner, no error toast. This
+// matches the existing /health polling pattern.
+
+function fetchDetailedHealth(forceRefresh) {
+    const section = document.getElementById("detailed-health-section");
+    if (!section) return Promise.resolve();
+
+    detailedHealthState = "loading";
+    renderDetailedHealth();
+
+    const url = `${API_BASE}/health/detailed${forceRefresh ? "?force_refresh=true" : ""}`;
+    return fetch(url, { signal: AbortSignal.timeout(15000) })
+        .then((resp) => {
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        })
+        .then((data) => {
+            detailedHealth = data;
+            detailedHealthState = "ok";
+            renderDetailedHealth();
+        })
+        .catch((err) => {
+            detailedHealthState = "error";
+            // Don't spam console when the API is simply offline — the
+            // /health polling already surfaces that. Log at debug level.
+            if (typeof console !== "undefined" && console.debug) {
+                console.debug("fetchDetailedHealth failed:", err);
+            }
+            renderDetailedHealth();
+        });
+}
+
+function _dhStatusPillClass(status) {
+    // Map backend status strings to frontend pill classes.
+    // "ok" / "pass" → high; "degraded" / "incomplete" → medium;
+    // "fail" / "unavailable" / unknown → low.
+    if (status === "ok" || status === "pass") return "status-high";
+    if (status === "degraded" || status === "incomplete") return "status-medium";
+    return "status-low";
+}
+
+function _dhStatusLabel(status) {
+    if (status === "ok" || status === "pass") return "OK";
+    if (status === "degraded") return "DEGRADED";
+    if (status === "incomplete") return "INCOMPLETE";
+    if (status === "fail") return "FAIL";
+    if (status === "unavailable") return t("detailed_health_unavailable");
+    if (status === "not_available") return t("detailed_health_not_available");
+    return status ? String(status).toUpperCase() : "–";
+}
+
+function _dhCard(titleKey, status, bodyHtml) {
+    const pillCls = _dhStatusPillClass(status);
+    const pillLabel = _dhStatusLabel(status);
+    return `<article class="liquid-panel compact-panel" style="padding:0.5rem 0.7rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.4rem;margin-bottom:0.3rem">
+            <span style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t(titleKey))}</span>
+            <span class="status-pill ${pillCls}">${escapeHtml(pillLabel)}</span>
+        </div>
+        ${bodyHtml}
+    </article>`;
+}
+
+function _dhMetricCell(label, value) {
+    if (value == null) return "";
+    return `<div style="font-size:0.78rem">
+        <span style="color:var(--text-muted)">${escapeHtml(label)}</span>
+        <br><strong>${escapeHtml(String(value))}</strong>
+    </div>`;
+}
+
+function _dhValidationBody(v) {
+    if (!v || v.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell(`${t("detailed_health_passed")}/${t("detailed_health_failed")}`, `${v.passed_count ?? 0}/${v.failed_count ?? 0}`),
+        _dhMetricCell("Total", v.total_checks),
+    ];
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.3rem">${cells.join("")}</div>`;
+}
+
+function _dhModelAdmissionBody(m) {
+    if (!m || m.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell(t("detailed_health_reviewable"), m.reviewable_run_count),
+        _dhMetricCell(t("detailed_health_not_reviewable"), m.not_reviewable_run_count),
+        _dhMetricCell(t("detailed_health_not_available"), m.not_available_run_count),
+    ];
+    let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:0.3rem">${cells.join("")}</div>`;
+    if (m.runs_summary_omitted) {
+        html += `<p style="font-size:0.68rem;color:var(--text-muted);margin-top:0.3rem">runs summary omitted — use CLI model-admission --json for per-run details</p>`;
+    }
+    return html;
+}
+
+function _dhContractQualityBody(cq) {
+    if (!cq || cq.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell("Checks", cq.checks_count),
+        _dhMetricCell(t("detailed_health_failed"), (cq.failed_checks || []).length),
+        _dhMetricCell("Incomplete", (cq.incomplete_checks || []).length),
+    ];
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:0.3rem">${cells.join("")}</div>`;
+}
+
+function _dhSourceHealthBody(sh) {
+    if (!sh || sh.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell(t("detailed_health_registered_sources"), sh.registered_source_count),
+        _dhMetricCell(t("detailed_health_with_snapshot"), sh.sources_with_snapshot),
+        _dhMetricCell(t("detailed_health_without_snapshot"), sh.sources_without_snapshot),
+    ];
+    let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:0.3rem">${cells.join("")}</div>`;
+    if (Array.isArray(sh.unregistered_raw_directories) && sh.unregistered_raw_directories.length > 0) {
+        html += `<p style="font-size:0.68rem;color:var(--warn,#ff9500);margin-top:0.3rem">Unregistered: ${escapeHtml(sh.unregistered_raw_directories.join(", "))}</p>`;
+    }
+    return html;
+}
+
+function _dhArtifactsBody(a) {
+    if (!a || a.status === "unavailable") {
+        return `<p style="font-size:0.75rem;color:var(--text-muted)">${escapeHtml(t("detailed_health_unavailable"))}</p>`;
+    }
+    const cells = [
+        _dhMetricCell(t("metric_player_match"), a.player_match_rows),
+        _dhMetricCell(t("metric_team_match"), a.team_match_rows),
+        _dhMetricCell(t("metric_ratings"), a.rating_rows),
+        _dhMetricCell(t("metric_events"), a.event_samples),
+    ];
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5rem,1fr));gap:0.3rem">${cells.join("")}</div>`;
+}
+
+function renderDetailedHealth() {
+    const section = document.getElementById("detailed-health-section");
+    if (!section) return;
+    const overallPill = document.getElementById("dh-overall-pill");
+    const metaNote = document.getElementById("dh-meta-note");
+    const grid = document.getElementById("dh-grid");
+    const limitationsNote = document.getElementById("dh-limitations-note");
+    if (!overallPill || !metaNote || !grid || !limitationsNote) return;
+
+    // While loading for the first time, keep the panel hidden — there is
+    // nothing to render and showing an empty panel would be jarring.
+    if (detailedHealthState === "loading" && !detailedHealth) {
+        section.style.display = "none";
+        return;
+    }
+    // On error with no prior data, also keep hidden — the /health polling
+    // already surfaces API offline state via the global banner.
+    if (detailedHealthState === "error" && !detailedHealth) {
+        section.style.display = "none";
+        return;
+    }
+
+    section.style.display = "block";
+
+    // Top-level status pill
+    const topStatus = detailedHealth?.status || "degraded";
+    overallPill.className = `status-pill ${_dhStatusPillClass(topStatus)}`;
+    overallPill.textContent = _dhStatusLabel(topStatus);
+
+    // Meta note: refreshed_at + failed/unavailable sections
+    const metaParts = [];
+    if (detailedHealth?.generated_at) {
+        // Format the ISO timestamp as localtime; fall back to raw on error.
+        try {
+            const dt = new Date(detailedHealth.generated_at);
+            const formatted = dt.toLocaleString();
+            metaParts.push(`${t("detailed_health_refreshed_at")}: ${formatted}`);
+        } catch {
+            metaParts.push(`${t("detailed_health_refreshed_at")}: ${detailedHealth.generated_at}`);
+        }
+    }
+    if (detailedHealth?.failed_sections?.length) {
+        metaParts.push(`${t("detailed_health_failed_sections")}: ${detailedHealth.failed_sections.join(", ")}`);
+    }
+    if (detailedHealth?.unavailable_sections?.length) {
+        metaParts.push(`${t("detailed_health_unavailable_sections")}: ${detailedHealth.unavailable_sections.join(", ")}`);
+    }
+    metaNote.textContent = metaParts.length > 0 ? metaParts.join("  •  ") : "–";
+
+    // Cards
+    const cards = [];
+    if (detailedHealth) {
+        cards.push(_dhCard("detailed_health_validation", detailedHealth.validation?.status, _dhValidationBody(detailedHealth.validation)));
+        cards.push(_dhCard("detailed_health_model_admission", detailedHealth.model_admission?.status, _dhModelAdmissionBody(detailedHealth.model_admission)));
+        cards.push(_dhCard("detailed_health_contract_quality", detailedHealth.contract_quality?.status, _dhContractQualityBody(detailedHealth.contract_quality)));
+        cards.push(_dhCard("detailed_health_source_health", detailedHealth.source_health?.status, _dhSourceHealthBody(detailedHealth.source_health)));
+        cards.push(_dhCard("detailed_health_artifacts", detailedHealth.artifacts?.status, _dhArtifactsBody(detailedHealth.artifacts)));
+    }
+    grid.innerHTML = cards.join("");
+
+    // Limitations
+    if (detailedHealth?.limitations?.length) {
+        limitationsNote.innerHTML = detailedHealth.limitations
+            .map((l) => `• ${escapeHtml(l)}`)
+            .join("<br>");
+    } else {
+        limitationsNote.textContent = "–";
+    }
+}
+
+function _initDetailedHealthButton() {
+    // Wire the force-refresh button. Called once during initial load.
+    const btn = document.getElementById("dh-refresh-btn");
+    if (!btn || btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => {
+        // Disable briefly to prevent double-clicks; re-enable on completion.
+        btn.disabled = true;
+        btn.textContent = "…";
+        fetchDetailedHealth(true).finally(() => {
+            btn.disabled = false;
+            btn.textContent = t("detailed_health_force_refresh");
+        });
+    });
+}
+
 function _fmtMetric(value, decimals) {
     if (value == null) return "–";
     return safeNum(value, decimals != null ? decimals : 3);
@@ -9695,7 +10993,7 @@ function _metricColor(metricKey, value) {
     if (metricKey === "spearman" || metricKey === "pearson") {
         if (v >= 0.7) return "var(--accent, #4caf50)";
         if (v >= 0.5) return "var(--text, #ccc)";
-        return "var(--warn, #ff9800)";
+        return "var(--warn, #ff9500)";
     }
     return "var(--text, #ccc)";
 }
@@ -9865,7 +11163,7 @@ function _renderRunDetailExtra(detail) {
             parts.push(`<div style="margin-top:0.2rem;font-size:0.72rem;line-height:1.5">${escapeHtml(da.license_note)}</div>`);
         }
         if (da.statsbomb_attribution_required) {
-            parts.push(`<div style="margin-top:0.3rem;padding:0.3rem 0.4rem;background:var(--bg-alt,#1a1a2e);border-radius:4px;font-size:0.72rem;line-height:1.5"><strong>StatsBomb:</strong> ${escapeHtml(da.statsbomb_attribution_required)}</div>`);
+            parts.push(`<div style="margin-top:0.3rem;padding:0.3rem 0.4rem;background:var(--bg-alt,#1a1a2e);border-radius:var(--radius-xs);font-size:0.72rem;line-height:1.5"><strong>StatsBomb:</strong> ${escapeHtml(da.statsbomb_attribution_required)}</div>`);
         }
         if (parts.length > 0) {
             sections.push(`<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? "数据归属" : "Data Attribution"}</p>
@@ -9915,7 +11213,7 @@ async function renderRunComparison(runIdA, runIdB) {
     const statusEl = document.getElementById("run-comparison-status");
     if (!body) return;
     const z = appState.lang === "zh";
-    body.innerHTML = `<p style="color:var(--text-muted)">${z ? "加载中..." : "Loading..."}</p>`;
+    body.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "加载中..." : "Loading...")}</p>`;
 
     const [detailA, detailB] = await Promise.all([
         fetchModelRunDetail(runIdA),
@@ -9923,7 +11221,7 @@ async function renderRunComparison(runIdA, runIdB) {
     ]);
 
     if (!detailA || !detailB) {
-        body.innerHTML = `<p style="color:var(--text-muted)">${z ? "无法加载运行详情" : "Failed to load run details"}</p>`;
+        body.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "无法加载运行详情" : "Failed to load run details")}</p>`;
         if (statusEl) { statusEl.textContent = z ? "加载失败" : "failed"; statusEl.className = "status-pill status-low"; }
         return;
     }
@@ -10036,7 +11334,7 @@ function _renderDataAttributionPanel() {
             html += `<div style="display:flex;align-items:baseline;gap:0.4rem;margin-bottom:0.2rem;flex-wrap:wrap">
                 <strong>${escapeHtml(name)}</strong>
                 <span style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(note)}</span>
-                ${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--accent,#4f9cff)">${z ? "链接" : "link"}</a>` : ""}
+                ${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--accent,#007aff)">${z ? "链接" : "link"}</a>` : ""}
             </div>`;
         });
         html += `</div>`;
@@ -10045,7 +11343,7 @@ function _renderDataAttributionPanel() {
     // StatsBomb special callout
     const statsbombAttr = la.statsbomb_attribution_required;
     if (statsbombAttr) {
-        html += `<div style="margin:0.4rem 0;padding:0.4rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:4px;font-size:0.75rem;line-height:1.5">
+        html += `<div style="margin:0.4rem 0;padding:0.4rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:var(--radius-xs);font-size:0.75rem;line-height:1.5">
             <strong>StatsBomb Open Data:</strong> ${escapeHtml(statsbombAttr)}
         </div>`;
     }
@@ -10209,6 +11507,675 @@ function renderTeamDetail(team) {
     if (pill) pill.textContent = (team.overall_rating || 0).toFixed(1);
 }
 
+// ── League season projection & form analysis ─────────────────────────────
+const leagueState = {
+    wired: false,
+    formLoaded: false,
+};
+
+function leagueTrendLabel(label) {
+    const z = appState.lang === "zh";
+    const map = {
+        rising: z ? "上升" : "Rising",
+        declining: z ? "下滑" : "Declining",
+        stable: z ? "稳定" : "Stable",
+        insufficient: z ? "样本不足" : "Insufficient",
+        no_data: z ? "无数据" : "No Data",
+    };
+    return map[label] || label || "—";
+}
+
+function leagueTrendClass(label) {
+    if (label === "rising") return "status-pill status-high";
+    if (label === "declining") return "status-pill status-low";
+    if (label === "stable") return "status-pill status-medium";
+    return "status-pill status-medium";
+}
+
+function leagueDiffLabel(label) {
+    const z = appState.lang === "zh";
+    const map = {
+        very_hard: z ? "极难" : "Very Hard",
+        hard: z ? "困难" : "Hard",
+        moderate: z ? "中等" : "Moderate",
+        easy: z ? "容易" : "Easy",
+        very_easy: z ? "极易" : "Very Easy",
+    };
+    return map[label] || label || "—";
+}
+
+function leagueDiffClass(label) {
+    if (label === "very_hard") return "status-pill status-low";
+    if (label === "hard") return "status-pill status-low";
+    if (label === "moderate") return "status-pill status-medium";
+    if (label === "easy") return "status-pill status-high";
+    if (label === "very_easy") return "status-pill status-high";
+    return "status-pill status-medium";
+}
+
+function leagueFormString(formString) {
+    if (!formString) return "—";
+    // form_string is a string like "WWDLW" from the API
+    const chars = String(formString).split("");
+    if (chars.length === 0) return "—";
+    const colorMap = { W: "color:#34c759;font-weight:600", D: "color:#ff9500;font-weight:600", L: "color:#ff3b30;font-weight:600" };
+    return chars.map((r) => `<span style="${colorMap[r] || ""}">${escapeHtml(r)}</span>`).join(" ");
+}
+
+function leagueParams() {
+    const seasonEl = document.getElementById("league-season-filter");
+    const leagueEl = document.getElementById("league-league-filter");
+    const lastNEl = document.getElementById("league-last-n-filter");
+    return {
+        season: seasonEl ? seasonEl.value : "2425",
+        league: leagueEl ? leagueEl.value : "",
+        last_n: lastNEl ? parseInt(lastNEl.value, 10) : 6,
+    };
+}
+
+function leagueQuery(params) {
+    const parts = [];
+    if (params.season) parts.push(`season=${encodeURIComponent(params.season)}`);
+    if (params.league) parts.push(`league=${encodeURIComponent(params.league)}`);
+    if (params.last_n) parts.push(`last_n=${encodeURIComponent(params.last_n)}`);
+    if (params.upcoming_n) parts.push(`upcoming_n=${encodeURIComponent(params.upcoming_n)}`);
+    if (params.team) parts.push(`team=${encodeURIComponent(params.team)}`);
+    if (params.num_simulations) parts.push(`num_simulations=${encodeURIComponent(params.num_simulations)}`);
+    if (params.random_seed != null) parts.push(`random_seed=${encodeURIComponent(params.random_seed)}`);
+    if (params.top_n) parts.push(`top_n=${encodeURIComponent(params.top_n)}`);
+    if (params.relegation_slots != null) parts.push(`relegation_slots=${encodeURIComponent(params.relegation_slots)}`);
+    return parts.length > 0 ? `?${parts.join("&")}` : "";
+}
+
+async function loadLeagueForm() {
+    const tbody = document.getElementById("league-form-table-body");
+    const statusPill = document.getElementById("league-form-status");
+    const countEl = document.getElementById("league-form-teams-count");
+    const topPpgEl = document.getElementById("league-form-top-ppg");
+    if (!tbody) return;
+    const z = appState.lang === "zh";
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">${escapeHtml(z ? "加载中..." : "Loading...")}</td></tr>`;
+    if (statusPill) { statusPill.textContent = z ? "加载中" : "Loading"; statusPill.className = "status-pill status-medium"; }
+    try {
+        const params = leagueParams();
+        const data = await fetchJson(`/league/form-table${leagueQuery(params)}`);
+        const teams = data.teams || [];
+        if (data.status !== "ok" || teams.length === 0) {
+            const msg = data.disclaimer || (z ? "无数据" : "No data");
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">${escapeHtml(msg)}</td></tr>`;
+            if (statusPill) { statusPill.textContent = data.status || "no_data"; statusPill.className = "status-pill status-low"; }
+            if (countEl) countEl.textContent = "0";
+            if (topPpgEl) topPpgEl.textContent = "0.0";
+            renderLeagueFormHeatmap(data);
+            return;
+        }
+        tbody.innerHTML = teams.map((t, i) => {
+            const ppg = Number(t.ppg || 0).toFixed(2);
+            const rating = Number(t.form_rating || 0).toFixed(1);
+            const homePpg = Number(t.home_ppg || 0).toFixed(2);
+            const awayPpg = Number(t.away_ppg || 0).toFixed(2);
+            const trendLabel = leagueTrendLabel(t.trend_label);
+            const trendClass = leagueTrendClass(t.trend_label);
+            return `<tr>
+                <td>${i + 1}</td>
+                <td>${escapeHtml(t.team || "")}</td>
+                <td>${ppg}</td>
+                <td>${rating}</td>
+                <td><span class="${trendClass}">${escapeHtml(trendLabel)}</span></td>
+                <td>${homePpg}</td>
+                <td>${awayPpg}</td>
+                <td>${leagueFormString(t.form_string)}</td>
+            </tr>`;
+        }).join("");
+        if (statusPill) { statusPill.textContent = `${teams.length} ${z ? "支球队" : "teams"}`; statusPill.className = "status-pill status-high"; }
+        if (countEl) countEl.textContent = teams.length;
+        const topPpg = Math.max(...teams.map((t) => Number(t.ppg || 0)));
+        if (topPpgEl) topPpgEl.textContent = topPpg.toFixed(2);
+        renderLeagueFormHeatmap(data);
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">${z ? "加载失败" : "Load failed"}: ${escapeHtml(err.message || "")}</td></tr>`;
+        if (statusPill) { statusPill.textContent = z ? "错误" : "Error"; statusPill.className = "status-pill status-low"; }
+        renderLeagueFormHeatmap({ teams: [] });
+    }
+}
+
+function renderLeagueFormHeatmap(data) {
+    const container = document.getElementById("league-form-heatmap");
+    const statusEl = document.getElementById("league-form-heatmap-status");
+    if (!container) return;
+    const z = appState.lang === "zh";
+    const teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+    const lastN = (data && Number(data.last_n)) || 6;
+
+    if (teams.length === 0) {
+        const chart = getChart("league-form-heatmap");
+        if (chart) chart.clear();
+        container.innerHTML = "";
+        if (statusEl) {
+            statusEl.textContent = t("league_form_heatmap_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const chart = getChart("league-form-heatmap");
+    if (!chart) {
+        if (statusEl) {
+            statusEl.textContent = t("league_form_heatmap_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const xLabels = [];
+    for (let i = 1; i <= lastN; i++) {
+        xLabels.push(t("league_form_heatmap_match_n").replace("{n}", String(i)));
+    }
+
+    const yLabels = teams.map((tm) => String(tm.team || ""));
+
+    const heatData = [];
+    const tooltipCells = [];
+    for (let yi = 0; yi < teams.length; yi++) {
+        const matches = Array.isArray(teams[yi].form_matches) ? teams[yi].form_matches : [];
+        for (let xi = 0; xi < lastN; xi++) {
+            const m = matches[xi];
+            if (!m) continue;
+            const points = Number(m.points != null ? m.points : 0);
+            heatData.push([xi, yi, points]);
+            tooltipCells.push({
+                xi: xi,
+                yi: yi,
+                team: String(teams[yi].team || ""),
+                match_n: xi + 1,
+                result: String(m.result || ""),
+                opponent: String(m.opponent || ""),
+                venue: String(m.venue || ""),
+                gf: m.goals_for != null ? m.goals_for : 0,
+                ga: m.goals_against != null ? m.goals_against : 0,
+                date: m.date ? String(m.date) : "",
+            });
+        }
+    }
+
+    const textColor = chartTextColor();
+    const gridColor = chartGridColor();
+
+    chart.setOption({
+        tooltip: {
+            trigger: "item",
+            formatter: function (params) {
+                const cell = tooltipCells.find(function (c) {
+                    return c.xi === params.value[0] && c.yi === params.value[1];
+                });
+                if (!cell) return "";
+                const resultLabel = cell.result === "W" ? (z ? "胜" : "Win")
+                    : cell.result === "D" ? (z ? "平" : "Draw")
+                    : cell.result === "L" ? (z ? "负" : "Loss")
+                    : cell.result;
+                const venueLabel = cell.venue === "H" ? (z ? "主" : "Home")
+                    : cell.venue === "A" ? (z ? "客" : "Away")
+                    : cell.venue;
+                const dateStr = cell.date ? cell.date.slice(0, 10) : "—";
+                return '<div style="font-weight:600">' + escapeHtml(cell.team)
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_match_n").replace("{n}", String(cell.match_n))) + '</span></div>'
+                    + '<div>' + escapeHtml(resultLabel) + ' <span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_opponent")) + ':</span> ' + escapeHtml(cell.opponent) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_score")) + ':</span> ' + cell.gf + '-' + cell.ga
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_venue")) + ':</span> ' + escapeHtml(venueLabel) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_form_heatmap_date")) + ':</span> ' + escapeHtml(dateStr) + '</div>';
+            },
+        },
+        grid: { left: 130, right: 30, top: 20, bottom: 70 },
+        xAxis: {
+            type: "category",
+            data: xLabels,
+            splitArea: { show: true },
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        yAxis: {
+            type: "category",
+            data: yLabels,
+            splitArea: { show: true },
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        visualMap: {
+            type: "piecewise",
+            pieces: [
+                { value: 3, label: "W", color: "#34c759" },
+                { value: 1, label: "D", color: "#ff9500" },
+                { value: 0, label: "L", color: "#ff3b30" },
+            ],
+            left: "center",
+            bottom: 5,
+            textStyle: { color: textColor },
+        },
+        series: [{
+            name: z ? "表单" : "Form",
+            type: "heatmap",
+            data: heatData,
+            label: {
+                show: true,
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 600,
+                formatter: function (params) {
+                    const val = params.value[2];
+                    if (val === 3) return "W";
+                    if (val === 1) return "D";
+                    if (val === 0) return "L";
+                    return "";
+                },
+            },
+            emphasis: {
+                itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.5)" },
+            },
+        }],
+    }, true);
+
+    requestAnimationFrame(function () { chart.resize(); });
+
+    if (statusEl) {
+        statusEl.textContent = teams.length + " " + (z ? "支球队" : "teams");
+        statusEl.className = "status-pill status-high";
+    }
+}
+
+function renderLeagueDifficultyHeatmap(data) {
+    const container = document.getElementById("league-difficulty-heatmap");
+    const statusEl = document.getElementById("league-difficulty-heatmap-status");
+    if (!container) return;
+    const z = appState.lang === "zh";
+    const teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+    const upcomingN = (data && Number(data.upcoming_n)) || 10;
+
+    if (teams.length === 0) {
+        const chart = getChart("league-difficulty-heatmap");
+        if (chart) chart.clear();
+        container.innerHTML = "";
+        if (statusEl) {
+            statusEl.textContent = t("league_difficulty_heatmap_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const chart = getChart("league-difficulty-heatmap");
+    if (!chart) {
+        if (statusEl) {
+            statusEl.textContent = t("league_difficulty_heatmap_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const xLabels = [];
+    for (let i = 1; i <= upcomingN; i++) {
+        xLabels.push(t("league_difficulty_heatmap_match_n").replace("{n}", String(i)));
+    }
+
+    const yLabels = teams.map((tm) => String(tm.team || ""));
+
+    const heatData = [];
+    const tooltipCells = [];
+    for (let yi = 0; yi < teams.length; yi++) {
+        const fixtures = Array.isArray(teams[yi].fixtures) ? teams[yi].fixtures : [];
+        for (let xi = 0; xi < upcomingN; xi++) {
+            const f = fixtures[xi];
+            if (!f) continue;
+            const diffScore = Number(f.difficulty_score != null ? f.difficulty_score : 0);
+            heatData.push([xi, yi, diffScore]);
+            tooltipCells.push({
+                xi: xi,
+                yi: yi,
+                team: String(teams[yi].team || ""),
+                match_n: xi + 1,
+                opponent: String(f.opponent || ""),
+                venue: String(f.venue || ""),
+                date: f.date ? String(f.date) : "",
+                difficulty_score: diffScore,
+                difficulty_label: String(f.difficulty_label || ""),
+                expected_points: Number(f.expected_points != null ? f.expected_points : 0),
+            });
+        }
+    }
+
+    const textColor = chartTextColor();
+    const gridColor = chartGridColor();
+
+    chart.setOption({
+        tooltip: {
+            trigger: "item",
+            formatter: function (params) {
+                const cell = tooltipCells.find(function (c) {
+                    return c.xi === params.value[0] && c.yi === params.value[1];
+                });
+                if (!cell) return "";
+                const venueLabel = cell.venue === "H" ? (z ? "主" : "Home")
+                    : cell.venue === "A" ? (z ? "客" : "Away")
+                    : cell.venue;
+                const levelLabel = leagueDiffLabel(cell.difficulty_label);
+                const dateStr = cell.date ? cell.date.slice(0, 10) : "—";
+                return '<div style="font-weight:600">' + escapeHtml(cell.team)
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_match_n").replace("{n}", String(cell.match_n))) + '</span></div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_opponent")) + ':</span> ' + escapeHtml(cell.opponent)
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_venue")) + ':</span> ' + escapeHtml(venueLabel) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_date")) + ':</span> ' + escapeHtml(dateStr) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_score")) + ':</span> ' + cell.difficulty_score
+                    + ' <span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_xpts")) + ':</span> ' + cell.expected_points.toFixed(2) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_level")) + ':</span> ' + escapeHtml(levelLabel) + '</div>';
+            },
+        },
+        grid: { left: 130, right: 30, top: 20, bottom: 70 },
+        xAxis: {
+            type: "category",
+            data: xLabels,
+            splitArea: { show: true },
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        yAxis: {
+            type: "category",
+            data: yLabels,
+            splitArea: { show: true },
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        visualMap: {
+            type: "continuous",
+            min: 0,
+            max: 100,
+            calculable: true,
+            inRange: {
+                color: ["#34c759", "#ff9500", "#ff3b30"],
+            },
+            left: "center",
+            bottom: 5,
+            textStyle: { color: textColor },
+        },
+        series: [{
+            name: z ? "赛程难度" : "Difficulty",
+            type: "heatmap",
+            data: heatData,
+            label: {
+                show: true,
+                color: "#fff",
+                fontSize: 10,
+                fontWeight: 600,
+                formatter: function (params) {
+                    return String(params.value[2]);
+                },
+            },
+            emphasis: {
+                itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.5)" },
+            },
+        }],
+    }, true);
+
+    requestAnimationFrame(function () { chart.resize(); });
+
+    if (statusEl) {
+        statusEl.textContent = teams.length + " " + (z ? "支球队" : "teams");
+        statusEl.className = "status-pill status-high";
+    }
+}
+
+function renderLeagueDifficultyDistribution(data) {
+    const container = document.getElementById("league-difficulty-distribution");
+    const statusEl = document.getElementById("league-difficulty-distribution-status");
+    if (!container) return;
+    const z = appState.lang === "zh";
+    const teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+
+    if (teams.length === 0) {
+        const chart = getChart("league-difficulty-distribution");
+        if (chart) chart.clear();
+        container.innerHTML = "";
+        if (statusEl) {
+            statusEl.textContent = t("league_difficulty_distribution_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const chart = getChart("league-difficulty-distribution");
+    if (!chart) {
+        if (statusEl) {
+            statusEl.textContent = t("league_difficulty_distribution_no_data");
+            statusEl.className = "status-pill status-low";
+        }
+        return;
+    }
+
+    const sorted = teams.slice().sort(function (a, b) {
+        const avgA = Number(a.avg_difficulty != null ? a.avg_difficulty : 0);
+        const avgB = Number(b.avg_difficulty != null ? b.avg_difficulty : 0);
+        return avgB - avgA;
+    });
+
+    const yLabels = sorted.map((tm) => String(tm.team || ""));
+    const values = sorted.map((tm) => Number(tm.avg_difficulty != null ? tm.avg_difficulty : 0));
+    const fixtureCounts = sorted.map((tm) => Number(tm.n_fixtures != null ? tm.n_fixtures : 0));
+    const barColors = sorted.map((tm) => {
+        const avg = Number(tm.avg_difficulty != null ? tm.avg_difficulty : 0);
+        if (avg >= 70) return "#ff3b30";
+        if (avg >= 50) return "#ff9500";
+        return "#34c759";
+    });
+
+    const textColor = chartTextColor();
+    const gridColor = chartGridColor();
+
+    chart.setOption({
+        tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+            formatter: function (params) {
+                const idx = params[0].dataIndex;
+                const team = yLabels[idx];
+                const avg = values[idx];
+                const nFix = fixtureCounts[idx];
+                return '<div style="font-weight:600">' + escapeHtml(team) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_distribution_avg")) + ':</span> ' + avg.toFixed(1) + '</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(t("league_difficulty_heatmap_score")) + ':</span> 0-100</div>'
+                    + '<div><span style="color:#8e8e93">' + escapeHtml(z ? "场次数" : "Fixtures") + ':</span> ' + nFix + '</div>';
+            },
+        },
+        grid: { left: 130, right: 30, top: 20, bottom: 30 },
+        xAxis: {
+            type: "value",
+            min: 0,
+            max: 100,
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+            splitLine: { lineStyle: { color: gridColor } },
+        },
+        yAxis: {
+            type: "category",
+            data: yLabels,
+            axisLabel: { color: textColor, fontSize: 11 },
+            axisLine: { lineStyle: { color: gridColor } },
+        },
+        series: [{
+            name: t("league_difficulty_distribution_avg"),
+            type: "bar",
+            data: values.map(function (v, i) {
+                return { value: v, itemStyle: { color: barColors[i] } };
+            }),
+            label: {
+                show: true,
+                position: "right",
+                color: textColor,
+                fontSize: 11,
+                formatter: function (params) {
+                    return params.value.toFixed(1);
+                },
+            },
+        }],
+    }, true);
+
+    requestAnimationFrame(function () { chart.resize(); });
+
+    if (statusEl) {
+        statusEl.textContent = teams.length + " " + (z ? "支球队" : "teams");
+        statusEl.className = "status-pill status-high";
+    }
+}
+
+async function loadLeagueDifficulty() {
+    const content = document.getElementById("league-difficulty-content");
+    if (!content) return;
+    const z = appState.lang === "zh";
+    const teamInput = document.getElementById("league-difficulty-team");
+    const team = teamInput ? teamInput.value.trim() : "";
+    content.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "加载中..." : "Loading...")}</p>`;
+    try {
+        const params = leagueParams();
+        params.team = team || null;
+        params.upcoming_n = 10;
+        // Remove last_n from difficulty query (not a valid param)
+        const diffParams = { season: params.season, league: params.league, upcoming_n: params.upcoming_n };
+        if (team) diffParams.team = team;
+        const data = await fetchJson(`/league/fixture-difficulty${leagueQuery(diffParams)}`);
+        const teamsData = data.teams || [];
+        if (data.status !== "ok" || teamsData.length === 0) {
+            const msg = data.disclaimer || (z ? "无数据" : "No data");
+            content.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(msg)}</p>`;
+            renderLeagueDifficultyHeatmap({ teams: [] });
+            renderLeagueDifficultyDistribution({ teams: [] });
+            return;
+        }
+        const sections = teamsData.map((td) => {
+            const fixtures = td.fixtures || [];
+            if (fixtures.length === 0) return "";
+            const rows = fixtures.map((f) => {
+                const xpts = Number(f.expected_points || 0).toFixed(2);
+                const diffScore = Number(f.difficulty_score || 0).toFixed(0);
+                const diffLabel = leagueDiffLabel(f.difficulty_label);
+                const diffClass = leagueDiffClass(f.difficulty_label);
+                const actual = f.actual_result ? `<span style="color:${f.actual_result === "W" ? "#34c759" : f.actual_result === "L" ? "#ff3b30" : "#ff9500"};font-weight:600">${escapeHtml(f.actual_result)}</span>` : "—";
+                return `<tr>
+                    <td>${escapeHtml(f.date || "—")}</td>
+                    <td>${escapeHtml(f.opponent || "")}</td>
+                    <td>${escapeHtml(f.venue === "H" ? (z ? "主" : "H") : (z ? "客" : "A"))}</td>
+                    <td>${xpts}</td>
+                    <td>${diffScore}</td>
+                    <td><span class="${diffClass}">${escapeHtml(diffLabel)}</span></td>
+                    <td>${actual}</td>
+                </tr>`;
+            }).join("");
+            return `<div style="margin-bottom:var(--space)">
+                <h4 style="margin:0 0 0.5rem;font-size:0.9rem">${escapeHtml(td.team || "")}</h4>
+                <div class="table-scroll">
+                    <table class="data-table" style="font-size:0.8rem">
+                        <thead><tr>
+                            <th>${z ? "日期" : "Date"}</th>
+                            <th>${z ? "对手" : "Opponent"}</th>
+                            <th>${z ? "主客" : "Venue"}</th>
+                            <th>${z ? "期望积分" : "Exp Pts"}</th>
+                            <th>${z ? "难度" : "Difficulty"}</th>
+                            <th>${z ? "等级" : "Level"}</th>
+                            <th>${z ? "实际" : "Actual"}</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            </div>`;
+        }).join("");
+        content.innerHTML = sections || `<p style="color:var(--text-muted)">${escapeHtml(z ? "无赛程数据" : "No fixture data")}</p>`;
+        renderLeagueDifficultyHeatmap(data);
+        renderLeagueDifficultyDistribution(data);
+    } catch (err) {
+        content.innerHTML = `<p style="color:var(--text-muted)">${z ? "加载失败" : "Load failed"}: ${escapeHtml(err.message || "")}</p>`;
+        renderLeagueDifficultyHeatmap({ teams: [] });
+        renderLeagueDifficultyDistribution({ teams: [] });
+    }
+}
+
+async function loadLeagueProjection() {
+    const tbody = document.getElementById("league-projection-table-body");
+    const disclaimerEl = document.getElementById("league-projection-disclaimer");
+    const titleProbEl = document.getElementById("league-projection-title-prob");
+    if (!tbody) return;
+    const z = appState.lang === "zh";
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">${escapeHtml(z ? "模拟中..." : "Simulating...")}</td></tr>`;
+    try {
+        const params = leagueParams();
+        const simCountEl = document.getElementById("league-sim-count");
+        const numSimulations = simCountEl ? parseInt(simCountEl.value, 10) : 1000;
+        const projParams = {
+            season: params.season,
+            league: params.league,
+            num_simulations: numSimulations,
+            random_seed: 42,
+            top_n: 4,
+            relegation_slots: 3,
+        };
+        const data = await fetchJson(`/league/season-projection${leagueQuery(projParams)}`);
+        const teams = data.teams || [];
+        if (data.status !== "ok" || teams.length === 0) {
+            const msg = data.disclaimer || (z ? "无数据" : "No data");
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">${escapeHtml(msg)}</td></tr>`;
+            if (disclaimerEl) disclaimerEl.textContent = "";
+            if (titleProbEl) titleProbEl.textContent = "0%";
+            return;
+        }
+        tbody.innerHTML = teams.map((t, i) => {
+            const avgPts = Number(t.avg_final_points || 0).toFixed(1);
+            const avgPos = Number(t.avg_position || 0).toFixed(2);
+            const titleProb = Number(t.title_probability || 0);
+            const topNProb = Number(t.top_n_probability || 0);
+            const relProb = Number(t.relegation_probability || 0);
+            const titlePct = (titleProb * 100).toFixed(1) + "%";
+            const topNPct = (topNProb * 100).toFixed(1) + "%";
+            const relPct = (relProb * 100).toFixed(1) + "%";
+            const titleClass = titleProb >= 0.5 ? "status-pill status-high" : titleProb >= 0.1 ? "status-pill status-medium" : "status-pill status-low";
+            const relClass = relProb >= 0.5 ? "status-pill status-low" : relProb >= 0.1 ? "status-pill status-medium" : "status-pill status-high";
+            return `<tr>
+                <td>${i + 1}</td>
+                <td>${escapeHtml(t.team || "")}</td>
+                <td>${avgPts}</td>
+                <td>${avgPos}</td>
+                <td><span class="${titleClass}">${titlePct}</span></td>
+                <td>${topNPct}</td>
+                <td><span class="${relClass}">${relPct}</span></td>
+            </tr>`;
+        }).join("");
+        if (disclaimerEl) disclaimerEl.textContent = data.disclaimer || "";
+        const topTeam = teams[0];
+        const topTitleProb = topTeam ? Number(topTeam.title_probability || 0) : 0;
+        if (titleProbEl) titleProbEl.textContent = (topTitleProb * 100).toFixed(0) + "%";
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">${z ? "加载失败" : "Load failed"}: ${escapeHtml(err.message || "")}</td></tr>`;
+        if (disclaimerEl) disclaimerEl.textContent = "";
+    }
+}
+
+async function renderLeague() {
+    // Wire up event listeners once
+    if (!leagueState.wired) {
+        leagueState.wired = true;
+        const refreshBtn = document.getElementById("league-refresh-btn");
+        const difficultyBtn = document.getElementById("league-difficulty-btn");
+        const projectionBtn = document.getElementById("league-projection-btn");
+        const seasonFilter = document.getElementById("league-season-filter");
+        const leagueFilter = document.getElementById("league-league-filter");
+        const lastNFilter = document.getElementById("league-last-n-filter");
+        if (refreshBtn) refreshBtn.addEventListener("click", () => { loadLeagueForm(); });
+        if (difficultyBtn) difficultyBtn.addEventListener("click", () => { loadLeagueDifficulty(); });
+        if (projectionBtn) projectionBtn.addEventListener("click", () => { loadLeagueProjection(); });
+        if (seasonFilter) seasonFilter.addEventListener("change", () => { loadLeagueForm(); });
+        if (leagueFilter) leagueFilter.addEventListener("change", () => { loadLeagueForm(); });
+        if (lastNFilter) lastNFilter.addEventListener("change", () => { loadLeagueForm(); });
+    }
+    // Initial load of form table if not yet loaded
+    if (!leagueState.formLoaded) {
+        leagueState.formLoaded = true;
+        await loadLeagueForm();
+    }
+}
+
 function renderTeamsChart(teams) {
     const chartEl = document.getElementById("teams-chart");
     if (!chartEl || typeof echarts === "undefined") return;
@@ -10357,7 +12324,7 @@ async function _renderTeamCompareResult(a, b) {
             radar: {
                 indicator: labels.map(l => ({ name: l, max: 100 })),
                 shape: "polygon",
-                splitArea: { areaStyle: { color: ["rgba(100,180,255,0.02)", "rgba(100,180,255,0.05)"] } },
+                splitArea: { areaStyle: { color: ["rgba(0,122,255,0.02)", "rgba(0,122,255,0.05)"] } },
             },
             series: [{
                 type: "radar",
@@ -10365,16 +12332,16 @@ async function _renderTeamCompareResult(a, b) {
                     {
                         value: radarA,
                         name: nameA,
-                        areaStyle: { opacity: 0.15, color: "#4a90d9" },
-                        lineStyle: { width: 2, color: "#4a90d9" },
-                        itemStyle: { color: "#4a90d9" },
+                        areaStyle: { opacity: 0.15, color: "#007aff" },
+                        lineStyle: { width: 2, color: "#007aff" },
+                        itemStyle: { color: "#007aff" },
                     },
                     {
                         value: radarB,
                         name: nameB,
-                        areaStyle: { opacity: 0.15, color: "#ff9f43" },
-                        lineStyle: { width: 2, color: "#ff9f43" },
-                        itemStyle: { color: "#ff9f43" },
+                        areaStyle: { opacity: 0.15, color: "#ff9500" },
+                        lineStyle: { width: 2, color: "#ff9500" },
+                        itemStyle: { color: "#ff9500" },
                     },
                 ],
             }],
@@ -10521,7 +12488,7 @@ async function _renderTeamStyleClusters(season, league, nClusters) {
         appState.charts.teamStyle = chart;
 
         // Group points by cluster_id so each cluster gets its own color.
-        const palette = ["#4a90d9", "#ff9f43", "#26c281", "#e84c3d", "#9b59b6", "#34495e", "#16a085", "#f1c40f"];
+        const palette = ["#007aff", "#ff9500", "#34c759", "#ff3b30", "#af52de", "#5856d6", "#5ac8fa", "#ff2d55"];
         const seriesByCluster = new Map();
         for (const p of profiles) {
             const cid = String(p.cluster_id ?? "?");
@@ -10642,7 +12609,7 @@ async function _renderClusterSimilarityMatrix(season, league, nClusters) {
                 left: "center",
                 bottom: 5,
                 textStyle: { color: chartTextColor() },
-                inRange: { color: ["#e84c3d", "#f1c40f", "#26c281"] },
+                inRange: { color: ["#ff3b30", "#ff9500", "#34c759"] },
             },
             series: [{
                 name: z ? "相似度" : "Similarity",
@@ -10785,7 +12752,7 @@ async function _renderStyleMatchup(homeTeam, awayTeam, season, league) {
             };
             clashText = `${clashMap[data.cluster_clash] || data.cluster_clash || ""} (${Number(data.cluster_similarity).toFixed(2)})`;
         }
-        clusterHtml = `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(100,180,255,0.06);border-radius:6px;font-size:0.75rem">`
+        clusterHtml = `<div style="margin-top:0.6rem;padding:0.4rem 0.5rem;background:rgba(0,122,255,0.06);border-radius:var(--radius-sm);font-size:0.75rem">`
             + `<p style="margin:0 0 0.3rem;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? "簇上下文" : "Cluster context"}</p>`
             + `<div style="display:grid;grid-template-columns:auto 1fr;gap:0.15rem 0.6rem">`
             + `<div style="color:var(--text-muted)">${escapeHtml(homeTeam)}:</div><div>${fmtCluster(hc)}</div>`
@@ -10992,7 +12959,7 @@ async function _renderLeagueStylePercentiles(team, season, league) {
             <td>${val.toFixed(2)}</td>
             <td>
                 <div style="display:flex;align-items:center;gap:0.4rem">
-                    <div style="flex:1;min-width:60px;height:6px;background:rgba(120,120,120,0.15);border-radius:3px;overflow:hidden">
+                    <div style="flex:1;min-width:60px;height:6px;background:rgba(120,120,120,0.15);border-radius:var(--radius-xs);overflow:hidden">
                         <div style="width:${barWidth}%;height:100%;background:linear-gradient(90deg,#5b8def,#3eb87f)"></div>
                     </div>
                     <strong style="font-size:0.75rem">${pct.toFixed(1)}%</strong>
@@ -11045,7 +13012,7 @@ async function _renderStyleAtlas(season, league) {
             const range = `${Number(b.low ?? 0).toFixed(1)}–${Number(b.high ?? 0).toFixed(1)}`;
             return `<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.65rem">
                 <div style="width:70px;text-align:right;color:var(--text-muted)">${escapeHtml(range)}</div>
-                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:2px;overflow:hidden">
+                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:var(--radius-xs);overflow:hidden">
                     <div style="width:${h}%;height:100%;background:#5b8def"></div>
                 </div>
                 <div style="width:24px;text-align:right;font-weight:600">${Number(b.count ?? 0)}</div>
@@ -11061,7 +13028,7 @@ async function _renderStyleAtlas(season, league) {
                 return `<span class="status-pill ${dirClass}" style="font-size:0.62rem;padding:0.08rem 0.35rem;margin:0.1rem 0.2rem 0.1rem 0">${escapeHtml(o.team)} (${Number(o.z_score ?? 0).toFixed(2)}σ, ${dirLabel})</span>`;
             }).join("") + (outliers.length > 5 ? `<span style="font-size:0.65rem;color:var(--text-muted)">+${outliers.length - 5}</span>` : "");
 
-        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
                 <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
                 <span style="font-size:0.68rem;color:var(--text-muted)">${z ? "min" : "min"} ${Number(d.min ?? 0).toFixed(2)} · Q1 ${Number(d.q1 ?? 0).toFixed(2)} · ${z ? "中位" : "med"} ${Number(d.median ?? 0).toFixed(2)} · Q3 ${Number(d.q3 ?? 0).toFixed(2)} · ${z ? "最大" : "max"} ${Number(d.max ?? 0).toFixed(2)} · IQR ${Number(d.iqr ?? 0).toFixed(2)}</span>
@@ -11166,7 +13133,7 @@ async function _renderTeamStyleDrift(team, league) {
         const perSeason = (d.per_season || []).map(ps => {
             return `<span style="font-size:0.65rem;color:var(--text-muted);margin-right:0.4rem">${escapeHtml(ps.season)}: <strong>${Number(ps.value ?? 0).toFixed(2)}</strong></span>`;
         }).join("");
-        return `<div style="margin-bottom:0.5rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.5rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.2rem">
                 <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
                 <span class="status-pill ${driftLabelClass(d.drift_label)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(driftLabelMap(d.drift_label))}</span>
@@ -11412,7 +13379,7 @@ async function _renderPositionStyleEvolution(league) {
             return `<div style="font-size:0.65rem;color:var(--text-muted);margin-right:0.4rem"><strong>${escapeHtml(d.label || d.feature || "")}</strong>: ${escapeHtml(vals)}</div>`;
         }).join("");
 
-        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
                 <strong style="font-size:0.8rem">${escapeHtml(g.position_group || "")}</strong>
                 <span style="font-size:0.68rem;color:var(--text-muted)">${z ? "赛季数" : "Seasons"}: ${g.n_seasons ?? 0} (${escapeHtml((g.seasons || []).join(" → "))})</span>
@@ -11491,7 +13458,7 @@ async function _renderPositionStyleDrift(pos, league) {
         const perSeason = (d.per_season || []).map(ps => {
             return `<span style="font-size:0.65rem;color:var(--text-muted);margin-right:0.4rem">${escapeHtml(ps.season)}: <strong>${Number(ps.value ?? 0).toFixed(2)}</strong> <span style="font-size:0.6rem">(${escapeHtml(String(ps.n_players ?? 0))}p)</span></span>`;
         }).join("");
-        return `<div style="margin-bottom:0.5rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.5rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.2rem">
                 <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
                 <span class="status-pill ${driftLabelClass(d.drift_label)}" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(driftLabelMap(d.drift_label))}</span>
@@ -11805,8 +13772,8 @@ async function _renderPositionGapReport(team, season) {
             `<div style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(data.team || "")}${data.league ? " · " + escapeHtml(data.league) : ""}${season ? " · " + escapeHtml(season) : ""}</div>`,
         `</div>`,
         `<div style="display:flex;gap:0.6rem;margin-bottom:0.4rem">`,
-            `<div style="flex:1;padding:0.4rem;background:rgba(255,100,100,0.06);border-radius:6px;text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-danger)">${data.n_gaps ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "缺口" : "Gaps"}</div></div>`,
-            `<div style="flex:1;padding:0.4rem;background:rgba(100,255,100,0.06);border-radius:6px;text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-success)">${data.n_strengths ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "优势" : "Strengths"}</div></div>`,
+            `<div style="flex:1;padding:0.4rem;background:rgba(255,100,100,0.06);border-radius:var(--radius-sm);text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-danger)">${data.n_gaps ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "缺口" : "Gaps"}</div></div>`,
+            `<div style="flex:1;padding:0.4rem;background:rgba(100,255,100,0.06);border-radius:var(--radius-sm);text-align:center"><div style="font-size:1.2rem;font-weight:bold;color:var(--text-success)">${data.n_strengths ?? 0}</div><div style="font-size:0.65rem;color:var(--text-muted)">${z ? "优势" : "Strengths"}</div></div>`,
         `</div>`,
         gapRows
             ? `<div style="margin-bottom:0.4rem"><p style="font-size:0.72rem;font-weight:bold;margin:0 0 0.2rem">${z ? "缺口位置" : "Gap Positions"}</p><div class="table-scroll"><table class="data-table" style="width:100%;font-size:0.72rem"><thead><tr><th>${z ? "位置" : "Position"}</th><th>${z ? "类型" : "Type"}</th><th>${z ? "人数" : "Players"}</th><th>${z ? "原因" : "Reason"}</th></tr></thead><tbody>${gapRows}</tbody></table></div></div>`
@@ -12355,7 +14322,7 @@ async function _renderLeagueActionAtlas(season, league) {
             const range = `${Number(b.low ?? 0).toFixed(2)}–${Number(b.high ?? 0).toFixed(2)}`;
             return `<div style="display:flex;align-items:center;gap:0.3rem;font-size:0.65rem">
                 <div style="width:80px;text-align:right;color:var(--text-muted)">${escapeHtml(range)}</div>
-                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:2px;overflow:hidden">
+                <div style="flex:1;height:10px;background:rgba(120,120,120,0.1);border-radius:var(--radius-xs);overflow:hidden">
                     <div style="width:${h}%;height:100%;background:#5b8def"></div>
                 </div>
                 <div style="width:24px;text-align:right;font-weight:600">${Number(b.count ?? 0)}</div>
@@ -12371,7 +14338,7 @@ async function _renderLeagueActionAtlas(season, league) {
                 return `<span class="status-pill ${dirClass}" style="font-size:0.62rem;padding:0.08rem 0.35rem;margin:0.1rem 0.2rem 0.1rem 0">${escapeHtml(o.team)} (${Number(o.z_score ?? 0).toFixed(2)}σ, ${dirLabel})</span>`;
             }).join("") + (outliers.length > 5 ? `<span style="font-size:0.65rem;color:var(--text-muted)">+${outliers.length - 5}</span>` : "");
 
-        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:6px">
+        return `<div style="margin-bottom:0.6rem;padding:0.5rem;background:rgba(120,180,255,0.04);border-radius:var(--radius-sm)">
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.3rem">
                 <strong style="font-size:0.78rem">${escapeHtml(d.label || d.feature || "")}</strong>
                 <span style="font-size:0.68rem;color:var(--text-muted)">min ${Number(d.min ?? 0).toFixed(2)} · Q1 ${Number(d.q1 ?? 0).toFixed(2)} · ${z ? "中位" : "med"} ${Number(d.median ?? 0).toFixed(2)} · Q3 ${Number(d.q3 ?? 0).toFixed(2)} · max ${Number(d.max ?? 0).toFixed(2)} · IQR ${Number(d.iqr ?? 0).toFixed(2)}</span>
@@ -12611,11 +14578,11 @@ async function _renderClusterRecruits(clusterId, season, league, nClusters) {
             const pos = row?.querySelector("td:nth-child(4)")?.textContent || "";
             const ratingText = row?.querySelector("td:nth-child(6)")?.textContent || "";
             const rating = parseFloat(ratingText) || null;
-            const added = togglePlayerWatchlist({
+            const result = togglePlayerWatchlist({
                 key, name, team, position: pos, rating,
                 reason_code: "cluster_recruit_fit",
             });
-            btn.classList.toggle("active", added);
+            btn.classList.toggle("active", result.added);
         });
     });
     wrap.querySelectorAll("[data-rec-short]").forEach(btn => {
@@ -12627,11 +14594,11 @@ async function _renderClusterRecruits(clusterId, season, league, nClusters) {
             const pos = row?.querySelector("td:nth-child(4)")?.textContent || "";
             const ratingText = row?.querySelector("td:nth-child(6)")?.textContent || "";
             const rating = parseFloat(ratingText) || null;
-            const added = togglePlayerShortlist({
+            const result = togglePlayerShortlist({
                 key, name, team, position: pos, rating,
                 reason_code: "cluster_recruit_fit",
             });
-            btn.classList.toggle("active", added);
+            btn.classList.toggle("active", result.added);
         });
     });
 }
@@ -12731,6 +14698,1004 @@ async function _renderPlayerStyleFit(playerName, season, league) {
             `</div>`,
         ].join("");
     }
+}
+
+// ── Cross-league scouting (Round 82): depth / targets / style-match ──────
+
+function initCrossScoutingControls() {
+    const depthBtn = document.getElementById("cross-scouting-depth-btn");
+    const targetsBtn = document.getElementById("cross-scouting-targets-btn");
+    const styleBtn = document.getElementById("cross-scouting-style-btn");
+    if (depthBtn && !depthBtn.dataset.bound) {
+        depthBtn.dataset.bound = "1";
+        const handler = () => {
+            const a = (document.getElementById("cross-scouting-team-a")?.value || "").trim();
+            const b = (document.getElementById("cross-scouting-team-b")?.value || "").trim();
+            const season = (document.getElementById("cross-scouting-season")?.value || "").trim();
+            const minMinutes = Number(document.getElementById("cross-scouting-min-minutes")?.value || 500);
+            if (!a || !b) return;
+            depthBtn.disabled = true;
+            depthBtn.textContent = "...";
+            _renderCrossLeagueDepth(a, b, season, minMinutes).finally(() => {
+                depthBtn.disabled = false;
+                depthBtn.textContent = t("cross_scouting_depth_btn");
+            });
+        };
+        depthBtn.addEventListener("click", handler);
+        const aInput = document.getElementById("cross-scouting-team-a");
+        const bInput = document.getElementById("cross-scouting-team-b");
+        if (aInput) aInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+        if (bInput) bInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+    }
+    if (targetsBtn && !targetsBtn.dataset.bound) {
+        targetsBtn.dataset.bound = "1";
+        const handler = () => {
+            const team = (document.getElementById("cross-scouting-targets-team")?.value || "").trim();
+            const season = (document.getElementById("cross-scouting-season")?.value || "").trim();
+            const minMinutes = Number(document.getElementById("cross-scouting-min-minutes")?.value || 500);
+            const topN = Number(document.getElementById("cross-scouting-top-n")?.value || 10);
+            const exclude = document.getElementById("cross-scouting-exclude-same-league")?.checked ?? true;
+            if (!team) return;
+            targetsBtn.disabled = true;
+            targetsBtn.textContent = "...";
+            _renderScoutingTargets(team, season, minMinutes, topN, exclude).finally(() => {
+                targetsBtn.disabled = false;
+                targetsBtn.textContent = t("cross_scouting_targets_btn");
+            });
+        };
+        targetsBtn.addEventListener("click", handler);
+        const teamInput = document.getElementById("cross-scouting-targets-team");
+        if (teamInput) teamInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+    }
+    if (styleBtn && !styleBtn.dataset.bound) {
+        styleBtn.dataset.bound = "1";
+        const handler = () => {
+            const team = (document.getElementById("cross-scouting-style-team")?.value || "").trim();
+            const pos = (document.getElementById("cross-scouting-style-pos")?.value || "CM").trim();
+            const season = (document.getElementById("cross-scouting-season")?.value || "").trim();
+            const minMinutes = Number(document.getElementById("cross-scouting-min-minutes")?.value || 500);
+            const topN = Number(document.getElementById("cross-scouting-top-n")?.value || 10);
+            const exclude = document.getElementById("cross-scouting-style-exclude")?.checked ?? true;
+            const weighted = document.getElementById("cross-scouting-style-weighted")?.checked ?? false;
+            if (!team) return;
+            styleBtn.disabled = true;
+            styleBtn.textContent = "...";
+            _renderScoutingStyleMatch(team, pos, season, minMinutes, topN, exclude, weighted).finally(() => {
+                styleBtn.disabled = false;
+                styleBtn.textContent = t("cross_scouting_style_btn");
+            });
+        };
+        styleBtn.addEventListener("click", handler);
+        const teamInput = document.getElementById("cross-scouting-style-team");
+        if (teamInput) teamInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+    }
+    const dashboardBtn = document.getElementById("cross-scouting-dashboard-btn");
+    if (dashboardBtn && !dashboardBtn.dataset.bound) {
+        dashboardBtn.dataset.bound = "1";
+        const handler = () => {
+            const team = (document.getElementById("cross-scouting-dashboard-team")?.value || "").trim();
+            const season = (document.getElementById("cross-scouting-season")?.value || "").trim();
+            const minMinutes = Number(document.getElementById("cross-scouting-min-minutes")?.value || 500);
+            const topN = Number(document.getElementById("cross-scouting-top-n")?.value || 10);
+            const maxPositions = Number(document.getElementById("cross-scouting-dashboard-max-positions")?.value || 3);
+            const usePositionWeights = document.getElementById("cross-scouting-dashboard-weighted")?.checked ?? false;
+            if (!team) return;
+            dashboardBtn.disabled = true;
+            dashboardBtn.textContent = "...";
+            _renderCrossScoutingDashboard(team, season, minMinutes, topN, maxPositions, usePositionWeights).finally(() => {
+                dashboardBtn.disabled = false;
+                dashboardBtn.textContent = t("cross_scouting_dashboard_btn");
+            });
+        };
+        dashboardBtn.addEventListener("click", handler);
+        const teamInput = document.getElementById("cross-scouting-dashboard-team");
+        if (teamInput) teamInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handler(); });
+    }
+}
+
+function _crossScoutingStatusText(status, z) {
+    const map = {
+        ok: z ? "正常" : "OK",
+        no_data: z ? "无数据" : "No data",
+        team_a_not_found: z ? "球队 A 未找到" : "Team A not found",
+        team_b_not_found: z ? "球队 B 未找到" : "Team B not found",
+        team_not_found: z ? "球队未找到" : "Team not found",
+        invalid_position: z ? "无效位置组" : "Invalid position",
+        team_position_not_found: z ? "该位置无球员" : "No player at position",
+        fetch_failed: z ? "请求失败" : "Fetch failed",
+    };
+    return map[status] || status || "—";
+}
+
+// Module-level cache for cross-scouting results (used by export buttons).
+const _lastCrossScoutingData = { depth: null, targets: null, style: null, dashboard: null };
+
+// Compare tray for cross-scouting candidate comparison (max 6 players,
+// raised from 2 in Round 84 to leverage the /players/compare-multi API).
+const _CROSS_SCOUTING_COMPARE_MAX = 6;
+let _crossScoutingCompareTray = [];
+
+function _csFindCandidateByKey(key, type) {
+    let data;
+    if (type === "targets") {
+        data = _lastCrossScoutingData.targets;
+    } else if (type === "dashboard") {
+        data = _lastCrossScoutingData.dashboard;
+    } else {
+        data = _lastCrossScoutingData.style;
+    }
+    if (!data || data.status !== "ok") return null;
+    if (type === "targets" || type === "dashboard") {
+        for (const g of data.gap_targets || []) {
+            for (const c of g.candidates || []) {
+                if (String(c.player_name || "") === key) return c;
+            }
+        }
+    }
+    if (type === "dashboard") {
+        for (const m of data.position_style_matches || []) {
+            for (const c of m.candidates || []) {
+                if (String(c.player_name || "") === key) return c;
+            }
+        }
+    }
+    if (type === "style") {
+        for (const c of data.candidates || []) {
+            if (String(c.player_name || "") === key) return c;
+        }
+    }
+    return null;
+}
+
+function _addToCompareTray(player) {
+    if (!player || !player.name) return;
+    if (_crossScoutingCompareTray.some((p) => p.key === player.key)) return;
+    if (_crossScoutingCompareTray.length >= _CROSS_SCOUTING_COMPARE_MAX) return;
+    _crossScoutingCompareTray.push(player);
+    _renderCompareTray();
+}
+
+function _clearCompareTray() {
+    _crossScoutingCompareTray = [];
+    _renderCompareTray();
+}
+
+function _renderCompareTray() {
+    const tray = document.getElementById("cross-scouting-compare-tray");
+    if (!tray) return;
+    const z = appState.lang === "zh";
+    const trayItems = _crossScoutingCompareTray;
+    if (trayItems.length === 0) {
+        tray.style.display = "none";
+        tray.innerHTML = "";
+        return;
+    }
+    tray.style.display = "block";
+    const itemHtml = trayItems.map((p, i) =>
+        `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;background:var(--surface-alt);border-radius:var(--radius-sm);font-size:0.8rem">
+            <strong>${escapeHtml(p.name)}</strong>
+            <span style="color:var(--text-muted)">${escapeHtml(p.team)}</span>
+            <button class="text-button" data-cs-compare-remove="${i}" type="button" style="font-size:0.75rem;padding:0 0.2rem">×</button>
+        </span>`
+    ).join("");
+    const canCompare = trayItems.length >= 2;
+    const hint = !canCompare
+        ? `<span style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(t("cross_scouting_compare_need_two"))}</span>`
+        : trayItems.length >= _CROSS_SCOUTING_COMPARE_MAX
+            ? `<span style="font-size:0.72rem;color:var(--text-muted)">${escapeHtml(t("cross_scouting_compare_max"))}</span>`
+            : "";
+    tray.innerHTML = [
+        `<div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;padding:0.3rem var(--space)">`,
+        `<span style="font-size:0.8rem;color:var(--text-muted)">${escapeHtml(t("cross_scouting_compare_tray"))}:</span>`,
+        itemHtml,
+        `<button class="cta-button" data-cs-compare-run type="button" style="font-size:0.75rem;padding:0.2rem 0.6rem"${canCompare ? "" : " disabled"}>${escapeHtml(t("cross_scouting_compare_run"))}</button>`,
+        `<button class="text-button" data-cs-compare-clear type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_compare_clear"))}</button>`,
+        hint,
+        `</div>`,
+        `<div id="cross-scouting-compare-result" style="padding:0 var(--space) var(--space)"></div>`,
+    ].join("");
+    tray.querySelectorAll("[data-cs-compare-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const idx = Number(btn.dataset.csCompareRemove);
+            _crossScoutingCompareTray.splice(idx, 1);
+            _renderCompareTray();
+        });
+    });
+    const runBtn = tray.querySelector("[data-cs-compare-run]");
+    if (runBtn && canCompare) {
+        runBtn.addEventListener("click", async () => {
+            const names = _crossScoutingCompareTray.map((p) => p.name);
+            await _renderCompareTrayResult(names);
+        });
+    }
+    const clearBtn = tray.querySelector("[data-cs-compare-clear]");
+    if (clearBtn) clearBtn.addEventListener("click", _clearCompareTray);
+}
+
+async function _renderCompareTrayResult(names) {
+    const result = document.getElementById("cross-scouting-compare-result");
+    if (!result) return;
+    const z = appState.lang === "zh";
+    result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在对比…" : "Comparing…")}</p>`;
+    try {
+        const data = await fetchPlayerComparisonMulti(names);
+        if (data.error || !data.players) {
+            result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "对比数据不可用" : "Comparison unavailable")}</p>`;
+            return;
+        }
+        const players = data.players || [];
+        const percentileMatrix = data.percentile_matrix || [];
+        const metricRankings = data.metric_rankings || [];
+        const composite = data.composite_ranking || [];
+        const pairwise = data.pairwise_similarity || { players: [], matrix: [] };
+
+        const headerCells = players.map((p) =>
+            `<th>${escapeHtml(p.name || "")}<br><span style="font-weight:normal;font-size:0.72rem;color:var(--text-muted)">${escapeHtml(p.team || "")}</span></th>`
+        ).join("");
+
+        const percentileRows = percentileMatrix.map((row) => {
+            const vals = (row.values || []).map((v) => {
+                const num = Number(v);
+                const cls = num >= 75 ? "status-high" : num >= 50 ? "status-medium" : "status-low";
+                return `<td><span class="status-pill ${cls}">${escapeHtml(Number.isFinite(num) ? num.toFixed(1) : "—")}</span></td>`;
+            }).join("");
+            return `<tr><td>${escapeHtml(row.label || row.dimension || "")}</td>${vals}</tr>`;
+        }).join("");
+
+        const compositeRows = composite.map((c, i) => {
+            const avg = Number(c.avg_percentile);
+            const cls = avg >= 75 ? "status-high" : avg >= 50 ? "status-medium" : "status-low";
+            return `<tr>
+                <td>${escapeHtml(String(c.rank || (i + 1)))}</td>
+                <td><strong>${escapeHtml(c.name || "")}</strong></td>
+                <td><span class="status-pill ${cls}">${escapeHtml(Number.isFinite(avg) ? avg.toFixed(1) : "—")}</span></td>
+            </tr>`;
+        }).join("");
+
+        const pairwiseHeader = (pairwise.players || []).map((n) => `<th>${escapeHtml(n || "")}</th>`).join("");
+        const pairwiseRows = (pairwise.players || []).map((rowName, i) => {
+            const row = (pairwise.matrix || [])[i] || [];
+            const cells = row.map((v) => {
+                const num = Number(v);
+                return `<td>${escapeHtml(Number.isFinite(num) ? num.toFixed(3) : "—")}</td>`;
+            }).join("");
+            return `<tr><td><strong>${escapeHtml(rowName || "")}</strong></td>${cells}</tr>`;
+        }).join("");
+
+        const metricRows = metricRankings.map((mr) => {
+            const ranked = (mr.ranked || []).map((r) =>
+                `<td>${escapeHtml(String(r.value ?? "—"))}</td>`
+            ).join("");
+            return `<tr><td>${escapeHtml(mr.label || mr.dimension || "")}</td>${ranked}</tr>`;
+        }).join("");
+
+        result.innerHTML = [
+            `<h4 style="margin:0.3rem 0;font-size:0.9rem">${escapeHtml(z ? "百分位矩阵" : "Percentile Matrix")}</h4>`,
+            `<div class="table-scroll"><table class="data-table"><thead><tr>`,
+            `<th>${escapeHtml(z ? "维度" : "Dimension")}</th>`,
+            headerCells,
+            `</tr></thead><tbody>${percentileRows}</tbody></table></div>`,
+            `<h4 style="margin:0.6rem 0 0.3rem;font-size:0.9rem">${escapeHtml(z ? "综合排名" : "Composite Ranking")}</h4>`,
+            `<div class="table-scroll"><table class="data-table"><thead><tr>`,
+            `<th>#</th><th>${escapeHtml(z ? "球员" : "Player")}</th><th>${escapeHtml(z ? "平均百分位" : "Avg Percentile")}</th>`,
+            `</tr></thead><tbody>${compositeRows}</tbody></table></div>`,
+            `<h4 style="margin:0.6rem 0 0.3rem;font-size:0.9rem">${escapeHtml(z ? "指标排名" : "Metric Rankings")}</h4>`,
+            metricRows ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>${escapeHtml(z ? "指标" : "Metric")}</th>${headerCells}</tr></thead><tbody>${metricRows}</tbody></table></div>` : "",
+            `<h4 style="margin:0.6rem 0 0.3rem;font-size:0.9rem">${escapeHtml(z ? "两两相似度矩阵" : "Pairwise Similarity Matrix")}</h4>`,
+            pairwiseRows ? `<div class="table-scroll"><table class="data-table"><thead><tr><th></th>${pairwiseHeader}</tr></thead><tbody>${pairwiseRows}</tbody></table></div>` : "",
+            `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.3rem">${escapeHtml(z ? "对比数据来自球员对比 API，不构成转会建议。" : "Comparison from player comparison API; not a transfer recommendation.")}</p>`,
+        ].join("");
+    } catch {
+        result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "对比请求失败" : "Comparison fetch failed")}</p>`;
+    }
+}
+
+function _wireCrossScoutingActionButtons(wrap, type, team, season, minMinutes, topN, excludeSameLeague, positionGroup, maxPositions, usePositionWeights) {
+    // Round 86: extended to handle three types — targets, style, dashboard.
+    // dashboard re-renders via _renderCrossScoutingDashboard (no per-position
+    // panel re-render) and uses its own reason code + dataset attributes.
+    const shortAttr = type === "targets"
+        ? "data-cs-tgt-short"
+        : type === "dashboard"
+            ? "data-cs-dash-short"
+            : "data-cs-style-short";
+    const compareAttr = type === "targets"
+        ? "data-cs-tgt-compare"
+        : type === "dashboard"
+            ? "data-cs-dash-compare"
+            : "data-cs-style-compare";
+    const reasonCode = type === "targets"
+        ? "cross_scouting_gap_target"
+        : type === "dashboard"
+            ? "cross_scouting_dashboard"
+            : "cross_scouting_style_match";
+    const shortDatasetKey = type === "targets"
+        ? "csTgtShort"
+        : type === "dashboard"
+            ? "csDashShort"
+            : "csStyleShort";
+    const compareDatasetKey = type === "targets"
+        ? "csTgtCompare"
+        : type === "dashboard"
+            ? "csDashCompare"
+            : "csStyleCompare";
+
+    wrap.querySelectorAll(`[${shortAttr}]`).forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const key = btn.dataset[shortDatasetKey];
+            const c = _csFindCandidateByKey(key, type);
+            if (!c) return;
+            togglePlayerShortlist({
+                key,
+                name: c.player_name || "",
+                team: c.team || "",
+                position: c.position_group || "",
+                rating: c.optimized_score ?? 0,
+                reason_code: reasonCode,
+            });
+            _reRenderCrossScoutingSection(type, team, season, minMinutes, topN, excludeSameLeague, positionGroup, maxPositions, usePositionWeights);
+            renderScouting();
+        });
+    });
+
+    wrap.querySelectorAll(`[${compareAttr}]`).forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const key = btn.dataset[compareDatasetKey];
+            const c = _csFindCandidateByKey(key, type);
+            if (!c) return;
+            if (_crossScoutingCompareTray.length >= _CROSS_SCOUTING_COMPARE_MAX && !_crossScoutingCompareTray.some((p) => p.key === key)) return;
+            _addToCompareTray({
+                key,
+                name: c.player_name || "",
+                team: c.team || "",
+                position: c.position_group || "",
+                rating: c.optimized_score ?? 0,
+            });
+        });
+    });
+
+    _wireCrossScoutingExportButtons(wrap);
+}
+
+// Round 86: helper to re-render the appropriate cross-scouting section after
+// a shortlist toggle. Keeps _wireCrossScoutingActionButtons readable and
+// avoids duplicating the ternary chain in two places.
+function _reRenderCrossScoutingSection(type, team, season, minMinutes, topN, excludeSameLeague, positionGroup, maxPositions, usePositionWeights) {
+    if (type === "targets") {
+        _renderScoutingTargets(team, season, minMinutes, topN, excludeSameLeague);
+    } else if (type === "dashboard") {
+        _renderCrossScoutingDashboard(team, season, minMinutes, topN, maxPositions, usePositionWeights);
+    } else {
+        const weighted = usePositionWeights !== undefined
+            ? Boolean(usePositionWeights)
+            : document.getElementById("cross-scouting-style-weighted")?.checked ?? false;
+        _renderScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague, weighted);
+    }
+}
+
+function _wireCrossScoutingExportButtons(wrap) {
+    wrap.querySelectorAll("[data-cs-export]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const type = btn.dataset.csExport;
+            if (type.endsWith("-csv")) _exportCrossScoutingCSV(type.replace("-csv", ""));
+            else if (type.endsWith("-json")) _exportCrossScoutingJSON(type.replace("-json", ""));
+        });
+    });
+}
+
+function _downloadCrossScoutingFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function _exportCrossScoutingJSON(type) {
+    const data = _lastCrossScoutingData[type];
+    if (!data || data.status !== "ok") return;
+    const payload = {
+        schema: `scoutfootball.cross-scouting-${type}`,
+        version: "1.0.0",
+        exported_at: new Date().toISOString(),
+        storage_scope: "browser-local-download",
+        source: data,
+        limitations: [
+            "Cross-scouting results are non-additive interpretive overlays.",
+            "Does not constitute a transfer directive or scouting verdict.",
+            "Browser-local download; not server-side audit or cross-device sync.",
+        ],
+    };
+    _downloadCrossScoutingFile(
+        JSON.stringify(payload, null, 2),
+        `scoutfootball-cross-scouting-${type}-${Date.now()}.json`,
+        "application/json;charset=utf-8",
+    );
+}
+
+function _exportCrossScoutingCSV(type) {
+    const data = _lastCrossScoutingData[type];
+    if (!data || data.status !== "ok") return;
+    const lines = [];
+    lines.push([`# ScoutFootball Cross-Scouting ${type} export`]);
+    lines.push(["storage_scope", "browser-local-download"]);
+    lines.push(["exported_at", new Date().toISOString()]);
+    lines.push([]);
+
+    if (type === "depth") {
+        lines.push(["position_group", "team_a_n", "team_a_mean", "team_a_depth", "team_b_n", "team_b_mean", "team_b_depth", "advantage"]);
+        for (const c of data.position_comparison || []) {
+            lines.push([
+                c.position_group || "",
+                String(c.team_a?.n_players ?? 0),
+                c.team_a?.mean_score != null ? Number(c.team_a.mean_score).toFixed(2) : "",
+                c.team_a?.depth_label || "",
+                String(c.team_b?.n_players ?? 0),
+                c.team_b?.mean_score != null ? Number(c.team_b.mean_score).toFixed(2) : "",
+                c.team_b?.depth_label || "",
+                c.advantage || "",
+            ]);
+        }
+    } else if (type === "targets") {
+        lines.push(["position_group", "gap_type", "threshold", "player_name", "team", "league", "optimized_score", "minutes", "percentile_in_league"]);
+        for (const g of data.gap_targets || []) {
+            for (const c of g.candidates || []) {
+                lines.push([
+                    g.position_group || "",
+                    g.gap_type || "",
+                    g.threshold != null ? String(g.threshold) : "",
+                    c.player_name || "",
+                    c.team || "",
+                    c.league || "",
+                    c.optimized_score != null ? String(c.optimized_score) : "",
+                    c.minutes != null ? String(c.minutes) : "",
+                    c.percentile_in_league != null ? String(c.percentile_in_league) : "",
+                ]);
+            }
+        }
+    } else if (type === "style") {
+        lines.push(["player_name", "team", "league", "optimized_score", "minutes", "style_similarity"]);
+        for (const c of data.candidates || []) {
+            lines.push([
+                c.player_name || "",
+                c.team || "",
+                c.league || "",
+                c.optimized_score != null ? String(c.optimized_score) : "",
+                c.minutes != null ? String(c.minutes) : "",
+                c.style_similarity != null ? String(c.style_similarity) : "",
+            ]);
+        }
+    } else if (type === "dashboard") {
+        // Gap targets section
+        lines.push(["# Gap targets"]);
+        lines.push(["position_group", "gap_type", "threshold", "depth_gap", "player_name", "team", "league", "optimized_score", "minutes", "percentile_in_league"]);
+        for (const g of data.gap_targets || []) {
+            for (const c of g.candidates || []) {
+                lines.push([
+                    g.position_group || "",
+                    g.gap_type || "",
+                    g.threshold != null ? String(g.threshold) : "",
+                    g.depth_gap != null ? Number(g.depth_gap).toFixed(4) : "",
+                    c.player_name || "",
+                    c.team || "",
+                    c.league || "",
+                    c.optimized_score != null ? String(c.optimized_score) : "",
+                    c.minutes != null ? String(c.minutes) : "",
+                    c.percentile_in_league != null ? String(c.percentile_in_league) : "",
+                ]);
+            }
+            if (!(g.candidates || []).length) {
+                lines.push([
+                    g.position_group || "",
+                    g.gap_type || "",
+                    g.threshold != null ? String(g.threshold) : "",
+                    g.depth_gap != null ? Number(g.depth_gap).toFixed(4) : "",
+                    "", "", "", "", "", "",
+                ]);
+            }
+        }
+        lines.push([]);
+        // Per-position style match section
+        lines.push(["# Per-position style matches"]);
+        lines.push(["position_group", "target_player", "target_team", "player_name", "team", "league", "optimized_score", "minutes", "style_similarity"]);
+        for (const m of data.position_style_matches || []) {
+            const pos = m.position_group || "";
+            const targetName = m.target_player?.player_name || m.target_player?.name || "";
+            const targetTeam = m.target_player?.team || "";
+            for (const c of m.candidates || []) {
+                lines.push([
+                    pos,
+                    targetName,
+                    targetTeam,
+                    c.player_name || "",
+                    c.team || "",
+                    c.league || "",
+                    c.optimized_score != null ? String(c.optimized_score) : "",
+                    c.minutes != null ? String(c.minutes) : "",
+                    c.style_similarity != null ? Number(c.style_similarity).toFixed(4) : "",
+                ]);
+            }
+        }
+    }
+
+    lines.push([]);
+    lines.push(["# Limitations"]);
+    lines.push(["Cross-scouting results are non-additive interpretive overlays."]);
+    lines.push(["Does not constitute a transfer directive or scouting verdict."]);
+    lines.push(["Browser-local download; not server-side audit or cross-device sync."]);
+
+    _downloadCrossScoutingFile(
+        `\uFEFF${lines.map((row) => row.map(csvCell).join(",")).join("\n")}`,
+        `scoutfootball-cross-scouting-${type}-${Date.now()}.csv`,
+        "text/csv;charset=utf-8",
+    );
+}
+
+async function _renderCrossLeagueDepth(teamA, teamB, season, minMinutes) {
+    const wrap = document.getElementById("cross-scouting-depth-result");
+    const pill = document.getElementById("cross-scouting-pill");
+    const z = appState.lang === "zh";
+    if (wrap) { wrap.style.display = "block"; wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在加载…" : "Loading…")}</p>`; }
+    if (pill) pill.textContent = "…";
+
+    const data = await fetchCrossLeagueTeamDepth(teamA, teamB, season, minMinutes);
+    _lastCrossScoutingData.depth = data;
+
+    if (data.error || data.status === "fetch_failed") {
+        if (pill) pill.textContent = _crossScoutingStatusText("fetch_failed", z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(_crossScoutingStatusText("fetch_failed", z))}</p>`;
+        return;
+    }
+    if (data.status !== "ok") {
+        if (pill) pill.textContent = _crossScoutingStatusText(data.status, z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data.disclaimer || _crossScoutingStatusText(data.status, z))}</p>`;
+        return;
+    }
+
+    const comparisons = data.position_comparison || [];
+    const complementary = data.complementary_positions || [];
+    if (pill) pill.textContent = `${comparisons.length} ${z ? "位置" : "pos"} · ${complementary.length} ${z ? "互补" : "comp"}`;
+
+    const advantageLabel = (a) => a === "a" ? (z ? "A" : "A") : a === "b" ? (z ? "B" : "B") : (z ? "持平" : "tie");
+    const advantageClass = (a) => a === "a" ? "status-high" : a === "b" ? "status-low" : "status-medium";
+
+    const rows = comparisons.map((c) => {
+        const aMean = c.team_a?.mean_score != null ? Number(c.team_a.mean_score).toFixed(2) : "—";
+        const bMean = c.team_b?.mean_score != null ? Number(c.team_b.mean_score).toFixed(2) : "—";
+        return `<tr>
+            <td><strong>${escapeHtml(c.position_group || "")}</strong></td>
+            <td>${escapeHtml(String(c.team_a?.n_players ?? 0))}</td>
+            <td>${escapeHtml(aMean)}</td>
+            <td>${escapeHtml(c.team_a?.depth_label || "—")}</td>
+            <td>${escapeHtml(String(c.team_b?.n_players ?? 0))}</td>
+            <td>${escapeHtml(bMean)}</td>
+            <td>${escapeHtml(c.team_b?.depth_label || "—")}</td>
+            <td><span class="status-pill ${advantageClass(c.advantage)}">${escapeHtml(advantageLabel(c.advantage))}</span></td>
+        </tr>`;
+    }).join("");
+
+    const compRows = complementary.map((c) => `<tr>
+        <td><strong>${escapeHtml(c.position_group || "")}</strong></td>
+        <td>${escapeHtml(c.deep_team === "a" ? (z ? "球队 A" : "Team A") : (z ? "球队 B" : "Team B"))}</td>
+        <td>${escapeHtml(c.shallow_team === "a" ? (z ? "球队 A" : "Team A") : (z ? "球队 B" : "Team B"))}</td>
+        <td style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(c.reason || "")}</td>
+    </tr>`).join("");
+
+    const teamAName = data.team_a?.name || teamA;
+    const teamBName = data.team_b?.name || teamB;
+    const teamALeague = data.team_a?.league || "—";
+    const teamBLeague = data.team_b?.league || "—";
+    const sameLeagueNote = data.same_league
+        ? `<p style="font-size:0.78rem;color:var(--text-muted)">${escapeHtml(z ? "两支球队在同一联赛" : "Both teams are in the same league")}</p>`
+        : "";
+
+    if (wrap) {
+        wrap.innerHTML = [
+            `<div style="padding:0.3rem 0 0.5rem;font-size:0.82rem">`,
+            `<strong>${escapeHtml(teamAName)}</strong> <span style="color:var(--text-muted)">(${escapeHtml(teamALeague)})</span> vs `,
+            `<strong>${escapeHtml(teamBName)}</strong> <span style="color:var(--text-muted)">(${escapeHtml(teamBLeague)})</span>`,
+            ` <button class="text-button" data-cs-export="depth-csv" type="button" style="margin-left:0.5rem;font-size:0.75rem">${escapeHtml(t("cross_scouting_export_csv"))}</button>`,
+            ` <button class="text-button" data-cs-export="depth-json" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_json"))}</button>`,
+            `</div>`,
+            sameLeagueNote,
+            `<div class="table-scroll"><table class="data-table"><thead><tr>`,
+            `<th>${escapeHtml(t("cross_scouting_col_pos"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_a"))} · ${escapeHtml(t("cross_scouting_col_n"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_a"))} · ${escapeHtml(t("cross_scouting_col_mean"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_a"))} · ${escapeHtml(t("cross_scouting_col_depth"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_b"))} · ${escapeHtml(t("cross_scouting_col_n"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_b"))} · ${escapeHtml(t("cross_scouting_col_mean"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_b"))} · ${escapeHtml(t("cross_scouting_col_depth"))}</th>`,
+            `<th>${escapeHtml(t("cross_scouting_col_advantage"))}</th>`,
+            `</tr></thead><tbody>${rows}</tbody></table></div>`,
+            complementary.length > 0
+                ? `<h4 style="padding:0.5rem 0 0.3rem">${escapeHtml(t("cross_scouting_complementary"))}</h4>
+                   <div class="table-scroll"><table class="data-table"><thead><tr>
+                   <th>${escapeHtml(t("cross_scouting_col_pos"))}</th>
+                   <th>${escapeHtml(z ? "深度方" : "Deep")}</th>
+                   <th>${escapeHtml(z ? "薄弱方" : "Shallow")}</th>
+                   <th>${escapeHtml(z ? "说明" : "Reason")}</th>
+                   </tr></thead><tbody>${compRows}</tbody></table></div>`
+                : "",
+            data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.4rem">${escapeHtml(data.disclaimer)}</p>` : "",
+        ].join("");
+        _wireCrossScoutingExportButtons(wrap);
+    }
+}
+
+async function _renderScoutingTargets(team, season, minMinutes, topN, excludeSameLeague) {
+    const wrap = document.getElementById("cross-scouting-targets-result");
+    const pill = document.getElementById("cross-scouting-pill");
+    const z = appState.lang === "zh";
+    if (wrap) { wrap.style.display = "block"; wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在加载…" : "Loading…")}</p>`; }
+    if (pill) pill.textContent = "…";
+
+    const data = await fetchScoutingTargets(team, season, minMinutes, topN, excludeSameLeague);
+    _lastCrossScoutingData.targets = data;
+
+    if (data.error || data.status === "fetch_failed") {
+        if (pill) pill.textContent = _crossScoutingStatusText("fetch_failed", z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(_crossScoutingStatusText("fetch_failed", z))}</p>`;
+        return;
+    }
+    if (data.status !== "ok") {
+        if (pill) pill.textContent = _crossScoutingStatusText(data.status, z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data.disclaimer || _crossScoutingStatusText(data.status, z))}</p>`;
+        return;
+    }
+
+    const gaps = data.gap_targets || [];
+    if (pill) pill.textContent = `${data.n_gaps ?? gaps.length} ${z ? "缺口" : "gaps"}`;
+
+    if (gaps.length === 0) {
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "未发现位置缺口。" : "No position gaps found.")}</p>`;
+        return;
+    }
+
+    const blocks = gaps.map((g) => {
+        const candidates = g.candidates || [];
+        const candRows = candidates.map((c) => {
+            const pKey = String(c.player_name || "");
+            const inShort = isInPlayerShortlist(pKey);
+            return `<tr>
+                <td><strong>${escapeHtml(c.player_name || "")}</strong></td>
+                <td>${escapeHtml(c.team || "")}</td>
+                <td>${escapeHtml(c.league || "")}</td>
+                <td>${escapeHtml(String(c.optimized_score ?? "—"))}</td>
+                <td>${escapeHtml(String(c.minutes ?? "—"))}</td>
+                <td>${escapeHtml(c.percentile_in_league != null ? Number(c.percentile_in_league).toFixed(1) + "%" : "—")}</td>
+                <td class="actions-cell">
+                    <button class="action-btn${inShort ? ' active' : ''}" data-cs-tgt-short="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_shortlist'))}" type="button">\u25B3</button>
+                    <button class="action-btn" data-cs-tgt-compare="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_compare'))}" type="button">\u25C7</button>
+                </td>
+            </tr>`;
+        }).join("");
+        const thresholdStr = g.threshold != null ? Number(g.threshold).toFixed(2) : "—";
+        return `<div style="margin-bottom:0.8rem">
+            <h4 style="padding:0.3rem 0">${escapeHtml(g.position_group || "")}
+                <span class="status-pill status-medium" style="margin-left:0.5rem">${escapeHtml(g.gap_type || "")}</span>
+                <span style="font-size:0.78rem;color:var(--text-muted);margin-left:0.5rem">${escapeHtml(z ? "阈值" : "threshold")}: ${thresholdStr}</span>
+            </h4>
+            ${candidates.length === 0
+                ? `<p style="color:var(--text-muted)">${escapeHtml(t("cross_scouting_no_candidates"))}</p>`
+                : `<div class="table-scroll"><table class="data-table"><thead><tr>
+                    <th>${escapeHtml(t("cross_scouting_col_player"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_team"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_league"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_score"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_minutes"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_pct"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_actions"))}</th>
+                   </tr></thead><tbody>${candRows}</tbody></table></div>`}
+        </div>`;
+    }).join("");
+
+    if (wrap) {
+        wrap.innerHTML = [
+            `<div style="padding:0.3rem 0 0.5rem;font-size:0.82rem">`,
+            `<strong>${escapeHtml(team)}</strong>`,
+            data.league ? ` <span style="color:var(--text-muted)">(${escapeHtml(data.league)})</span>` : "",
+            ` · ${data.n_gaps ?? gaps.length} ${escapeHtml(z ? "个缺口" : "gaps")}`,
+            ` <button class="text-button" data-cs-export="targets-csv" type="button" style="margin-left:0.5rem;font-size:0.75rem">${escapeHtml(t("cross_scouting_export_csv"))}</button>`,
+            ` <button class="text-button" data-cs-export="targets-json" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_json"))}</button>`,
+            `</div>`,
+            blocks,
+            data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.4rem">${escapeHtml(data.disclaimer)}</p>` : "",
+        ].join("");
+        _wireCrossScoutingActionButtons(wrap, "targets", team, season, minMinutes, topN, excludeSameLeague);
+    }
+}
+
+async function _renderScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague, usePositionWeights) {
+    const wrap = document.getElementById("cross-scouting-style-result");
+    const pill = document.getElementById("cross-scouting-pill");
+    const z = appState.lang === "zh";
+    if (wrap) { wrap.style.display = "block"; wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(z ? "正在加载…" : "Loading…")}</p>`; }
+    if (pill) pill.textContent = "…";
+
+    const data = await fetchScoutingStyleMatch(team, positionGroup, season, minMinutes, topN, excludeSameLeague, usePositionWeights);
+    _lastCrossScoutingData.style = data;
+
+    if (data.error || data.status === "fetch_failed") {
+        if (pill) pill.textContent = _crossScoutingStatusText("fetch_failed", z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(_crossScoutingStatusText("fetch_failed", z))}</p>`;
+        return;
+    }
+    if (data.status !== "ok") {
+        if (pill) pill.textContent = _crossScoutingStatusText(data.status, z);
+        if (wrap) wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data.disclaimer || _crossScoutingStatusText(data.status, z))}</p>`;
+        return;
+    }
+
+    const candidates = data.candidates || [];
+    const target = data.target_player || {};
+    if (pill) pill.textContent = `${candidates.length} ${z ? "候选" : "cand"}`;
+
+    const styleVec = target.style_vector || {};
+    const styleRow = Object.entries(styleVec).map(([k, v]) => {
+        const label = z
+            ? ({ npg_p90: "非点球进球/90", assists_p90: "助攻/90", defense_composite: "防守综合", possession_composite: "控球综合" }[k] || k)
+            : k;
+        return `<span style="display:inline-block;margin-right:0.75rem;font-size:0.78rem;color:var(--text-muted)">${escapeHtml(label)}: <strong>${Number(v).toFixed(2)}</strong></span>`;
+    }).join("");
+
+    const candRows = candidates.map((c) => {
+        const sim = c.style_similarity != null ? Number(c.style_similarity).toFixed(4) : "—";
+        const cls = Number(c.style_similarity) >= 0.9 ? "status-high" : Number(c.style_similarity) >= 0.7 ? "status-medium" : "status-low";
+        const pKey = String(c.player_name || "");
+        const inShort = isInPlayerShortlist(pKey);
+        return `<tr>
+            <td><strong>${escapeHtml(c.player_name || "")}</strong></td>
+            <td>${escapeHtml(c.team || "")}</td>
+            <td>${escapeHtml(c.league || "")}</td>
+            <td>${escapeHtml(String(c.optimized_score ?? "—"))}</td>
+            <td>${escapeHtml(String(c.minutes ?? "—"))}</td>
+            <td><span class="status-pill ${cls}">${escapeHtml(sim)}</span></td>
+            <td class="actions-cell">
+                <button class="action-btn${inShort ? ' active' : ''}" data-cs-style-short="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_shortlist'))}" type="button">\u25B3</button>
+                <button class="action-btn" data-cs-style-compare="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_compare'))}" type="button">\u25C7</button>
+            </td>
+        </tr>`;
+    }).join("");
+
+    if (wrap) {
+        wrap.innerHTML = [
+            `<div style="padding:0.3rem 0 0.5rem;font-size:0.82rem">`,
+            `<strong>${escapeHtml(t("cross_scouting_target_player"))}:</strong> ${escapeHtml(target.name || "")}`,
+            target.team ? ` <span style="color:var(--text-muted)">(${escapeHtml(target.team)})</span>` : "",
+            target.league ? ` <span style="color:var(--text-muted)">· ${escapeHtml(target.league)}</span>` : "",
+            target.optimized_score != null ? ` · ${escapeHtml(String(Number(target.optimized_score).toFixed(2)))}` : "",
+            ` <button class="text-button" data-cs-export="style-csv" type="button" style="margin-left:0.5rem;font-size:0.75rem">${escapeHtml(t("cross_scouting_export_csv"))}</button>`,
+            ` <button class="text-button" data-cs-export="style-json" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_json"))}</button>`,
+            `</div>`,
+            styleRow ? `<div style="padding:0.2rem 0 0.4rem">${styleRow}</div>` : "",
+            candidates.length === 0
+                ? `<p style="color:var(--text-muted)">${escapeHtml(t("cross_scouting_no_candidates"))}</p>`
+                : `<div class="table-scroll"><table class="data-table"><thead><tr>
+                    <th>${escapeHtml(t("cross_scouting_col_player"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_team"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_league"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_score"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_minutes"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_sim"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_actions"))}</th>
+                   </tr></thead><tbody>${candRows}</tbody></table></div>`,
+            data.disclaimer ? `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.4rem">${escapeHtml(data.disclaimer)}</p>` : "",
+        ].join("");
+        _wireCrossScoutingActionButtons(wrap, "style", team, season, minMinutes, topN, excludeSameLeague, positionGroup);
+    }
+}
+
+// ── Scouting dashboard: unified multi-position aggregation ──────────────
+//
+// Round 85 backend-backed feature. Calls the unified
+// /teams/{team}/scouting-dashboard endpoint, which fans out gap-target
+// detection + per-position style match across the team's top gap
+// positions in a single request (replacing the Round 84 frontend-only
+// parallel fetch of targets + a single CM style match).
+async function _renderCrossScoutingDashboard(team, season, minMinutes, topN, maxPositions, usePositionWeights) {
+    const wrap = document.getElementById("cross-scouting-dashboard-result");
+    if (!wrap) return;
+    const z = appState.lang === "zh";
+    wrap.style.display = "block";
+    wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(t("cross_scouting_dashboard_loading"))}</p>`;
+
+    const excludeSameLeague = true;
+    const data = await fetchScoutingDashboard(
+        team, season, minMinutes, topN, excludeSameLeague, maxPositions, usePositionWeights,
+    );
+    _lastCrossScoutingData.dashboard = data;
+
+    if (!data || data.status !== "ok") {
+        wrap.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(data?.disclaimer || t("cross_scouting_dashboard_no_data"))}</p>`;
+        return;
+    }
+
+    const gapTargets = data.gap_targets || [];
+    const positionMatches = data.position_style_matches || [];
+    const nGaps = data.n_gaps ?? gapTargets.length;
+    const nMatched = data.n_positions_matched ?? positionMatches.length;
+    const weighted = data.use_position_weights === true;
+
+    // ── Targets summary: top 3 gap positions with their top candidate ──
+    // Round 86: added △ shortlist + ◇ compare action column so the dashboard
+    // hands off directly to the shortlist / compare tray without forcing the
+    // user to open the dedicated gap-targets panel.
+    const targetRows = gapTargets.slice(0, 3).map((g) => {
+        const pos = escapeHtml(g.position_group || "—");
+        const gap = g.depth_gap != null ? Number(g.depth_gap).toFixed(2) : "—";
+        const top = (g.candidates || [])[0] || {};
+        const topName = escapeHtml(top.player_name || "—");
+        const topTeam = escapeHtml(top.team || "");
+        const topScore = top.optimized_score != null ? Number(top.optimized_score).toFixed(1) : "—";
+        const pKey = String(top.player_name || "");
+        const inShort = pKey ? isInPlayerShortlist(pKey) : false;
+        const shortBtn = pKey
+            ? `<button class="action-btn${inShort ? ' active' : ''}" data-cs-dash-short="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_shortlist'))}" type="button">\u25B3</button>`
+            : "";
+        const compareBtn = pKey
+            ? `<button class="action-btn" data-cs-dash-compare="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_compare'))}" type="button">\u25C7</button>`
+            : "";
+        return `<tr>
+            <td><strong>${pos}</strong></td>
+            <td><span class="status-pill status-low">${escapeHtml(gap)}</span></td>
+            <td>${topName}${topTeam ? ` <span style="color:var(--text-muted)">(${topTeam})</span>` : ""}</td>
+            <td>${escapeHtml(topScore)}</td>
+            <td class="actions-cell">${shortBtn}${compareBtn}</td>
+        </tr>`;
+    }).join("");
+
+    // ── Per-position style match sections (top 3 candidates each) ──
+    // Round 86: each candidate row now carries △ / ◇ buttons wired through
+    // _wireCrossScoutingActionButtons(wrap, "dashboard", ...).
+    const styleSections = positionMatches.map((m) => {
+        const pos = escapeHtml(m.position_group || "—");
+        const target = m.target_player || {};
+        const targetName = escapeHtml(target.name || target.player_name || "—");
+        const targetTeam = escapeHtml(target.team || "");
+        const candidates = (m.candidates || []).slice(0, 3);
+        const rows = candidates.map((c) => {
+            const sim = c.style_similarity != null ? Number(c.style_similarity).toFixed(4) : "—";
+            const cls = Number(c.style_similarity) >= 0.9 ? "status-high" : Number(c.style_similarity) >= 0.7 ? "status-medium" : "status-low";
+            const name = escapeHtml(c.player_name || "—");
+            const cTeam = escapeHtml(c.team || "");
+            const cLeague = escapeHtml(c.league || "");
+            const pKey = String(c.player_name || "");
+            const inShort = pKey ? isInPlayerShortlist(pKey) : false;
+            const shortBtn = pKey
+                ? `<button class="action-btn${inShort ? ' active' : ''}" data-cs-dash-short="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_shortlist'))}" type="button">\u25B3</button>`
+                : "";
+            const compareBtn = pKey
+                ? `<button class="action-btn" data-cs-dash-compare="${escapeAttr(pKey)}" title="${escapeHtml(t('cross_scouting_add_compare'))}" type="button">\u25C7</button>`
+                : "";
+            return `<tr>
+                <td><strong>${name}</strong></td>
+                <td>${cTeam}</td>
+                <td>${cLeague}</td>
+                <td><span class="status-pill ${cls}">${escapeHtml(sim)}</span></td>
+                <td class="actions-cell">${shortBtn}${compareBtn}</td>
+            </tr>`;
+        }).join("");
+        const targetLine = `${escapeHtml(t("cross_scouting_dashboard_style"))} · ${pos}`
+            + ` <span style="color:var(--text-muted);font-size:0.75rem">(${escapeHtml(z ? "参照" : "ref")}: ${targetName}${targetTeam ? ` · ${targetTeam}` : ""})</span>`;
+        return [
+            `<div style="flex:1;min-width:240px">`,
+            `<h4 style="margin:0 0 0.3rem;font-size:0.88rem">${targetLine}</h4>`,
+            rows
+                ? `<div class="table-scroll"><table class="data-table"><thead><tr>
+                    <th>${escapeHtml(t("cross_scouting_col_player"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_team"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_league"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_sim"))}</th>
+                    <th>${escapeHtml(t("cross_scouting_col_actions"))}</th>
+                   </tr></thead><tbody>${rows}</tbody></table></div>`
+                : `<p style="color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("cross_scouting_no_candidates"))}</p>`,
+            `</div>`,
+        ].join("");
+    }).join("");
+
+    const targetsSection = gapTargets.length ? [
+        `<div style="flex:1;min-width:240px">`,
+        `<h4 style="margin:0 0 0.3rem;font-size:0.88rem">${escapeHtml(t("cross_scouting_dashboard_targets"))}</h4>`,
+        targetRows
+            ? `<div class="table-scroll"><table class="data-table"><thead><tr>
+                <th>${escapeHtml(z ? "位置" : "Pos")}</th>
+                <th>${escapeHtml(z ? "深度缺口" : "Gap")}</th>
+                <th>${escapeHtml(z ? "头号候选" : "Top candidate")}</th>
+                <th>${escapeHtml(z ? "评分" : "Score")}</th>
+                <th>${escapeHtml(t("cross_scouting_col_actions"))}</th>
+               </tr></thead><tbody>${targetRows}</tbody></table></div>`
+            : `<p style="color:var(--text-muted);font-size:0.8rem">${escapeHtml(z ? "无缺口目标" : "No gap targets")}</p>`,
+        `</div>`,
+    ].join("") : "";
+
+    const badgeStyle = "display:inline-block;padding:0.1rem 0.4rem;border-radius:var(--radius-sm);font-size:0.72rem;background:var(--surface-alt);color:var(--text-muted);margin-left:0.4rem";
+    const badges = [
+        `<span style="${badgeStyle}">${escapeHtml(t("cross_scouting_dashboard_n_gaps"))}: ${escapeHtml(String(nGaps))}</span>`,
+        `<span style="${badgeStyle}">${escapeHtml(t("cross_scouting_dashboard_n_matched"))}: ${escapeHtml(String(nMatched))}</span>`,
+        weighted ? `<span style="${badgeStyle}">${escapeHtml(t("cross_scouting_dashboard_weighted"))}</span>` : "",
+    ].join("");
+
+    // Round 86: batch "Add all gap-target candidates to shortlist" button.
+    // Adds the top candidate of each gap position to the shortlist with a
+    // distinct cross_scouting_dashboard_batch reason code. Skips players
+    // already in the shortlist. Shows a brief inline status line below the
+    // header instead of an alert() (matches the codebase convention of
+    // avoiding blocking dialogs for routine status updates).
+    const hasBatchCandidates = gapTargets.some((g) => {
+        const top = (g.candidates || [])[0];
+        return top && top.player_name && !isInPlayerShortlist(String(top.player_name));
+    });
+    const batchBtn = hasBatchCandidates
+        ? `<button class="text-button" id="cs-dash-batch-add" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_dashboard_batch_add"))}</button>`
+        : "";
+
+    wrap.innerHTML = [
+        `<div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.3rem 0 0.5rem;flex-wrap:wrap">`,
+        `<div>`,
+        `<h3 style="margin:0;font-size:0.95rem">${escapeHtml(t("cross_scouting_dashboard_title"))}: ${escapeHtml(team)}</h3>`,
+        `<div style="margin-top:0.2rem">${badges}</div>`,
+        `</div>`,
+        `<div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">`,
+        batchBtn,
+        `<button class="text-button" data-cs-export="dashboard-csv" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_csv"))}</button>`,
+        `<button class="text-button" data-cs-export="dashboard-json" type="button" style="font-size:0.75rem">${escapeHtml(t("cross_scouting_export_json"))}</button>`,
+        `</div>`,
+        `</div>`,
+        `<div id="cs-dash-batch-status" style="font-size:0.75rem;color:var(--text-muted);padding-bottom:0.3rem"></div>`,
+        `<div style="display:flex;gap:var(--space);flex-wrap:wrap;padding:0 0 0.4rem">`,
+        targetsSection,
+        styleSections,
+        `</div>`,
+        `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.3rem">${escapeHtml(z ? "仪表盘为聚合视图，完整数据请使用上方专属面板；不构成转会建议。" : "Dashboard is an aggregate view; use the dedicated panels above for full data. Not a transfer recommendation.")}</p>`,
+    ].join("");
+
+    _wireCrossScoutingActionButtons(
+        wrap, "dashboard", team, season, minMinutes, topN, excludeSameLeague, "",
+        maxPositions, usePositionWeights,
+    );
+    _wireCrossScoutingDashboardBatch(wrap, team, season, minMinutes, topN, maxPositions, usePositionWeights);
+}
+
+// Round 86: batch "Add all gap-target candidates to shortlist" handler.
+// Operates on the cached _lastCrossScoutingData.dashboard to avoid an extra
+// API round-trip. Re-renders the dashboard so △ buttons reflect the new
+// shortlist state, and surfaces a brief status line.
+function _wireCrossScoutingDashboardBatch(wrap, team, season, minMinutes, topN, maxPositions, usePositionWeights) {
+    const btn = wrap.querySelector("#cs-dash-batch-add");
+    const status = wrap.querySelector("#cs-dash-batch-status");
+    if (!btn || !status) return;
+    btn.addEventListener("click", () => {
+        const data = _lastCrossScoutingData.dashboard;
+        if (!data || data.status !== "ok") return;
+        const gaps = data.gap_targets || [];
+        let added = 0;
+        for (const g of gaps) {
+            const top = (g.candidates || [])[0];
+            if (!top || !top.player_name) continue;
+            const key = String(top.player_name);
+            if (isInPlayerShortlist(key)) continue;
+            togglePlayerShortlist({
+                key,
+                name: top.player_name || "",
+                team: top.team || "",
+                position: top.position_group || g.position_group || "",
+                rating: top.optimized_score ?? 0,
+                reason_code: "cross_scouting_dashboard_batch",
+            });
+            added += 1;
+        }
+        status.textContent = added > 0
+            ? t("cross_scouting_dashboard_batch_added").replace("{n}", String(added))
+            : t("cross_scouting_dashboard_batch_none");
+        // Re-render so △ active state refreshes.
+        _renderCrossScoutingDashboard(team, season, minMinutes, topN, maxPositions, usePositionWeights);
+        renderScouting();
+    });
 }
 
 // ── Risers / Decliners watchlist (career trajectory slope scan) ────────────
@@ -12886,10 +15851,15 @@ function renderReports() {
     const holdoutSummary = latestRun.holdout_summary || {};
     const optTest = holdoutSummary.optimized_test || {};
     const runSpearman = optTest.spearman ?? latestMetrics.spearman ?? latestRun.spearman;
-    const runStatus = runSpearman != null ? `Spearman ${Number(runSpearman).toFixed(3)}` : "no metrics";
+    const latestAdmission = latestRun.admission || {};
+    const runStatus = latestAdmission.status === "reviewable"
+        ? "reviewable by maintainer"
+        : latestAdmission.status === "not_reviewable"
+            ? "evidence incomplete"
+            : runSpearman != null ? `Spearman ${Number(runSpearman).toFixed(3)}` : "no metrics";
     document.getElementById("report-run-title").textContent = latestRun.run_id || "rating_optimizer_gpu";
     document.getElementById("report-run-status").textContent = runStatus;
-    document.getElementById("report-run-status").className = `status-pill ${runSpearman != null ? "status-high" : "status-low"}`;
+    document.getElementById("report-run-status").className = `status-pill ${latestAdmission.status === "reviewable" ? "status-high" : latestAdmission.status === "not_reviewable" ? "status-medium" : runSpearman != null ? "status-high" : "status-low"}`;
 
     const valueMetrics = valueSummaryMeta.metrics || {};
     const valueImprovement = valueMetrics.mae_improvement_vs_baseline;
@@ -12929,6 +15899,11 @@ function renderReports() {
         const identityMapped = Number(identity.mapped_rows || 0);
         const identityTotal = Number(identity.total_rows || 0);
         const identityReview = Number(identity.review_rows || 0);
+        const identityDecisions = identity.review_decisions || {};
+        const identityConfirmed = Number(identityDecisions.confirmed_rows || 0);
+        const identityConfirmationText = z
+            ? `本次导入应用的人工身份确认：${identityConfirmed.toLocaleString()}。`
+            : `Manual identity confirmations applied to this import: ${identityConfirmed.toLocaleString()}.`;
         const excluded = Object.entries(report.excluded_source_counts || {})
             .map(([source, count]) => `${escapeHtml(source)}: ${escapeHtml(String(count))}`)
             .join(" · ");
@@ -12936,10 +15911,11 @@ function renderReports() {
             supervisionPanel.textContent = z ? "未找到本地真值标签产物。" : "No local truth-label artifact found.";
         } else {
             supervisionPanel.innerHTML = `
-                <div><strong>${eligible.toLocaleString()} / ${total.toLocaleString()}</strong> ${z ? "行可用于监督" : "rows eligible for supervision"}</div>
-                <div style="margin-top:0.25rem;color:var(--text-muted)">${z ? "已排除循环或未获准来源：" : "Excluded circular or unapproved sources: "}${excluded || (z ? "无" : "none")}</div>
-                <div style="margin-top:0.25rem;color:var(--text-muted)">${z ? "赛季内时间可用：" : "Temporally in-season: "}${temporallyEligible.toLocaleString()}${z ? "；赛后快照：" : "; post-season snapshots: "}${postSeason.toLocaleString()}</div>
-                <div style="margin-top:0.25rem;color:var(--text-muted)">${transfermarktIdentityReport.status === "available" ? `Transfermarkt identity matches: ${identityMapped.toLocaleString()} / ${identityTotal.toLocaleString()}; review: ${identityReview.toLocaleString()}` : "No local Transfermarkt identity report."}</div>
+                <div><strong>${escapeHtml(String(eligible.toLocaleString()))} / ${escapeHtml(String(total.toLocaleString()))}</strong> ${escapeHtml(z ? "行可用于监督" : "rows eligible for supervision")}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${escapeHtml(z ? "已排除循环或未获准来源：" : "Excluded circular or unapproved sources: ")}${excluded || escapeHtml(z ? "无" : "none")}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${escapeHtml(z ? "赛季内时间可用：" : "Temporally in-season: ")}${escapeHtml(String(temporallyEligible.toLocaleString()))}${escapeHtml(z ? "；赛后快照：" : "; post-season snapshots: ")}${escapeHtml(String(postSeason.toLocaleString()))}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${transfermarktIdentityReport.status === "available" ? escapeHtml(`Transfermarkt identity matches: ${identityMapped.toLocaleString()} / ${identityTotal.toLocaleString()}; review: ${identityReview.toLocaleString()}`) : escapeHtml("No local Transfermarkt identity report.")}</div>
+                <div style="margin-top:0.25rem;color:var(--text-muted)">${transfermarktIdentityReport.status === "available" ? escapeHtml(identityConfirmationText) : ""}</div>
                 <div style="margin-top:0.35rem;color:var(--text-muted)">${escapeHtml(report.caveat || "")}</div>`;
         }
     }
@@ -12971,10 +15947,21 @@ function renderReports() {
             const snapshotHash = lineage.dataset_snapshot?.input_hash || hash;
             const manifestHash = lineage.feature_manifest?.hash || null;
             const lineageStatus = lineage.status || "not_recorded";
+            const admission = run.admission || {};
+            const admissionStatus = admission.status || "not_available";
+            const failedAdmissionChecks = Array.isArray(admission.failed_checks)
+                ? admission.failed_checks
+                : [];
 
             // Header status
-            const statusText = spearman != null ? "READY" : "N/A";
-            const statusClass = spearman != null ? "status-high" : "status-low";
+            const statusText = admissionStatus === "reviewable"
+                ? (z ? "可人工复核" : "REVIEWABLE")
+                : admissionStatus === "not_reviewable"
+                    ? (z ? "证据不完整" : "NOT REVIEWABLE")
+                    : (z ? "未复核" : "NOT REVIEWED");
+            const statusClass = admissionStatus === "reviewable"
+                ? "status-high"
+                : admissionStatus === "not_reviewable" ? "status-medium" : "status-low";
 
             // Details row
             const detailParts = [
@@ -12992,6 +15979,9 @@ function renderReports() {
             }
             if (dataSource) {
                 detailParts.push(`<span style="color:var(--text-muted)">source</span> ${escapeHtml(dataSource)}`);
+            }
+            if (failedAdmissionChecks.length) {
+                detailParts.push(`<span style="color:var(--text-muted)">evidence missing</span> ${escapeHtml(failedAdmissionChecks.join(", "))}`);
             }
 
             // Metrics blocks
@@ -13014,7 +16004,7 @@ function renderReports() {
             const cmd = run.reproduce_command || "";
             const cmdHtml = cmd
                 ? `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">Reproduce</p>
-                   <pre style="margin:0;padding:0.35rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:4px;font-size:0.72rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace;color:var(--text,#ccc)">${escapeHtml(cmd)}</pre>`
+                   <pre style="margin:0;padding:0.35rem 0.5rem;background:var(--bg-alt,#1a1a2e);border-radius:var(--radius-xs);font-size:0.72rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace;color:var(--text,#ccc)">${escapeHtml(cmd)}</pre>`
                 : "";
 
             // Assemble detail block (everything below the header)
@@ -13095,12 +16085,19 @@ function renderReports() {
                     </div>`;
             }
 
+            const admissionHtml = `<p style="margin:0.4rem 0 0.15rem;font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${z ? '模型准入' : 'Model admission'}</p>
+                <div style="font-size:0.75rem;line-height:1.5">
+                    <div><span style="color:var(--text-muted)">${z ? '状态' : 'Status'}:</span> ${escapeHtml(statusText)}</div>
+                    ${failedAdmissionChecks.length ? `<div><span style="color:var(--text-muted)">${z ? '缺失证据' : 'Missing evidence'}:</span> ${escapeHtml(failedAdmissionChecks.join(", "))}</div>` : ""}
+                    <div style="color:var(--text-muted)">${escapeHtml(z ? '此状态不执行晋级或切换评分产物。' : 'This status does not promote or switch the rating artifact.')}</div>
+                </div>`;
+
             // Reproduce command for copy button
             const copyBtn = cmd
                 ? `<button class="text-button" data-copy-cmd="${escapeAttr(cmd)}" style="font-size:0.72rem;padding:0.15rem 0.4rem;margin-left:0.3rem" title="${z ? '复制命令' : 'Copy command'}">\u25C6 ${z ? '复制' : 'Copy'}</button>`
                 : '';
 
-            const fullDetailSections = [lineageHtml, depHtml, detailSections].filter(Boolean)
+            const fullDetailSections = [admissionHtml, lineageHtml, depHtml, detailSections].filter(Boolean)
                 .join("<hr style=\"border:none;border-top:1px solid var(--border,#333);margin:0.35rem 0\">");
 
             const runIdx = run.run_id || `run_${Math.random().toString(36).slice(2, 8)}`;
@@ -13317,7 +16314,7 @@ function renderActions() {
         series: [{
             type: "bar",
             data: chartPlayers.map((player) => Number(player[metricKey] ?? player[legacyMetricKey] ?? 0)),
-            itemStyle: { color: mode === "vaep" ? "rgba(124,168,255,.82)" : "rgba(87,214,141,.78)" },
+            itemStyle: { color: mode === "vaep" ? "rgba(0,122,255,.82)" : "rgba(52,199,89,.78)" },
             label: { show: false },
         }],
     }, true);
@@ -13877,18 +16874,34 @@ function renderData() {
 }
 
 async function renderActiveView() {
-    if (appState.view === "overview") renderOverview();
+    if (appState.view === "overview") {
+        renderOverview();
+        // Re-render the detailed-health panel with current cached data so
+        // labels stay correct after language switches and navigation.
+        renderDetailedHealth();
+    }
+    if (appState.view === "workflow") await renderWorkflow();
+    if (appState.view === "versions") await renderVersions();
     if (appState.view === "players") await renderPlayers();
     if (appState.view === "compare") await renderCompare();
     if (appState.view === "value") renderValue();
     if (appState.view === "matches") await renderMatches();
     if (appState.view === "teams") await renderTeams();
+    if (appState.view === "league") await renderLeague();
     if (appState.view === "scouting") renderScouting();
     if (appState.view === "actions") renderActions();
     if (appState.view === "reports") renderReports();
     if (appState.view === "tactical") renderTactical();
     if (appState.view === "wc_schedule") renderWcSchedule();
-    if (appState.view === "wc_squads") renderWcSquads();
+    if (appState.view === "wc_squads") {
+        renderWcSquads();
+        renderWcSquadScoutingNeeds();
+        // Lazy-load scouting needs data if not yet cached for this team
+        const _team = appState.wcSquadTeam;
+        if (_team && !wcApiData.squadScoutingNeedsCache[_team] && !wcApiData.squadScoutingNeedsLoading.has(_team)) {
+            fetchWcSquadScoutingNeeds(_team);
+        }
+    }
     if (appState.view === "wc_compare") renderWcCompare();
     if (appState.view === "wc_probability") renderWcProbability();
     if (appState.view === "wc_knockout") renderWcKnockout();
@@ -13910,6 +16923,2532 @@ async function renderActiveView() {
             try { chart.resize(); } catch(e) { /* ignore disposed charts */ }
         });
     });
+}
+
+// ── Workflow navigation view ─────────────────────────────────────────
+// Local-first inference of next steps / blockers / evidence gaps based
+// on already-loaded state: review queue, watchlist, shortlist, and any
+// local-API recruitment briefs and opposition briefings.
+//
+// Sources are read-only here; no state is mutated. Each step is rendered
+// with a clear marker, reason, and an action button that jumps to the
+// relevant view (no inline editing, keeping the workflow view as a
+// navigation hub rather than another editing surface).
+
+const workflowState = {
+    briefs: [],
+    briefings: [],
+    dossiers: [],
+    reviews: [],
+    briefsLoadedAt: 0,
+    briefingsLoadedAt: 0,
+    dossiersLoadedAt: 0,
+    reviewsLoadedAt: 0,
+    briefsError: null,
+    briefingsError: null,
+    dossiersError: null,
+    reviewsError: null,
+};
+
+async function _fetchWorkflowBriefs() {
+    try {
+        const data = await fetchJson("/recruitment/briefs", { params: "limit=100" });
+        workflowState.briefs = Array.isArray(data?.briefs) ? data.briefs : [];
+        workflowState.briefsLoadedAt = Date.now();
+        workflowState.briefsError = null;
+    } catch (err) {
+        workflowState.briefsError = err?.message || String(err);
+        workflowState.briefs = [];
+    }
+}
+
+async function _fetchWorkflowBriefings() {
+    try {
+        const data = await fetchJson("/opposition/briefs", { params: "limit=100" });
+        workflowState.briefings = Array.isArray(data?.briefings) ? data.briefings : [];
+        workflowState.briefingsLoadedAt = Date.now();
+        workflowState.briefingsError = null;
+    } catch (err) {
+        workflowState.briefingsError = err?.message || String(err);
+        workflowState.briefings = [];
+    }
+}
+
+async function _fetchWorkflowDossiers() {
+    try {
+        const data = await fetchJson("/recruitment/dossiers", { params: "limit=100" });
+        workflowState.dossiers = Array.isArray(data?.dossiers) ? data.dossiers : [];
+        workflowState.dossiersLoadedAt = Date.now();
+        workflowState.dossiersError = null;
+    } catch (err) {
+        workflowState.dossiersError = err?.message || String(err);
+        workflowState.dossiers = [];
+    }
+}
+
+async function _fetchWorkflowReviews() {
+    try {
+        const data = await fetchJson("/opposition/reviews", { params: "limit=100" });
+        workflowState.reviews = Array.isArray(data?.reviews) ? data.reviews : [];
+        workflowState.reviewsLoadedAt = Date.now();
+        workflowState.reviewsError = null;
+    } catch (err) {
+        workflowState.reviewsError = err?.message || String(err);
+        workflowState.reviews = [];
+    }
+}
+
+function _workflowStatusSummary() {
+    const zT = appState.lang === "zh";
+    const parts = [];
+    parts.push(zT
+        ? `复核队列：${reviewQueue.length} 条`
+        : `Review queue: ${reviewQueue.length}`);
+    parts.push(zT
+        ? `Watchlist：${watchlistData.length}`
+        : `Watchlist: ${watchlistData.length}`);
+    parts.push(zT
+        ? `Shortlist：${shortlistData.length}`
+        : `Shortlist: ${shortlistData.length}`);
+    if (workflowState.briefsError) {
+        parts.push(zT
+            ? `Recruitment brief：离线（${workflowState.briefsError}）`
+            : `Recruitment briefs: offline (${workflowState.briefsError})`);
+    } else {
+        parts.push(zT
+            ? `Recruitment brief：${workflowState.briefs.length}`
+            : `Recruitment briefs: ${workflowState.briefs.length}`);
+    }
+    if (workflowState.briefingsError) {
+        parts.push(zT
+            ? `Opposition briefing：离线（${workflowState.briefingsError}）`
+            : `Opposition briefings: offline (${workflowState.briefingsError})`);
+    } else {
+        parts.push(zT
+            ? `Opposition briefing：${workflowState.briefings.length}`
+            : `Opposition briefings: ${workflowState.briefings.length}`);
+    }
+    if (workflowState.dossiersError) {
+        parts.push(zT
+            ? `Decision dossier：离线（${workflowState.dossiersError}）`
+            : `Decision dossiers: offline (${workflowState.dossiersError})`);
+    } else {
+        parts.push(zT
+            ? `Decision dossier：${workflowState.dossiers.length}`
+            : `Decision dossiers: ${workflowState.dossiers.length}`);
+    }
+    if (workflowState.reviewsError) {
+        parts.push(zT
+            ? `Post-match review：离线（${workflowState.reviewsError}）`
+            : `Post-match reviews: offline (${workflowState.reviewsError})`);
+    } else {
+        parts.push(zT
+            ? `Post-match review：${workflowState.reviews.length}`
+            : `Post-match reviews: ${workflowState.reviews.length}`);
+    }
+    return parts;
+}
+
+function _workflowInferSteps() {
+    const zT = appState.lang === "zh";
+    const next = [];
+    const blockers = [];
+    const evidenceGaps = [];
+
+    const pendingReviews = reviewQueue.filter((item) => {
+        const status = (item.status || "pending").toLowerCase();
+        return status === "pending" || status === "reviewing";
+    });
+
+    if (pendingReviews.length > 0) {
+        next.push({
+            id: "review-pending",
+            title: zT
+                ? `复核 ${pendingReviews.length} 条待处理候选`
+                : `Review ${pendingReviews.length} pending candidate(s)`,
+            reason: zT
+                ? "存在待复核候选；先在球探视图给出决策再进入 brief 阶段。"
+                : "Pending candidates exist; decide them in Scouting before moving to the brief stage.",
+            action: "scouting",
+            actionLabel: zT ? "前往球探" : "Open Scouting",
+        });
+    } else if (reviewQueue.length === 0) {
+        evidenceGaps.push({
+            id: "no-review-queue",
+            title: zT ? "复核队列为空" : "Review queue empty",
+            reason: zT
+                ? "尚未导入或生成候选；可在球员/身价视图将候选加入 watchlist。"
+                : "No candidates imported yet; add players to the watchlist from Players / Value.",
+            action: "players",
+            actionLabel: zT ? "前往球员" : "Open Players",
+        });
+    }
+
+    if (shortlistData.length === 0 && watchlistData.length > 0) {
+        next.push({
+            id: "promote-shortlist",
+            title: zT ? "将 Watchlist 推进为 Shortlist" : "Promote Watchlist to Shortlist",
+            reason: zT
+                ? "Watchlist 已有候选但 Shortlist 仍为空；在球探视图标记目标后再创建 brief。"
+                : "Watchlist has candidates but Shortlist is empty; mark targets in Scouting before creating a brief.",
+            action: "scouting",
+            actionLabel: zT ? "前往球探" : "Open Scouting",
+        });
+    }
+
+    // Recruitment briefs
+    if (workflowState.briefsError) {
+        blockers.push({
+            id: "brief-api-offline",
+            title: zT ? "Recruitment brief API 离线" : "Recruitment brief API offline",
+            reason: zT
+                ? "本地 API 不可用或未启用；仅可基于浏览器状态推断。"
+                : "Local API unavailable or disabled; inference limited to in-browser state.",
+            action: "data",
+            actionLabel: zT ? "查看数据视图" : "Open Data",
+        });
+    } else if (workflowState.briefs.length === 0) {
+        // Jump straight to the versions view's create-brief dialog. Brief
+        // has no upstream closing-artifact linkage, so no pre-fill is
+        // staged. This closes the workflow breakpoint where the previous
+        // "Open Scouting" jump led to a view with no creation form.
+        next.push({
+            id: "create-brief",
+            title: zT ? "创建第一个 Recruitment brief" : "Create your first recruitment brief",
+            reason: zT
+                ? "已有 Shortlist 即可起草需求 brief（位置、角色、预算、年龄、风险）。"
+                : "With a Shortlist in place, draft a requirement brief (position, role, budget, age, risk).",
+            action: "versions",
+            actionLabel: zT ? "起草 brief" : "Draft brief",
+            create: {
+                type: "brief",
+                fields: {},
+            },
+        });
+        evidenceGaps.push({
+            id: "brief-missing",
+            title: zT ? "缺少 Recruitment brief" : "Missing recruitment brief",
+            reason: zT
+                ? "无 brief 时无法生成 decision dossier；候选推荐会缺少覆盖与来源标注。"
+                : "Without a brief no decision dossier can be produced; recommendations lack coverage and source flags.",
+            action: null,
+            actionLabel: "",
+        });
+    } else {
+        // Check briefs that lack minimum_minutes or budget
+        const incompleteBriefs = workflowState.briefs.filter((b) => {
+            const payload = b.brief || b;
+            const hasBudget = payload.budget_eur != null && payload.budget_eur > 0;
+            const hasMinutes = payload.minimum_minutes != null && payload.minimum_minutes > 0;
+            return !hasBudget || !hasMinutes;
+        });
+        for (const brief of incompleteBriefs.slice(0, 5)) {
+            const payload = brief.brief || brief;
+            const missing = [];
+            if (!payload.budget_eur) missing.push(zT ? "预算" : "budget");
+            if (!payload.minimum_minutes) missing.push(zT ? "最低出场分钟" : "minimum minutes");
+            evidenceGaps.push({
+                id: `brief-gap-${payload.brief_id || "unknown"}`,
+                title: zT
+                    ? `Brief ${payload.brief_id || "?"} 缺少 ${missing.join("、")}`
+                    : `Brief ${payload.brief_id || "?"} missing ${missing.join(", ")}`,
+                reason: zT
+                    ? "未填写的字段会降低候选排序的可解释性；回到球探视图补全。"
+                    : "Unfilled fields reduce explainability of candidate ranking; complete them in Scouting.",
+                action: "scouting",
+                actionLabel: zT ? "前往球探" : "Open Scouting",
+            });
+        }
+    }
+
+    // Opposition briefings
+    if (workflowState.briefingsError) {
+        blockers.push({
+            id: "briefing-api-offline",
+            title: zT ? "Opposition briefing API 离线" : "Opposition briefing API offline",
+            reason: zT
+                ? "本地 API 不可用或未启用；无法读取已保存的 briefing。"
+                : "Local API unavailable or disabled; cannot read saved briefings.",
+            action: "data",
+            actionLabel: zT ? "查看数据视图" : "Open Data",
+        });
+    } else if (workflowState.briefings.length === 0) {
+        // Jump straight to the versions view's create-briefing dialog.
+        // Like brief, briefing has no upstream closing-artifact linkage,
+        // so no pre-fill is staged. This closes the workflow breakpoint
+        // where the previous "Open Matches" jump led to a view with no
+        // creation form.
+        next.push({
+            id: "create-briefing",
+            title: zT ? "创建第一个 Opposition briefing" : "Create your first opposition briefing",
+            reason: zT
+                ? "从比赛预测视图选定对手后，起草源受限 briefing（含 fact_tier 标注）。"
+                : "Pick an opponent from Match Prediction, then draft a source-limited briefing with fact_tier labels.",
+            action: "versions",
+            actionLabel: zT ? "起草 briefing" : "Draft briefing",
+            create: {
+                type: "briefing",
+                fields: {},
+            },
+        });
+        evidenceGaps.push({
+            id: "briefing-missing",
+            title: zT ? "缺少 Opposition briefing" : "Missing opposition briefing",
+            reason: zT
+                ? "无 briefing 时 pattern card / scenario tree / post-match review 都无法挂载。"
+                : "Without a briefing, pattern cards / scenario trees / post-match reviews cannot be attached.",
+            action: null,
+            actionLabel: "",
+        });
+    } else {
+        // Flag briefings whose sections all have fact_tier = unknown
+        const unclassified = workflowState.briefings.filter((b) => {
+            const payload = b.briefing || b;
+            const sections = Array.isArray(payload.sections) ? payload.sections : [];
+            if (sections.length === 0) return true;
+            return sections.every((s) => (s.fact_tier || "unknown") === "unknown");
+        });
+        for (const briefing of unclassified.slice(0, 5)) {
+            const payload = briefing.briefing || briefing;
+            evidenceGaps.push({
+                id: `briefing-tier-${payload.briefing_id || "unknown"}`,
+                title: zT
+                    ? `Briefing ${payload.briefing_id || "?"} 的 fact_tier 全部为 unknown`
+                    : `Briefing ${payload.briefing_id || "?"} has all fact_tier = unknown`,
+                reason: zT
+                    ? "未分类的 section 无法区分 official / recorded / estimated；建议人工标注。"
+                    : "Unclassified sections cannot distinguish official / recorded / estimated; label them manually.",
+                action: "matches",
+                actionLabel: zT ? "前往预测" : "Open Matches",
+            });
+        }
+    }
+
+    // Decision dossiers (closing artifact of the recruitment workflow).
+    if (workflowState.dossiersError) {
+        blockers.push({
+            id: "dossier-api-offline",
+            title: zT ? "Decision dossier API 离线" : "Decision dossier API offline",
+            reason: zT
+                ? "本地 API 不可用或未启用；无法读取已保存的 dossier。"
+                : "Local API unavailable or disabled; cannot read saved dossiers.",
+            action: "data",
+            actionLabel: zT ? "查看数据视图" : "Open Data",
+        });
+    } else if (workflowState.briefs.length > 0 && workflowState.dossiers.length === 0) {
+        // Pre-fill the dossier form with the first available brief_id so the
+        // maintainer can close the brief → dossier loop in one jump. The
+        // brief_id field is a <select> in the create form, so the pre-fill
+        // value must match a brief_id in versionsState.briefs.
+        const firstBrief = workflowState.briefs[0];
+        const firstBriefId = firstBrief?.brief_id || firstBrief?.payload?.brief_id || "";
+        next.push({
+            id: "create-dossier",
+            title: zT ? "为候选起草第一个 decision dossier" : "Draft the first decision dossier for a candidate",
+            reason: zT
+                ? "已有 Recruitment brief 即可整理候选证据、对照、风险与人工判断，形成可追溯的决策档案。"
+                : "With a brief in place, collect evidence, comparisons, risks and human judgment into a traceable dossier.",
+            action: "versions",
+            actionLabel: zT ? "起草 dossier" : "Draft dossier",
+            create: {
+                type: "dossier",
+                fields: firstBriefId ? { brief_id: firstBriefId } : {},
+            },
+        });
+        evidenceGaps.push({
+            id: "dossier-missing",
+            title: zT ? "缺少 Decision dossier" : "Missing decision dossier",
+            reason: zT
+                ? "没有 dossier 时候选决策无法回溯；brief → dossier 的闭环未形成。"
+                : "Without a dossier candidate decisions are not traceable; the brief → dossier loop is open.",
+            action: null,
+            actionLabel: "",
+        });
+    } else if (workflowState.dossiers.length > 0) {
+        const draftDossiers = workflowState.dossiers.filter((d) => {
+            const status = (d.status || "draft").toLowerCase();
+            return status === "draft";
+        });
+        for (const dossier of draftDossiers.slice(0, 5)) {
+            evidenceGaps.push({
+                id: `dossier-draft-${dossier.dossier_id || "unknown"}`,
+                title: zT
+                    ? `Dossier ${dossier.dossier_id || "?"} 仍为 draft`
+                    : `Dossier ${dossier.dossier_id || "?"} is still in draft`,
+                reason: zT
+                    ? "draft 状态的 dossier 尚未给出最终 decision；建议补全证据后标记为 decided / rejected。"
+                    : "Draft dossiers have no final decision yet; complete the evidence and mark them decided / rejected.",
+                action: "versions",
+                actionLabel: zT ? "前往版本视图" : "Open Versions",
+            });
+        }
+    }
+
+    // Post-match reviews (closing artifact of the opposition workflow).
+    if (workflowState.reviewsError) {
+        blockers.push({
+            id: "review-api-offline",
+            title: zT ? "Post-match review API 离线" : "Post-match review API offline",
+            reason: zT
+                ? "本地 API 不可用或未启用；无法读取已保存的 review。"
+                : "Local API unavailable or disabled; cannot read saved reviews.",
+            action: "data",
+            actionLabel: zT ? "查看数据视图" : "Open Data",
+        });
+    } else if (workflowState.briefings.length > 0 && workflowState.reviews.length === 0) {
+        // Pre-fill the review form with the first available briefing_id so
+        // the maintainer can close the briefing → review loop in one jump.
+        const firstBriefing = workflowState.briefings[0];
+        const firstBriefingId = firstBriefing?.briefing_id || firstBriefing?.payload?.briefing_id || "";
+        next.push({
+            id: "create-review",
+            title: zT ? "为已踢比赛起草第一个 post-match review" : "Draft the first post-match review for a played match",
+            reason: zT
+                ? "已有 Opposition briefing 即可对照假设-计划-执行-结果，记录确认/证伪的模式与新问题。"
+                : "With a briefing in place, compare hypothesis-plan-execution-result and record confirmed/falsified patterns and new questions.",
+            action: "versions",
+            actionLabel: zT ? "起草 review" : "Draft review",
+            create: {
+                type: "review",
+                fields: firstBriefingId ? { briefing_id: firstBriefingId } : {},
+            },
+        });
+        evidenceGaps.push({
+            id: "review-missing",
+            title: zT ? "缺少 Post-match review" : "Missing post-match review",
+            reason: zT
+                ? "没有 review 时假设-结果对照无法沉淀；briefing → review 的闭环未形成。"
+                : "Without a review the hypothesis-result comparison is lost; the briefing → review loop is open.",
+            action: null,
+            actionLabel: "",
+        });
+    } else if (workflowState.reviews.length > 0) {
+        const draftReviews = workflowState.reviews.filter((r) => {
+            const status = (r.status || "draft").toLowerCase();
+            return status === "draft";
+        });
+        for (const review of draftReviews.slice(0, 5)) {
+            evidenceGaps.push({
+                id: `review-draft-${review.review_id || "unknown"}`,
+                title: zT
+                    ? `Review ${review.review_id || "?"} 仍为 draft`
+                    : `Review ${review.review_id || "?"} is still in draft`,
+                reason: zT
+                    ? "draft 状态的 review 尚未给出最终 decision；建议补全假设结果后标记为 finalized。"
+                    : "Draft reviews have no final decision yet; complete the hypothesis results and mark them finalized.",
+                action: "versions",
+                actionLabel: zT ? "前往版本视图" : "Open Versions",
+            });
+        }
+    }
+
+    return { next, blockers, evidenceGaps };
+}
+
+function _renderWorkflowStep(step, index, kind) {
+    const zT = appState.lang === "zh";
+    const markerClass = kind === "blocker"
+        ? "wf-marker-blocker"
+        : (kind === "evidence" ? "wf-marker-evidence" : "");
+    const itemClass = kind === "blocker"
+        ? "wf-step-blocker"
+        : (kind === "evidence" ? "wf-step-evidence" : "");
+    const markerText = kind === "blocker" ? "!" : String(index + 1);
+    let actionHtml;
+    if (step.create) {
+        // A "create" step jumps to the versions view but first stages a
+        // pendingCreate payload so the create dialog auto-opens with the
+        // right pre-fill (e.g. the brief_id this dossier closes).
+        const prefillJson = JSON.stringify(step.create.fields || {});
+        actionHtml = `<button class="wf-step-action" type="button" data-wf-create="${escapeAttr(step.create.type)}" data-wf-prefill="${escapeAttr(prefillJson)}">${escapeHtml(step.actionLabel || t("workflow_action_goto"))}</button>`;
+    } else if (step.action) {
+        actionHtml = `<button class="wf-step-action" type="button" data-wf-jump="${escapeAttr(step.action)}">${escapeHtml(step.actionLabel || t("workflow_action_goto"))}</button>`;
+    } else {
+        actionHtml = `<button class="wf-step-action" type="button" disabled>${escapeHtml(zT ? "—" : "—")}</button>`;
+    }
+    return `
+        <li class="${itemClass}" data-wf-step-id="${escapeAttr(step.id)}">
+            <span class="wf-step-marker ${markerClass}">${escapeHtml(markerText)}</span>
+            <div class="wf-step-body">
+                <span class="wf-step-title">${escapeHtml(step.title)}</span>
+                <span class="wf-step-reason">${escapeHtml(step.reason)}</span>
+            </div>
+            ${actionHtml}
+        </li>`;
+}
+
+async function renderWorkflow() {
+    // Refresh briefs / briefings / dossiers / reviews (fire-and-forget; render with whatever we have).
+    const briefsPromise = _fetchWorkflowBriefs();
+    const briefingsPromise = _fetchWorkflowBriefings();
+    const dossiersPromise = _fetchWorkflowDossiers();
+    const reviewsPromise = _fetchWorkflowReviews();
+
+    // Render status rail immediately with in-browser state, then update after fetch.
+    _renderWorkflowBody();
+    await Promise.all([briefsPromise, briefingsPromise, dossiersPromise, reviewsPromise]);
+    _renderWorkflowBody();
+}
+
+function _renderWorkflowBody() {
+    const zT = appState.lang === "zh";
+    const statusRail = document.getElementById("wf-status-rail");
+    if (statusRail) {
+        const summary = _workflowStatusSummary();
+        const offlineNote = (
+            workflowState.briefsError
+            || workflowState.briefingsError
+            || workflowState.dossiersError
+            || workflowState.reviewsError
+        )
+            ? ` <strong>${t("workflow_sources_offline")}</strong>`
+            : "";
+        statusRail.innerHTML = summary
+            .map((part) => `<span>${escapeHtml(part)}</span>`)
+            .join("") + offlineNote;
+    }
+
+    const { next, blockers, evidenceGaps } = _workflowInferSteps();
+
+    const nextCount = document.getElementById("wf-next-count");
+    const blockerCount = document.getElementById("wf-blocker-count");
+    const evidenceGapCount = document.getElementById("wf-evidence-gap-count");
+    if (nextCount) nextCount.textContent = String(next.length);
+    if (blockerCount) blockerCount.textContent = String(blockers.length);
+    if (evidenceGapCount) evidenceGapCount.textContent = String(evidenceGaps.length);
+
+    const nextPill = document.getElementById("wf-next-pill");
+    const blockerPill = document.getElementById("wf-blocker-pill");
+    const evidenceGapPill = document.getElementById("wf-evidence-gap-pill");
+    if (nextPill) nextPill.textContent = String(next.length);
+    if (blockerPill) blockerPill.textContent = String(blockers.length);
+    if (evidenceGapPill) evidenceGapPill.textContent = String(evidenceGaps.length);
+
+    const nextList = document.getElementById("wf-next-list");
+    const blockerList = document.getElementById("wf-blocker-list");
+    const evidenceGapList = document.getElementById("wf-evidence-gap-list");
+    if (nextList) {
+        nextList.innerHTML = next.length
+            ? next.map((s, i) => _renderWorkflowStep(s, i, "next")).join("")
+            : `<li style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("workflow_empty_next"))}</li>`;
+    }
+    if (blockerList) {
+        blockerList.innerHTML = blockers.length
+            ? blockers.map((s, i) => _renderWorkflowStep(s, i, "blocker")).join("")
+            : `<li style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("workflow_empty_blocker"))}</li>`;
+    }
+    if (evidenceGapList) {
+        evidenceGapList.innerHTML = evidenceGaps.length
+            ? evidenceGaps.map((s, i) => _renderWorkflowStep(s, i, "evidence")).join("")
+            : `<li style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem">${escapeHtml(t("workflow_empty_evidence"))}</li>`;
+    }
+
+    const sourcesNote = document.getElementById("wf-sources-note");
+    if (sourcesNote) {
+        sourcesNote.textContent = t("workflow_sources_local");
+    }
+
+    // Wire up jump buttons.
+    document.querySelectorAll("#view-workflow .wf-step-action[data-wf-jump]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const target = btn.getAttribute("data-wf-jump");
+            if (target) setView(target);
+        });
+    });
+    // Wire up "create" jump buttons: these stage a pendingCreate payload on
+    // versionsState (so the create dialog auto-opens with pre-fill) and then
+    // jump to the versions view. This closes the workflow breakpoint where
+    // creating a closing artifact (dossier / review) required the CLI.
+    document.querySelectorAll("#view-workflow .wf-step-action[data-wf-create]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const createType = btn.getAttribute("data-wf-create");
+            if (!createType) return;
+            let prefill = {};
+            try {
+                prefill = JSON.parse(btn.getAttribute("data-wf-prefill") || "{}");
+            } catch {
+                prefill = {};
+            }
+            versionsState.pendingCreate = { type: createType, fields: prefill };
+            setView("versions");
+        });
+    });
+}
+
+// ── Versions / backups / diff / portable pack ────────────────────────
+// Read-only views over the local-API backup endpoints. Editing (restore)
+// goes through POST /restore with an If-Match-style expected_revision.
+
+// Configuration-driven artifact type registry for the versions view.
+// Adding a new versioned artifact type only requires extending this table;
+// all downstream functions (fetch/list/diff/restore) read from it.
+const _VERSION_ARTIFACT_TYPES = {
+    brief: {
+        listPath: "/recruitment/briefs",
+        itemPath: (id) => `/recruitment/briefs/${encodeURIComponent(id)}`,
+        backupsPath: (id) => `/recruitment/briefs/${encodeURIComponent(id)}/backups`,
+        backupPath: (id, fn) => `/recruitment/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
+        diffPath: (id, fn) => `/recruitment/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
+        restorePath: (id) => `/recruitment/briefs/${encodeURIComponent(id)}/restore`,
+        createPath: "/recruitment/briefs",
+        idField: "brief_id",
+        listKey: "briefs",
+        stateField: "briefs",
+        errorField: "briefsError",
+        labelKey: "versions_type_brief",
+        createLabelKey: "versions_create_brief",
+        createHintKey: "versions_create_hint_brief",
+        // Brief has no upstream closing-artifact linkage (it IS the
+        // upstream artifact of the recruitment workflow). Empty linkField
+        // disables the link <select> in the create form.
+        idPrefix: "brief-",
+        linkField: "",
+        linkListKey: "",
+        linkIdField: "",
+        // Field definitions for the create form. position_group is
+        // required (Pydantic rejects empty strings). budget_eur /
+        // minimum_minutes / age_min / age_max are optional integers;
+        // empty inputs are converted to null in _collectCreateForm.
+        formFields: [
+            { name: "brief_id", type: "text", required: false, labelKey: "versions_create_field_brief_id", placeholderKey: "versions_create_field_brief_id_ph", noteKey: "versions_create_field_id_note" },
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph_brief" },
+            { name: "team", type: "text", required: false, labelKey: "versions_create_field_team", placeholderKey: "versions_create_field_team_ph" },
+            { name: "position_group", type: "select-options", required: true, labelKey: "versions_create_field_position_group", options: [
+                { value: "DF", labelKey: "versions_create_pos_df" },
+                { value: "MF", labelKey: "versions_create_pos_mf" },
+                { value: "FW", labelKey: "versions_create_pos_fw" },
+                { value: "GK", labelKey: "versions_create_pos_gk" },
+            ] },
+            { name: "role", type: "text", required: false, labelKey: "versions_create_field_role", placeholderKey: "versions_create_field_role_ph" },
+            { name: "budget_eur", type: "number", required: false, labelKey: "versions_create_field_budget_eur", placeholderKey: "versions_create_field_budget_eur_ph" },
+            { name: "minimum_minutes", type: "number", required: false, labelKey: "versions_create_field_minimum_minutes", placeholderKey: "versions_create_field_minimum_minutes_ph" },
+            { name: "age_min", type: "number", required: false, labelKey: "versions_create_field_age_min" },
+            { name: "age_max", type: "number", required: false, labelKey: "versions_create_field_age_max" },
+            { name: "risk_tolerance", type: "select-options", required: false, labelKey: "versions_create_field_risk_tolerance", options: [
+                { value: "low", labelKey: "versions_create_risk_low" },
+                { value: "medium", labelKey: "versions_create_risk_medium" },
+                { value: "high", labelKey: "versions_create_risk_high" },
+            ] },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_create_field_notes" },
+        ],
+    },
+    briefing: {
+        listPath: "/opposition/briefs",
+        itemPath: (id) => `/opposition/briefs/${encodeURIComponent(id)}`,
+        backupsPath: (id) => `/opposition/briefs/${encodeURIComponent(id)}/backups`,
+        backupPath: (id, fn) => `/opposition/briefs/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
+        diffPath: (id, fn) => `/opposition/briefs/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
+        restorePath: (id) => `/opposition/briefs/${encodeURIComponent(id)}/restore`,
+        createPath: "/opposition/briefs",
+        editPath: (id) => `/opposition/briefs/${encodeURIComponent(id)}`,
+        idField: "briefing_id",
+        listKey: "briefings",
+        stateField: "briefings",
+        errorField: "briefingsError",
+        labelKey: "versions_type_briefing",
+        createLabelKey: "versions_create_briefing",
+        createHintKey: "versions_create_hint_briefing",
+        editLabelKey: "versions_edit_briefing",
+        // Briefing has no upstream closing-artifact linkage (it IS the
+        // upstream artifact of the opposition workflow).
+        idPrefix: "briefing-",
+        linkField: "",
+        linkListKey: "",
+        linkIdField: "",
+        // Sections are intentionally NOT in the small create form: they
+        // require fact_tier classification and evidence_refs, which are
+        // better added through the edit dialog after creation. The
+        // Pydantic model accepts an empty sections tuple.
+        formFields: [
+            { name: "briefing_id", type: "text", required: false, labelKey: "versions_create_field_briefing_id", placeholderKey: "versions_create_field_briefing_id_ph", noteKey: "versions_create_field_id_note" },
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph_briefing" },
+            { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
+            { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
+            { name: "match_id", type: "text", required: false, labelKey: "versions_create_field_match_id", placeholderKey: "versions_create_field_match_id_ph" },
+            { name: "competition", type: "text", required: false, labelKey: "versions_create_field_competition", placeholderKey: "versions_create_field_competition_ph" },
+            { name: "season", type: "text", required: false, labelKey: "versions_create_field_season", placeholderKey: "versions_create_field_season_ph" },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_create_field_notes" },
+        ],
+        // Editable fields for the PUT /opposition/briefs/{id} endpoint.
+        // Kept in sync with _BRIEFING_EDITABLE_FIELDS in api.py. The ID
+        // field, schema, version, revision, created_at, updated_at,
+        // author, limitations are not editable here — they have their
+        // own lifecycle. The entry-list field (sections) IS editable
+        // and is described by `entryLists` below; it uses full-list
+        // replacement semantics.
+        //
+        // The briefing model has no status/decision state machine
+        // (unlike dossier/review), so there is no status/decision
+        // dropdown in this edit form. ``kickoff_at`` accepts an ISO
+        // 8601 datetime string or empty (cleared to null on save).
+        // ``linked_scenario_tree_id`` / ``linked_post_match_review_id``
+        // accept a string ID or empty (cleared to null on save).
+        // ``linked_pattern_card_ids`` is a list of strings, one per
+        // line; empty lines are dropped on save.
+        editFormFields: [
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph_briefing" },
+            { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
+            { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
+            { name: "match_id", type: "text", required: false, labelKey: "versions_create_field_match_id", placeholderKey: "versions_create_field_match_id_ph" },
+            { name: "kickoff_at", type: "text", required: false, nullable: true, labelKey: "versions_edit_field_kickoff_at" },
+            { name: "competition", type: "text", required: false, labelKey: "versions_create_field_competition", placeholderKey: "versions_create_field_competition_ph" },
+            { name: "season", type: "text", required: false, labelKey: "versions_create_field_season", placeholderKey: "versions_create_field_season_ph" },
+            { name: "linked_scenario_tree_id", type: "text", required: false, nullable: true, labelKey: "versions_edit_field_linked_scenario_tree_id" },
+            { name: "linked_post_match_review_id", type: "text", required: false, nullable: true, labelKey: "versions_edit_field_linked_post_match_review_id" },
+            { name: "linked_pattern_card_ids", type: "list-strings", required: false, labelKey: "versions_edit_field_linked_pattern_card_ids" },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_edit_field_notes" },
+        ],
+        // Entry-list field rendered as a config-driven list editor in
+        // the edit dialog. Uses full-list replacement: the caller sends
+        // the complete new list and the server re-validates each
+        // entry's schema, section_id uniqueness (including the
+        // ``custom:<tail>`` rule) and fact_tier enum value.
+        entryLists: [
+            {
+                fieldName: "sections",
+                labelKey: "versions_edit_list_sections",
+                idField: "section_id",
+                idPrefix: "sec-",
+                fields: [
+                    { name: "section_id", type: "text", required: true, labelKey: "versions_edit_field_section_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+        ],
+    },
+    dossier: {
+        listPath: "/recruitment/dossiers",
+        itemPath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}`,
+        backupsPath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}/backups`,
+        backupPath: (id, fn) => `/recruitment/dossiers/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
+        diffPath: (id, fn) => `/recruitment/dossiers/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
+        restorePath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}/restore`,
+        createPath: "/recruitment/dossiers",
+        editPath: (id) => `/recruitment/dossiers/${encodeURIComponent(id)}`,
+        idField: "dossier_id",
+        listKey: "dossiers",
+        stateField: "dossiers",
+        errorField: "dossiersError",
+        labelKey: "versions_type_dossier",
+        createLabelKey: "versions_create_dossier",
+        createHintKey: "versions_create_hint_dossier",
+        editLabelKey: "versions_edit_dossier",
+        // ID prefix used when the maintainer leaves the ID field blank.
+        idPrefix: "dossier-",
+        // Linked artifact field used for workflow pre-fill (which brief this
+        // dossier closes). Empty string means no linkage pre-fill.
+        linkField: "brief_id",
+        linkListKey: "briefs",
+        linkIdField: "brief_id",
+        // Field definitions for the create form. Order is preserved.
+        // `type` ∈ {text, textarea, select}. `required` triggers client-side
+        // validation. `prefill: true` marks fields eligible for workflow
+        // pre-fill (the link field plus free-form maintainer notes).
+        formFields: [
+            { name: "dossier_id", type: "text", required: false, labelKey: "versions_create_field_dossier_id", placeholderKey: "versions_create_field_dossier_id_ph", noteKey: "versions_create_field_id_note" },
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
+            { name: "brief_id", type: "select", required: false, labelKey: "versions_create_field_link_brief_id", prefill: true },
+            { name: "candidate_player_name", type: "text", required: false, labelKey: "versions_create_field_candidate_name", placeholderKey: "versions_create_field_candidate_name_ph" },
+            { name: "candidate_team_name", type: "text", required: false, labelKey: "versions_create_field_candidate_team", placeholderKey: "versions_create_field_candidate_team_ph" },
+            { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion", prefill: true },
+            { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation", prefill: true },
+        ],
+        // Editable fields for the PUT /recruitment/dossiers/{id} endpoint.
+        // Kept in sync with _DOSSIER_EDITABLE_FIELDS in api.py. The ID
+        // field, schema, version, limitations and linked_artifacts are
+        // not editable here — they have their own lifecycle. The
+        // entry-list fields (supporting_evidence, counter_evidence,
+        // comparisons, risks) ARE editable and are described by
+        // `entryLists` below; they use full-list replacement semantics.
+        editFormFields: [
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
+            { name: "brief_id", type: "select", required: false, labelKey: "versions_create_field_link_brief_id" },
+            { name: "candidate_player_name", type: "text", required: false, labelKey: "versions_create_field_candidate_name", placeholderKey: "versions_create_field_candidate_name_ph" },
+            { name: "candidate_team_name", type: "text", required: false, labelKey: "versions_create_field_candidate_team", placeholderKey: "versions_create_field_candidate_team_ph" },
+            { name: "status", type: "select-status", required: true, labelKey: "versions_edit_field_status" },
+            { name: "decision", type: "select-decision-dossier", required: false, labelKey: "versions_edit_field_decision" },
+            { name: "decision_note", type: "text", required: false, labelKey: "versions_edit_field_decision_note" },
+            { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion" },
+            { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation" },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_edit_field_notes" },
+        ],
+        // Entry-list fields rendered as config-driven list editors in
+        // the edit dialog. Each list uses full-list replacement: the
+        // caller sends the complete new list and the server re-validates
+        // each entry's schema, id uniqueness and enum values.
+        entryLists: [
+            {
+                fieldName: "supporting_evidence",
+                labelKey: "versions_edit_list_supporting_evidence",
+                idField: "evidence_id",
+                idPrefix: "ev-",
+                fields: [
+                    { name: "evidence_id", type: "text", required: true, labelKey: "versions_edit_field_evidence_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "counter_evidence",
+                labelKey: "versions_edit_list_counter_evidence",
+                idField: "evidence_id",
+                idPrefix: "cev-",
+                fields: [
+                    { name: "evidence_id", type: "text", required: true, labelKey: "versions_edit_field_evidence_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "comparisons",
+                labelKey: "versions_edit_list_comparisons",
+                idField: "comparison_id",
+                idPrefix: "cmp-",
+                fields: [
+                    { name: "comparison_id", type: "text", required: true, labelKey: "versions_edit_field_comparison_id" },
+                    { name: "comparison_player_id", type: "text", required: false, labelKey: "versions_edit_field_comparison_player_id" },
+                    { name: "comparison_player_name", type: "text", required: false, labelKey: "versions_edit_field_comparison_player_name" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "risks",
+                labelKey: "versions_edit_list_risks",
+                idField: "risk_id",
+                idPrefix: "risk-",
+                fields: [
+                    { name: "risk_id", type: "text", required: true, labelKey: "versions_edit_field_risk_id" },
+                    { name: "summary", type: "textarea", required: true, labelKey: "versions_edit_field_summary" },
+                    { name: "severity", type: "select-enum", required: true, labelKey: "versions_edit_field_severity", options: ["low", "medium", "high"] },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+        ],
+        // Status values valid for this artifact type. Used to populate the
+        // status dropdown in the edit dialog. Must match the Pydantic
+        // VALID_DOSSIER_STATUS / VALID_REVIEW_STATUS sets exactly.
+        validStatuses: ["draft", "decided", "rejected", "superseded"],
+        // The status value that requires a non-null decision. Used for
+        // client-side validation and server-error mapping.
+        decisionRequiredStatus: "decided",
+        // Decision values valid for this artifact type. The first entry
+        // is the "no decision" placeholder when status != decisionRequiredStatus.
+        validDecisions: ["proceed", "hold", "reject", "defer"],
+    },
+    review: {
+        listPath: "/opposition/reviews",
+        itemPath: (id) => `/opposition/reviews/${encodeURIComponent(id)}`,
+        backupsPath: (id) => `/opposition/reviews/${encodeURIComponent(id)}/backups`,
+        backupPath: (id, fn) => `/opposition/reviews/${encodeURIComponent(id)}/backups/${encodeURIComponent(fn)}`,
+        diffPath: (id, fn) => `/opposition/reviews/${encodeURIComponent(id)}/diff?backup_filename=${encodeURIComponent(fn)}`,
+        restorePath: (id) => `/opposition/reviews/${encodeURIComponent(id)}/restore`,
+        createPath: "/opposition/reviews",
+        editPath: (id) => `/opposition/reviews/${encodeURIComponent(id)}`,
+        idField: "review_id",
+        listKey: "reviews",
+        stateField: "reviews",
+        errorField: "reviewsError",
+        labelKey: "versions_type_review",
+        createLabelKey: "versions_create_review",
+        createHintKey: "versions_create_hint_review",
+        editLabelKey: "versions_edit_review",
+        idPrefix: "review-",
+        linkField: "briefing_id",
+        linkListKey: "briefings",
+        linkIdField: "briefing_id",
+        formFields: [
+            { name: "review_id", type: "text", required: false, labelKey: "versions_create_field_review_id", placeholderKey: "versions_create_field_review_id_ph", noteKey: "versions_create_field_id_note" },
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
+            { name: "briefing_id", type: "select", required: false, labelKey: "versions_create_field_link_briefing_id", prefill: true },
+            { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
+            { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
+            { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion", prefill: true },
+            { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation", prefill: true },
+        ],
+        // Editable fields for the PUT /opposition/reviews/{id} endpoint.
+        // Kept in sync with _REVIEW_EDITABLE_FIELDS in api.py. The ID
+        // field, schema, version, limitations and linked_artifacts are
+        // not editable here. The entry-list fields (hypothesis_results,
+        // falsified_patterns, new_questions, supporting_evidence,
+        // counter_evidence) ARE editable and are described by
+        // `entryLists` below; they use full-list replacement semantics.
+        editFormFields: [
+            { name: "title", type: "text", required: true, labelKey: "versions_create_field_title", placeholderKey: "versions_create_field_title_ph" },
+            { name: "briefing_id", type: "select", required: false, labelKey: "versions_create_field_link_briefing_id" },
+            { name: "match_id", type: "text", required: false, labelKey: "versions_edit_field_match_id" },
+            { name: "home_team", type: "text", required: false, labelKey: "versions_create_field_home_team", placeholderKey: "versions_create_field_home_team_ph" },
+            { name: "away_team", type: "text", required: false, labelKey: "versions_create_field_away_team", placeholderKey: "versions_create_field_away_team_ph" },
+            { name: "competition", type: "text", required: false, labelKey: "versions_edit_field_competition" },
+            { name: "season", type: "text", required: false, labelKey: "versions_edit_field_season" },
+            { name: "final_score_home", type: "number", required: false, labelKey: "versions_edit_field_final_score_home" },
+            { name: "final_score_away", type: "number", required: false, labelKey: "versions_edit_field_final_score_away" },
+            { name: "status", type: "select-status", required: true, labelKey: "versions_edit_field_status" },
+            { name: "decision", type: "select-decision-review", required: false, labelKey: "versions_edit_field_decision" },
+            { name: "decision_note", type: "text", required: false, labelKey: "versions_edit_field_decision_note" },
+            { name: "human_opinion", type: "textarea", required: false, labelKey: "versions_create_field_human_opinion" },
+            { name: "recommendation", type: "textarea", required: false, labelKey: "versions_create_field_recommendation" },
+            { name: "notes", type: "textarea", required: false, labelKey: "versions_edit_field_notes" },
+        ],
+        // Entry-list fields rendered as config-driven list editors.
+        // Each list uses full-list replacement: the caller sends the
+        // complete new list and the server re-validates each entry's
+        // schema, id uniqueness and enum values (fact_tier / severity /
+        // outcome).
+        entryLists: [
+            {
+                fieldName: "hypothesis_results",
+                labelKey: "versions_edit_list_hypothesis_results",
+                idField: "hypothesis_id",
+                idPrefix: "hyp-",
+                fields: [
+                    { name: "hypothesis_id", type: "text", required: true, labelKey: "versions_edit_field_hypothesis_id" },
+                    { name: "planned", type: "text", required: false, labelKey: "versions_edit_field_planned" },
+                    { name: "observed", type: "text", required: false, labelKey: "versions_edit_field_observed" },
+                    { name: "outcome", type: "select-enum", required: true, labelKey: "versions_edit_field_outcome", options: ["confirmed", "falsified", "partial"] },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "falsified_patterns",
+                labelKey: "versions_edit_list_falsified_patterns",
+                idField: "pattern_id",
+                idPrefix: "fp-",
+                fields: [
+                    { name: "pattern_id", type: "text", required: true, labelKey: "versions_edit_field_pattern_id" },
+                    { name: "summary", type: "textarea", required: true, labelKey: "versions_edit_field_summary" },
+                    { name: "severity", type: "select-enum", required: true, labelKey: "versions_edit_field_severity", options: ["low", "medium", "high"] },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "new_questions",
+                labelKey: "versions_edit_list_new_questions",
+                idField: "question_id",
+                idPrefix: "q-",
+                fields: [
+                    { name: "question_id", type: "text", required: true, labelKey: "versions_edit_field_question_id" },
+                    { name: "summary", type: "textarea", required: true, labelKey: "versions_edit_field_summary" },
+                    { name: "scope", type: "text", required: false, labelKey: "versions_edit_field_scope" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "supporting_evidence",
+                labelKey: "versions_edit_list_supporting_evidence",
+                idField: "evidence_id",
+                idPrefix: "ev-",
+                fields: [
+                    { name: "evidence_id", type: "text", required: true, labelKey: "versions_edit_field_evidence_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+            {
+                fieldName: "counter_evidence",
+                labelKey: "versions_edit_list_counter_evidence",
+                idField: "evidence_id",
+                idPrefix: "cev-",
+                fields: [
+                    { name: "evidence_id", type: "text", required: true, labelKey: "versions_edit_field_evidence_id" },
+                    { name: "fact_tier", type: "select-enum", required: true, labelKey: "versions_edit_field_fact_tier", options: ["official", "recorded", "estimated", "unknown"] },
+                    { name: "summary", type: "textarea", required: false, labelKey: "versions_edit_field_summary" },
+                    { name: "evidence_refs", type: "list-strings", required: false, labelKey: "versions_edit_field_evidence_refs" },
+                ],
+            },
+        ],
+        validStatuses: ["draft", "finalized", "superseded"],
+        decisionRequiredStatus: "finalized",
+        validDecisions: ["confirmed", "falsified", "partial", "inconclusive"],
+    },
+};
+
+function _versionTypeConfig(type) {
+    return _VERSION_ARTIFACT_TYPES[type] || _VERSION_ARTIFACT_TYPES.brief;
+}
+
+const versionsState = {
+    type: "brief", // "brief" | "briefing" | "dossier" | "review"
+    briefs: [],
+    briefings: [],
+    dossiers: [],
+    reviews: [],
+    briefsError: null,
+    briefingsError: null,
+    dossiersError: null,
+    reviewsError: null,
+    selectedId: "",
+    backups: [],
+    backupsError: null,
+    selectedBackup: null, // full record from load_backup
+    diff: null,
+    diffError: null,
+    currentRevision: null, // server_revision of the live record
+    // When the maintainer jumps from the workflow view to create a closing
+    // artifact (dossier/review), this field carries pre-fill context so the
+    // create dialog can auto-open with the right brief_id / briefing_id.
+    // Shape: { type: "dossier"|"review", linkId: string, fields: {name: value} }
+    // Cleared after the dialog opens or is dismissed.
+    pendingCreate: null,
+    // Edit-dialog context: the id + server_revision of the record the
+    // maintainer is currently editing. Set by _openEditDialog, read by
+    // _submitEditForm to send expected_revision (If-Match), cleared by
+    // _closeEditDialog.
+    // Shape: { id: string, serverRevision: int, type: "dossier"|"review" }
+    editContext: null,
+};
+
+async function _fetchVersionRecords() {
+    const fetches = Object.values(_VERSION_ARTIFACT_TYPES).map(async (cfg) => {
+        try {
+            const data = await fetchJson(cfg.listPath, { params: "limit=100" });
+            const records = Array.isArray(data?.[cfg.listKey]) ? data[cfg.listKey] : [];
+            versionsState[cfg.stateField] = records;
+            versionsState[cfg.errorField] = null;
+        } catch (err) {
+            versionsState[cfg.errorField] = err?.message || String(err);
+            versionsState[cfg.stateField] = [];
+        }
+    });
+    await Promise.all(fetches);
+}
+
+async function _fetchVersionBackups(id) {
+    versionsState.backups = [];
+    versionsState.backupsError = null;
+    versionsState.selectedBackup = null;
+    versionsState.diff = null;
+    if (!id) return;
+    const cfg = _versionTypeConfig(versionsState.type);
+    try {
+        const data = await fetchJson(cfg.backupsPath(id));
+        versionsState.backups = Array.isArray(data?.backups) ? data.backups : [];
+    } catch (err) {
+        versionsState.backupsError = err?.message || String(err);
+    }
+    // Also fetch the live record to know the current server_revision.
+    try {
+        const live = await fetchJson(cfg.itemPath(id));
+        versionsState.currentRevision = live?.record?.server_revision ?? live?.server_revision ?? null;
+    } catch (err) {
+        // Record may have been deleted (only a deletion backup remains).
+        versionsState.currentRevision = null;
+    }
+}
+
+async function _loadVersionBackup(id, backupFilename) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const path = cfg.backupPath(id, backupFilename);
+    try {
+        versionsState.selectedBackup = await fetchJson(path);
+    } catch (err) {
+        versionsState.selectedBackup = null;
+        throw err;
+    }
+}
+
+async function _diffVersionBackup(id, backupFilename) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const path = cfg.diffPath(id, backupFilename);
+    try {
+        const data = await fetchJson(path);
+        versionsState.diff = Array.isArray(data?.changes) ? data.changes : (Array.isArray(data?.diff) ? data.diff : []);
+        versionsState.diffError = null;
+    } catch (err) {
+        versionsState.diff = null;
+        versionsState.diffError = err?.message || String(err);
+    }
+}
+
+async function _restoreVersionBackup(id, backupFilename, expectedRevision) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const path = cfg.restorePath(id);
+    const resp = await fetch(API_BASE + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backup_filename: backupFilename, expected_revision: expectedRevision }),
+    });
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+    }
+    return resp.json();
+}
+
+async function _exportPortablePack() {
+    const resp = await fetch(API_BASE + "/local-pack/export");
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+    }
+    return resp.json();
+}
+
+async function _importPortablePack(pack, overwrite) {
+    // POST /local-pack/import?overwrite=<bool>
+    // Body: { "pack": <pack-object> } — the inner pack from an export
+    // response. Accepts either { pack: {...} } or the pack object directly
+    // for ergonomics; the API server mirrors this flexibility.
+    const body = (pack && typeof pack === "object" && pack.schema === "scoutfootball.portable-pack")
+        ? { pack }
+        : pack;
+    const url = API_BASE + "/local-pack/import?overwrite=" + (overwrite ? "true" : "false");
+    const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+    }
+    return resp.json();
+}
+
+function _versionStatusLabel() {
+    const zT = appState.lang === "zh";
+    const parts = [];
+    for (const cfg of Object.values(_VERSION_ARTIFACT_TYPES)) {
+        const count = versionsState[cfg.stateField]?.length ?? 0;
+        const error = versionsState[cfg.errorField];
+        const label = t(cfg.labelKey);
+        if (error) {
+            parts.push(zT ? `${label} API 离线（${error}）` : `${label} API offline (${error})`);
+        } else {
+            parts.push(zT ? `${label}：${count}` : `${label}: ${count}`);
+        }
+    }
+    if (versionsState.selectedId) {
+        const cfg = _versionTypeConfig(versionsState.type);
+        parts.push(zT
+            ? `当前 ${t(cfg.labelKey)}：${versionsState.selectedId}`
+            : `Selected ${t(cfg.labelKey)}: ${versionsState.selectedId}`);
+        if (versionsState.currentRevision != null) {
+            parts.push(zT
+                ? `${t("versions_current_revision")}：${versionsState.currentRevision}`
+                : `${t("versions_current_revision")}: ${versionsState.currentRevision}`);
+        }
+    }
+    return parts;
+}
+
+function _renderVersionRecordOptions() {
+    const select = document.getElementById("ver-record-select");
+    if (!select) return;
+    const cfg = _versionTypeConfig(versionsState.type);
+    const list = versionsState[cfg.stateField] || [];
+    const error = versionsState[cfg.errorField];
+    if (error) {
+        select.innerHTML = `<option value="" disabled selected>${escapeHtml(t("versions_offline"))}</option>`;
+        return;
+    }
+    if (list.length === 0) {
+        select.innerHTML = `<option value="" disabled selected>${escapeHtml(t("versions_empty_records"))}</option>`;
+        return;
+    }
+    select.innerHTML = list.map((rec) => {
+        const id = rec[cfg.idField] || "";
+        const title = rec.title || "";
+        const rev = rec.server_revision ?? "?";
+        return `<option value="${escapeAttr(id)}">rev ${rev} · ${escapeHtml(title || id)}</option>`;
+    }).join("");
+    if (versionsState.selectedId && list.some((r) => r[cfg.idField] === versionsState.selectedId)) {
+        select.value = versionsState.selectedId;
+    } else {
+        versionsState.selectedId = list[0][cfg.idField] || "";
+        select.value = versionsState.selectedId;
+    }
+}
+
+function _renderVersionTimeline() {
+    const ul = document.getElementById("ver-timeline");
+    const pill = document.getElementById("ver-timeline-pill");
+    if (pill) pill.textContent = String(versionsState.backups.length);
+    if (!ul) return;
+    const zT = appState.lang === "zh";
+    if (versionsState.backupsError) {
+        ul.innerHTML = `<li style="padding:0.6rem;color:var(--danger);font-size:0.78rem">${escapeHtml(versionsState.backupsError)}</li>`;
+        return;
+    }
+    if (versionsState.backups.length === 0) {
+        ul.innerHTML = `<li style="padding:0.6rem;color:var(--text-muted);font-size:0.78rem">${escapeHtml(t("versions_empty_timeline"))}</li>`;
+        return;
+    }
+    ul.innerHTML = versionsState.backups.map((b, i) => {
+        const kind = b.kind === "deletion" ? "deletion" : "revision";
+        const markerClass = kind === "deletion" ? "wf-marker-blocker" : "";
+        const itemClass = kind === "deletion" ? "wf-step-blocker" : "";
+        const markerText = kind === "deletion" ? "!" : String(i + 1);
+        const kindLabel = kind === "deletion"
+            ? t("versions_kind_deletion")
+            : `${t("versions_kind_revision")} ${b.revision ?? "?"}`;
+        const stored = b.stored_at || "";
+        const size = b.size_bytes != null ? ` · ${b.size_bytes} B` : "";
+        const title = kind === "deletion"
+            ? (zT ? "删除备份" : "Deletion backup")
+            : (zT ? `版本 ${b.revision ?? "?"} 的备份` : `Backup of revision ${b.revision ?? "?"}`);
+        return `
+            <li class="${itemClass}" data-backup-filename="${escapeAttr(b.backup_filename || "")}">
+                <span class="wf-step-marker ${markerClass}">${escapeHtml(markerText)}</span>
+                <div class="wf-step-body">
+                    <span class="wf-step-title">${escapeHtml(title)}</span>
+                    <span class="wf-step-reason">${escapeHtml(kindLabel)} · ${escapeHtml(stored)}${escapeHtml(size)}</span>
+                </div>
+                <button class="wf-step-action" type="button" data-backup-select="${escapeAttr(b.backup_filename || "")}">${escapeHtml(t("workflow_action_goto"))}</button>
+            </li>`;
+    }).join("");
+
+    // Wire selection
+    ul.querySelectorAll("button[data-backup-select]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const fn = btn.getAttribute("data-backup-select");
+            _selectBackup(fn);
+        });
+    });
+}
+
+function _selectBackup(backupFilename) {
+    versionsState.selectedBackupFilename = backupFilename;
+    versionsState.selectedBackup = null;
+    versionsState.diff = null;
+    _updateVersionActionButtons();
+    _renderVersionDiff();
+}
+
+function _updateVersionActionButtons() {
+    const hasBackup = !!versionsState.selectedBackupFilename;
+    const loadBtn = document.getElementById("ver-load-backup");
+    const diffBtn = document.getElementById("ver-diff-backup");
+    const restoreBtn = document.getElementById("ver-restore-backup");
+    if (loadBtn) loadBtn.disabled = !hasBackup;
+    if (diffBtn) diffBtn.disabled = !hasBackup;
+    if (restoreBtn) restoreBtn.disabled = !hasBackup;
+}
+
+function _renderVersionDiff() {
+    const out = document.getElementById("ver-diff-output");
+    const pill = document.getElementById("ver-diff-pill");
+    if (!out) return;
+    if (versionsState.diffError) {
+        out.innerHTML = `<div style="color:var(--danger);padding:0.5rem 0">${escapeHtml(versionsState.diffError)}</div>`;
+        if (pill) pill.textContent = "!";
+        return;
+    }
+    if (!versionsState.diff) {
+        out.innerHTML = `<div style="color:var(--text-muted);padding:0.5rem 0">${escapeHtml(t("versions_diff_empty"))}</div>`;
+        if (pill) pill.textContent = "0";
+        return;
+    }
+    if (versionsState.diff.length === 0) {
+        out.innerHTML = `<div style="color:var(--text-muted);padding:0.5rem 0">${escapeHtml(t("versions_diff_no_change"))}</div>`;
+        if (pill) pill.textContent = "0";
+        return;
+    }
+    if (pill) pill.textContent = String(versionsState.diff.length);
+    const rows = versionsState.diff.map((entry) => {
+        const path = entry.path || "";
+        const change = entry.change || "";
+        const oldVal = entry.old == null ? "null" : (typeof entry.old === "object" ? JSON.stringify(entry.old) : String(entry.old));
+        const newVal = entry.new == null ? "null" : (typeof entry.new === "object" ? JSON.stringify(entry.new) : String(entry.new));
+        const changeClass = change === "added" ? "status-high"
+            : (change === "removed" ? "status-low" : "status-medium");
+        return `
+            <div style="display:grid;grid-template-columns:1fr auto;gap:8px;padding:6px 0;border-bottom:1px solid var(--glass-border)">
+                <div>
+                    <div style="font-weight:650;color:var(--text-primary);word-break:break-all">${escapeHtml(path)}</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted);word-break:break-all">
+                        <span style="color:var(--danger)">− ${escapeHtml(oldVal)}</span><br>
+                        <span style="color:var(--success)">+ ${escapeHtml(newVal)}</span>
+                    </div>
+                </div>
+                <span class="status-pill ${changeClass}">${escapeHtml(change)}</span>
+            </div>`;
+    }).join("");
+    out.innerHTML = rows;
+}
+
+async function renderVersions() {
+    _wireVersionControlsOnce();
+    // Sync type selector
+    const typeSelect = document.getElementById("ver-type-select");
+    if (typeSelect && typeSelect.value !== versionsState.type) {
+        versionsState.type = typeSelect.value;
+    }
+    await _fetchVersionRecords();
+    _renderVersionRecordOptions();
+    if (versionsState.selectedId) {
+        await _fetchVersionBackups(versionsState.selectedId);
+    }
+    _renderVersionSummary();
+    _renderVersionTimeline();
+    _renderVersionDiff();
+    _updateVersionActionButtons();
+    _renderVersionStatusRail();
+    _updateCreateButtonVisibility();
+    _updateEditButtonVisibility();
+    // Auto-open the create dialog when the maintainer jumped here from the
+    // workflow view with pre-fill context. This closes the workflow breakpoint
+    // where creating a dossier/review previously required the CLI.
+    _handlePendingCreate();
+}
+
+function _isCreateableType(type) {
+    const cfg = _versionTypeConfig(type);
+    return Array.isArray(cfg.formFields) && cfg.formFields.length > 0 && typeof cfg.createPath === "string";
+}
+
+function _updateCreateButtonVisibility() {
+    const createBtn = document.getElementById("ver-create");
+    const createHint = document.getElementById("ver-create-hint");
+    if (!createBtn) return;
+    const isCreateable = _isCreateableType(versionsState.type);
+    createBtn.hidden = !isCreateable;
+    if (!createHint) return;
+    if (!isCreateable) {
+        createHint.textContent = t("versions_create_hint_disabled");
+        return;
+    }
+    const cfg = _versionTypeConfig(versionsState.type);
+    createHint.textContent = t(cfg.createHintKey);
+}
+
+function _handlePendingCreate() {
+    const pending = versionsState.pendingCreate;
+    if (!pending) return;
+    versionsState.pendingCreate = null;
+    if (!_isCreateableType(pending.type)) return;
+    // Sync the type selector so the dialog reads from the right config.
+    const typeSelect = document.getElementById("ver-type-select");
+    if (typeSelect) typeSelect.value = pending.type;
+    versionsState.type = pending.type;
+    _updateCreateButtonVisibility();
+    _openCreateDialog(pending.fields || {});
+}
+
+function _generateArtifactId(prefix) {
+    const now = new Date();
+    const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
+    const rand = Math.random().toString(36).slice(2, 10);
+    return `${prefix}${datePart}-${rand}`;
+}
+
+function _renderCreateField(field, value) {
+    const id = `ver-create-input-${field.name}`;
+    const labelTxt = t(field.labelKey);
+    const required = !!field.required;
+    const requiredMark = required ? ' <span style="color:var(--danger)">*</span>' : "";
+    const note = field.noteKey
+        ? `<span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t(field.noteKey))}</span>`
+        : "";
+    let control = "";
+    if (field.type === "textarea") {
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="3" style="width:100%;min-height:64px;resize:vertical;font-family:inherit;font-size:0.82rem;padding:8px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(value || "")}</textarea>`;
+    } else if (field.type === "select") {
+        const cfg = _versionTypeConfig(versionsState.type);
+        const linkList = versionsState[cfg.linkListKey] || [];
+        const linkIdField = cfg.linkIdField;
+        const options = [`<option value="">— ${escapeHtml(t("versions_create_no_link"))} —</option>`]
+            .concat(linkList.map((rec) => {
+                const lid = rec[linkIdField] || rec.payload?.[linkIdField] || "";
+                const title = rec.title || rec.payload?.title || lid;
+                return `<option value="${escapeAttr(lid)}">${escapeHtml(lid ? `${lid} · ${title}` : title)}</option>`;
+            }));
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options.join("")}</select>`;
+    } else if (field.type === "select-options") {
+        // Enumerated options dropdown (position_group, risk_tolerance).
+        // `field.options` is an array of {value, labelKey}. The optional
+        // `required` flag controls whether a blank placeholder is offered;
+        // for required selects, no placeholder is rendered so the first
+        // real option becomes the default.
+        const opts = Array.isArray(field.options) ? field.options : [];
+        const placeholderOpt = required
+            ? ""
+            : `<option value="">— ${escapeHtml(t("versions_create_no_link"))} —</option>`;
+        const optionsHtml = [placeholderOpt].concat(opts.map((o) =>
+            `<option value="${escapeAttr(o.value)}">${escapeHtml(t(o.labelKey) || o.value)}</option>`,
+        )).join("");
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${optionsHtml}</select>`;
+    } else if (field.type === "number") {
+        const placeholder = field.placeholderKey ? ` placeholder="${escapeAttr(t(field.placeholderKey))}"` : "";
+        const val = value || "";
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="number" min="0" step="1" value="${escapeAttr(val)}"${placeholder} class="glass-control" style="width:100%">`;
+    } else {
+        const placeholder = field.placeholderKey ? ` placeholder="${escapeAttr(t(field.placeholderKey))}"` : "";
+        const val = value || "";
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="text" value="${escapeAttr(val)}"${placeholder} class="glass-control" style="width:100%">`;
+    }
+    return `
+        <label style="display:grid;gap:4px;font-size:0.74rem;color:var(--text-muted)">
+            <span>${escapeHtml(labelTxt)}${requiredMark}</span>
+            ${control}
+            ${note}
+        </label>`;
+}
+
+function _openCreateDialog(prefill = {}) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!_isCreateableType(versionsState.type)) return;
+    const dialog = document.getElementById("ver-create-dialog");
+    const titleEl = document.getElementById("ver-create-title");
+    const kickerEl = document.getElementById("ver-create-kicker");
+    const fieldsEl = document.getElementById("ver-create-fields");
+    if (!dialog || !fieldsEl) return;
+    if (titleEl) titleEl.textContent = t(cfg.createLabelKey);
+    if (kickerEl) kickerEl.textContent = t(cfg.labelKey);
+
+    // Render fields, applying pre-fill where the field is eligible and a value
+    // is provided. The ID field is auto-generated when the maintainer leaves
+    // it blank on submit, so we don't pre-fill it.
+    const fieldsHtml = cfg.formFields.map((field) => {
+        let value = "";
+        if (field.prefill && Object.prototype.hasOwnProperty.call(prefill, field.name)) {
+            value = prefill[field.name] || "";
+        }
+        return _renderCreateField(field, value);
+    }).join("");
+    fieldsEl.innerHTML = fieldsHtml;
+
+    // Apply pre-fill to select fields (they need .value set after render).
+    cfg.formFields.forEach((field) => {
+        if (field.type === "select" && field.prefill && Object.prototype.hasOwnProperty.call(prefill, field.name)) {
+            const el = document.getElementById(`ver-create-input-${field.name}`);
+            if (el) el.value = prefill[field.name] || "";
+        }
+    });
+
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+}
+
+function _closeCreateDialog() {
+    const dialog = document.getElementById("ver-create-dialog");
+    if (!dialog) return;
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+}
+
+function _collectCreateForm() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const form = document.getElementById("ver-create-form");
+    if (!form) return { ok: false, error: "form_missing" };
+    const data = {};
+    const fieldTypes = {};
+    let firstMissing = null;
+    for (const field of cfg.formFields) {
+        const el = document.getElementById(`ver-create-input-${field.name}`);
+        if (!el) continue;
+        const raw = (el.value || "").trim();
+        if (field.required && !raw) {
+            firstMissing = firstMissing || field;
+            el.style.borderColor = "var(--danger)";
+        } else {
+            el.style.borderColor = "";
+        }
+        data[field.name] = raw;
+        fieldTypes[field.name] = field.type;
+    }
+    if (firstMissing) {
+        return { ok: false, error: "required_missing", field: firstMissing };
+    }
+    // Auto-generate ID if the maintainer left it blank.
+    const idField = cfg.idField;
+    if (!data[idField]) {
+        data[idField] = _generateArtifactId(cfg.idPrefix);
+    }
+    return { ok: true, data, fieldTypes };
+}
+
+function _buildCreatePayload(data, fieldTypes) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const now = new Date().toISOString();
+    // Start from the maintainer-entered fields, then add server-side defaults
+    // that the Pydantic model requires (created_at/updated_at/author/schema).
+    // The store will re-validate via the model, so this is not a security
+    // boundary — it's a convenience so the form stays small.
+    const payload = { ...data };
+    // Convert empty number inputs to null (Pydantic int|None rejects "").
+    // Empty string for non-number fields is left for the model to validate.
+    if (fieldTypes) {
+        for (const [name, type] of Object.entries(fieldTypes)) {
+            if (type === "number" && payload[name] === "") {
+                payload[name] = null;
+            } else if (type === "number" && payload[name] != null && payload[name] !== "") {
+                const asInt = Number.parseInt(payload[name], 10);
+                if (Number.isFinite(asInt)) payload[name] = asInt;
+            }
+        }
+    }
+    if (versionsState.type === "brief") {
+        payload.schema = "scoutfootball.recruitment-brief";
+        payload.version = "1.0.0";
+        payload.revision = 1;
+        payload.created_at = now;
+        payload.updated_at = now;
+        payload.author = "maintainer";
+        // Optional fields not in the small form: keep model defaults by
+        // sending the empty equivalents the Pydantic model accepts.
+        if (!Object.prototype.hasOwnProperty.call(payload, "position_detail")) payload.position_detail = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "contract_years_min")) payload.contract_years_min = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "league_preferences")) payload.league_preferences = [];
+        if (!Object.prototype.hasOwnProperty.call(payload, "language_preferences")) payload.language_preferences = [];
+        if (!Object.prototype.hasOwnProperty.call(payload, "risk_tolerance") || !payload.risk_tolerance) {
+            payload.risk_tolerance = "medium";
+        }
+        if (!Object.prototype.hasOwnProperty.call(payload, "notes")) payload.notes = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "limitations")) payload.limitations = [
+            "Brief is a personal local object; not an external fact.",
+            "Role and weights are working assumptions, not universal truth.",
+        ];
+    } else if (versionsState.type === "briefing") {
+        payload.schema = "scoutfootball.opposition-briefing";
+        payload.version = "1.0.0";
+        payload.revision = 1;
+        payload.created_at = now;
+        payload.updated_at = now;
+        payload.author = "maintainer";
+        if (!Object.prototype.hasOwnProperty.call(payload, "sections")) payload.sections = [];
+        if (!Object.prototype.hasOwnProperty.call(payload, "linked_pattern_card_ids")) payload.linked_pattern_card_ids = [];
+        if (!Object.prototype.hasOwnProperty.call(payload, "linked_scenario_tree_id")) payload.linked_scenario_tree_id = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "linked_post_match_review_id")) payload.linked_post_match_review_id = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "kickoff_at")) payload.kickoff_at = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "notes")) payload.notes = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "limitations")) payload.limitations = [
+            "Briefing is a personal local object; not an official team news source.",
+            "fact_tier is the maintainer's honest classification, not automated.",
+        ];
+    } else if (versionsState.type === "dossier") {
+        payload.schema = "scoutfootball.recruitment-decision-dossier";
+        payload.version = "1.0.0";
+        payload.revision = 1;
+        payload.created_at = now;
+        payload.updated_at = now;
+        payload.author = "maintainer";
+        payload.status = "draft";
+        payload.decision = null;
+        payload.decision_note = "";
+        payload.supporting_evidence = [];
+        payload.counter_evidence = [];
+        payload.comparisons = [];
+        payload.risks = [];
+        payload.linked_artifacts = [];
+        payload.notes = "";
+        payload.limitations = [
+            "Dossier is a personal local object; not an external fact.",
+            "Decision is the maintainer's honest judgment, not an automated recommendation.",
+        ];
+        // candidate_player_id / candidate_season_id are not in the small form;
+        // send empty strings so the model's max_length defaults are honoured.
+        if (!Object.prototype.hasOwnProperty.call(payload, "candidate_player_id")) payload.candidate_player_id = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "candidate_season_id")) payload.candidate_season_id = "";
+    } else if (versionsState.type === "review") {
+        payload.schema = "scoutfootball.opposition-post-match-review";
+        payload.version = "1.0.0";
+        payload.revision = 1;
+        payload.created_at = now;
+        payload.updated_at = now;
+        payload.author = "maintainer";
+        payload.status = "draft";
+        payload.decision = null;
+        payload.decision_note = "";
+        payload.hypothesis_results = [];
+        payload.falsified_patterns = [];
+        payload.new_questions = [];
+        payload.supporting_evidence = [];
+        payload.counter_evidence = [];
+        payload.linked_artifacts = [];
+        payload.notes = "";
+        payload.limitations = [
+            "Review is a personal local object; not an external fact.",
+            "Decision is the maintainer's honest judgment, not an automated recommendation.",
+        ];
+        // Optional match context fields not in the small form.
+        if (!Object.prototype.hasOwnProperty.call(payload, "match_id")) payload.match_id = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "competition")) payload.competition = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "season")) payload.season = "";
+        if (!Object.prototype.hasOwnProperty.call(payload, "final_score_home")) payload.final_score_home = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "final_score_away")) payload.final_score_away = null;
+        if (!Object.prototype.hasOwnProperty.call(payload, "kickoff_at")) payload.kickoff_at = null;
+    }
+    return payload;
+}
+
+async function _submitCreateForm() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const submitBtn = document.getElementById("ver-create-submit");
+    const result = _collectCreateForm();
+    if (!result.ok) {
+        if (result.field) {
+            alert(t("versions_create_required_missing") + (result.field.labelKey ? t(result.field.labelKey) : result.field.name));
+        }
+        return;
+    }
+    if (submitBtn) submitBtn.disabled = true;
+    const payload = _buildCreatePayload(result.data, result.fieldTypes);
+    try {
+        const resp = await fetch(API_BASE + cfg.createPath, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        const text = await resp.text();
+        let body = null;
+        try { body = JSON.parse(text); } catch { body = null; }
+        if (!resp.ok || body?.status !== "ok") {
+            const msg = body?.message || body?.code || `HTTP ${resp.status}`;
+            alert(`${t("versions_create_failed")}${msg}`);
+            return;
+        }
+        // Success: close the dialog, refresh the list, and select the new
+        // record so the maintainer can immediately see its timeline.
+        _closeCreateDialog();
+        await _fetchVersionRecords();
+        versionsState.type = versionsState.type; // keep current type
+        versionsState.selectedId = payload[cfg.idField];
+        _renderVersionRecordOptions();
+        if (versionsState.selectedId) {
+            await _fetchVersionBackups(versionsState.selectedId);
+        }
+        _renderVersionSummary();
+        _renderVersionTimeline();
+        _renderVersionDiff();
+        _updateVersionActionButtons();
+        _renderVersionStatusRail();
+        _updateCreateButtonVisibility();
+        alert(`${t("versions_create_success")}${payload[cfg.idField]}`);
+    } catch (err) {
+        alert(`${t("versions_create_failed")}${err?.message || err}`);
+    } finally {
+        if (submitBtn) submitBtn.disabled = false;
+    }
+}
+
+// ── Edit dialog ────────────────────────────────────────────────────────
+// The edit dialog reuses the same field-rendering pattern as the create
+// dialog but loads the current record's values into the form and submits
+// via PUT /recruitment/dossiers/{id} or PUT /opposition/reviews/{id}.
+//
+// The PUT body is `{"fields": {...}, "expected_revision": <int>}`. The
+// server merges the partial fields onto the current record, bumps
+// server_revision, creates a backup, and returns the new record envelope.
+// 409 (revision_conflict) is surfaced inline so the maintainer can
+// refresh and retry without losing the form.
+
+function _isEditableType(type) {
+    const cfg = _versionTypeConfig(type);
+    return Array.isArray(cfg.editFormFields) && cfg.editFormFields.length > 0 && typeof cfg.editPath === "function";
+}
+
+function _updateEditButtonVisibility() {
+    const editBtn = document.getElementById("ver-edit");
+    if (!editBtn) return;
+    // The edit button is only visible when the current type is editable
+    // AND a specific record is selected in the record dropdown. With no
+    // record selected, we hide it so the maintainer gets a clear signal
+    // that they need to pick something to edit.
+    const isEditable = _isEditableType(versionsState.type);
+    const hasSelection = !!versionsState.selectedId;
+    editBtn.hidden = !(isEditable && hasSelection);
+}
+
+function _statusOptionLabel(status) {
+    // Map a status value to its localized label. Falls back to the raw
+    // value when no translation exists.
+    const key = `versions_edit_status_${status}`;
+    const translated = t(key);
+    return translated === key ? status : translated;
+}
+
+function _decisionOptionLabel(decision) {
+    // Map a decision value to its localized label.
+    const key = `versions_edit_decision_${decision}`;
+    const translated = t(key);
+    return translated === key ? decision : translated;
+}
+
+function _renderEditField(field, currentValue, cfg) {
+    const id = `ver-edit-input-${field.name}`;
+    const labelTxt = t(field.labelKey);
+    const required = !!field.required;
+    const requiredMark = required ? ' <span style="color:var(--danger)">*</span>' : "";
+    let control = "";
+    if (field.type === "textarea") {
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="3" style="width:100%;min-height:64px;resize:vertical;font-family:inherit;font-size:0.82rem;padding:8px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(currentValue || "")}</textarea>`;
+    } else if (field.type === "select") {
+        // Linked-artifact dropdown (brief_id / briefing_id). Reuses the
+        // versionsState[cfg.linkListKey] list so the maintainer can
+        // re-pick the link without leaving the dialog.
+        const linkList = versionsState[cfg.linkListKey] || [];
+        const linkIdField = cfg.linkIdField;
+        const options = [`<option value="">— ${escapeHtml(t("versions_create_no_link"))} —</option>`]
+            .concat(linkList.map((rec) => {
+                const lid = rec[linkIdField] || rec.payload?.[linkIdField] || "";
+                const title = rec.title || rec.payload?.title || lid;
+                return `<option value="${escapeAttr(lid)}">${escapeHtml(lid ? `${lid} · ${title}` : title)}</option>`;
+            }));
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options.join("")}</select>`;
+    } else if (field.type === "select-status") {
+        const options = cfg.validStatuses.map((s) =>
+            `<option value="${escapeAttr(s)}">${escapeHtml(_statusOptionLabel(s))}</option>`,
+        ).join("");
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options}</select>`;
+    } else if (field.type === "select-decision-dossier" || field.type === "select-decision-review") {
+        // The "no decision" option uses an empty string value; the
+        // submit step converts "" to null before sending to the API.
+        const noneLabel = t("versions_edit_decision_none");
+        const options = [`<option value="">${escapeHtml(noneLabel)}</option>`]
+            .concat(cfg.validDecisions.map((d) =>
+                `<option value="${escapeAttr(d)}">${escapeHtml(_decisionOptionLabel(d))}</option>`,
+            ))
+            .join("");
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options}</select>`;
+    } else if (field.type === "number") {
+        const val = (currentValue === null || currentValue === undefined) ? "" : String(currentValue);
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="number" min="0" step="1" value="${escapeAttr(val)}" class="glass-control" style="width:100%">`;
+    } else if (field.type === "list-strings") {
+        // Top-level list-of-strings field (e.g. linked_pattern_card_ids).
+        // Rendered as a textarea, one string per line. The collect step
+        // splits by newline, trims and drops empty lines, matching the
+        // behaviour of the entry-list ``list-strings`` sub-field.
+        const val = Array.isArray(currentValue) ? currentValue.join("\n") : (currentValue || "");
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="2" style="width:100%;min-height:48px;resize:vertical;font-family:inherit;font-size:0.82rem;padding:8px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(val)}</textarea>`;
+    } else {
+        const placeholder = field.placeholderKey ? ` placeholder="${escapeAttr(t(field.placeholderKey))}"` : "";
+        const val = currentValue || "";
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="text" value="${escapeAttr(val)}"${placeholder} class="glass-control" style="width:100%">`;
+    }
+    return `
+        <label style="display:grid;gap:4px;font-size:0.74rem;color:var(--text-muted)">
+            <span>${escapeHtml(labelTxt)}${requiredMark}</span>
+            ${control}
+        </label>`;
+}
+
+// ─ Entry-list editor (supporting_evidence, risks, hypothesis_results, etc.) ─
+//
+// The entry-list editor renders a config-driven list of entries (each
+// with its own sub-fields) inside the edit dialog. The config comes from
+// `cfg.entryLists` (see _VERSION_ARTIFACT_TYPES). The DOM is the single
+// source of truth: add/remove re-reads the current entries from the DOM
+// and re-renders the section, so no separate JS-side state is needed.
+
+function _enumOptionLabel(enumName, value) {
+    // Map (enumName, value) to an i18n key like
+    // versions_edit_fact_tier_official / versions_edit_severity_low /
+    // versions_edit_outcome_confirmed. Falls back to the raw value if
+    // no key is defined.
+    const key = `versions_edit_${enumName}_${value}`;
+    const lbl = t(key);
+    return lbl === key ? value : lbl;
+}
+
+function _renderEditEntryField(field, currentValue, listFieldName, entryIdx) {
+    const id = `ver-edit-entry-${listFieldName}-${entryIdx}-${field.name}`;
+    const labelTxt = t(field.labelKey);
+    const required = !!field.required;
+    const requiredMark = required ? ' <span style="color:var(--danger)">*</span>' : "";
+    let control = "";
+    if (field.type === "textarea") {
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="2" style="width:100%;min-height:48px;resize:vertical;font-family:inherit;font-size:0.8rem;padding:6px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(currentValue || "")}</textarea>`;
+    } else if (field.type === "select-enum") {
+        // Enum dropdown. The option label uses the i18n key pattern
+        // versions_edit_<enumName>_<value> (e.g. versions_edit_fact_tier_official).
+        const enumName = field.name;
+        const options = field.options.map((opt) =>
+            `<option value="${escapeAttr(opt)}">${escapeHtml(_enumOptionLabel(enumName, opt))}</option>`,
+        ).join("");
+        control = `<select id="${id}" name="${escapeAttr(field.name)}" class="glass-control" style="width:100%">${options}</select>`;
+    } else if (field.type === "list-strings") {
+        // evidence_refs: one string per line. The collect step splits
+        // by newline, trims and drops empty lines.
+        const val = Array.isArray(currentValue) ? currentValue.join("\n") : (currentValue || "");
+        control = `<textarea id="${id}" name="${escapeAttr(field.name)}" rows="2" style="width:100%;min-height:48px;resize:vertical;font-family:inherit;font-size:0.8rem;padding:6px;border-radius:var(--radius-md);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary)">${escapeHtml(val)}</textarea>`;
+    } else {
+        const val = currentValue || "";
+        control = `<input id="${id}" name="${escapeAttr(field.name)}" type="text" value="${escapeAttr(val)}" class="glass-control" style="width:100%">`;
+    }
+    return `
+        <label style="display:grid;gap:3px;font-size:0.72rem;color:var(--text-muted)">
+            <span>${escapeHtml(labelTxt)}${requiredMark}</span>
+            ${control}
+        </label>`;
+}
+
+function _renderEditEntryList(listCfg, entries, cfg) {
+    const fieldName = listCfg.fieldName;
+    const headerTxt = t(listCfg.labelKey);
+    const addBtnTxt = t("versions_edit_list_add");
+    const removeBtnTxt = t("versions_edit_list_remove");
+    const emptyTxt = t("versions_edit_list_empty");
+    const safeEntries = Array.isArray(entries) ? entries : [];
+
+    const itemsHtml = safeEntries.length === 0
+        ? `<div style="font-size:0.74rem;color:var(--text-muted);padding:6px 0">${escapeHtml(emptyTxt)}</div>`
+        : safeEntries.map((entry, idx) => {
+            const fieldsHtml = listCfg.fields.map((field) => {
+                const v = entry?.[field.name];
+                return _renderEditEntryField(field, v, fieldName, idx);
+            }).join("");
+            return `
+                <div class="ver-edit-entry" data-entry-idx="${idx}" style="border:1px solid var(--glass-border);border-radius:var(--radius-md);padding:8px;display:grid;gap:6px;background:var(--glass-bg)">
+                    <div class="ver-edit-entry-fields" style="display:grid;gap:6px">${fieldsHtml}</div>
+                    <button type="button" data-action="remove-entry" data-entry-list-field="${escapeAttr(fieldName)}" data-entry-idx="${idx}" style="justify-self:start;font-size:0.72rem;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-muted);cursor:pointer">${escapeHtml(removeBtnTxt)}</button>
+                </div>`;
+        }).join("");
+
+    return `
+        <div class="ver-edit-entry-list" data-entry-list="${escapeAttr(fieldName)}" style="border-top:1px solid var(--glass-border);padding-top:10px;margin-top:10px;display:grid;gap:6px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:0.8rem;font-weight:600;color:var(--text-primary)">${escapeHtml(headerTxt)}</span>
+                <button type="button" data-action="add-entry" data-entry-list-field="${escapeAttr(fieldName)}" style="font-size:0.74rem;padding:4px 12px;border-radius:var(--radius-sm);border:1px solid var(--glass-border);background:var(--glass-bg-strong);color:var(--text-primary);cursor:pointer">${escapeHtml(addBtnTxt)}</button>
+            </div>
+            <div class="ver-edit-entry-list-items" style="display:grid;gap:6px">${itemsHtml}</div>
+        </div>`;
+}
+
+function _readEditEntryListFromDom(listCfg) {
+    // Read all entries from the DOM. The DOM is the source of truth:
+    // add/remove calls this before re-rendering so no edits are lost.
+    const fieldName = listCfg.fieldName;
+    const container = document.querySelector(`.ver-edit-entry-list[data-entry-list="${fieldName}"] .ver-edit-entry-list-items`);
+    if (!container) return [];
+    const entryEls = container.querySelectorAll(".ver-edit-entry");
+    const entries = [];
+    entryEls.forEach((entryEl) => {
+        const entry = {};
+        listCfg.fields.forEach((field) => {
+            const el = document.getElementById(`ver-edit-entry-${fieldName}-${entryEl.dataset.entryIdx}-${field.name}`);
+            if (!el) {
+                entry[field.name] = field.type === "list-strings" ? [] : "";
+                return;
+            }
+            if (field.type === "list-strings") {
+                // Split by newline, trim, drop empty lines.
+                entry[field.name] = el.value.split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+            } else {
+                entry[field.name] = el.value;
+            }
+        });
+        entries.push(entry);
+    });
+    return entries;
+}
+
+function _rerenderEditEntryList(fieldName) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!cfg.entryLists) return;
+    const listCfg = cfg.entryLists.find((l) => l.fieldName === fieldName);
+    if (!listCfg) return;
+    const entries = _readEditEntryListFromDom(listCfg);
+    const wrapper = document.querySelector(`.ver-edit-entry-list[data-entry-list="${fieldName}"]`);
+    if (!wrapper) return;
+    // Replace the whole entry-list section with a fresh render.
+    const newHtml = _renderEditEntryList(listCfg, entries, cfg);
+    wrapper.outerHTML = newHtml;
+}
+
+function _addEditEntry(fieldName) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!cfg.entryLists) return;
+    const listCfg = cfg.entryLists.find((l) => l.fieldName === fieldName);
+    if (!listCfg) return;
+    const entries = _readEditEntryListFromDom(listCfg);
+    // Build a new empty entry. Defaults: empty strings for text/textarea,
+    // first option for select-enum, empty list for list-strings. The id
+    // field gets a prefix-based placeholder so the maintainer can tell
+    // multiple new entries apart.
+    const newEntry = {};
+    listCfg.fields.forEach((field) => {
+        if (field.name === listCfg.idField) {
+            // Suggest a unique id using the prefix + entry count. The
+            // maintainer can edit it. Use the current length + 1 so it
+            // does not collide with existing indices.
+            newEntry[field.name] = `${listCfg.idPrefix || ""}${entries.length + 1}`;
+        } else if (field.type === "select-enum") {
+            newEntry[field.name] = field.options[0];
+        } else if (field.type === "list-strings") {
+            newEntry[field.name] = [];
+        } else {
+            newEntry[field.name] = "";
+        }
+    });
+    entries.push(newEntry);
+    // Re-render with the new entry list.
+    const wrapper = document.querySelector(`.ver-edit-entry-list[data-entry-list="${fieldName}"]`);
+    if (!wrapper) return;
+    const newHtml = _renderEditEntryList(listCfg, entries, cfg);
+    wrapper.outerHTML = newHtml;
+}
+
+function _removeEditEntry(fieldName, idx) {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!cfg.entryLists) return;
+    const listCfg = cfg.entryLists.find((l) => l.fieldName === fieldName);
+    if (!listCfg) return;
+    const entries = _readEditEntryListFromDom(listCfg);
+    if (idx < 0 || idx >= entries.length) return;
+    entries.splice(idx, 1);
+    const wrapper = document.querySelector(`.ver-edit-entry-list[data-entry-list="${fieldName}"]`);
+    if (!wrapper) return;
+    const newHtml = _renderEditEntryList(listCfg, entries, cfg);
+    wrapper.outerHTML = newHtml;
+}
+
+// Expose entry-list editor handlers for debugging / programmatic use.
+// Click handling is wired via event delegation in _initEntryListDelegation()
+// below — inline ``onclick`` attributes are intentionally avoided so the
+// CSP ``script-src 'self'`` directive is not violated.
+window._addEditEntry = _addEditEntry;
+window._removeEditEntry = _removeEditEntry;
+
+let _entryListDelegationBound = false;
+function _initEntryListDelegation() {
+    // Bind a single delegated click listener on document for all
+    // ``[data-action="add-entry"]`` and ``[data-action="remove-entry"]``
+    // buttons inside the versions edit dialog. Delegation survives the
+    // ``outerHTML`` re-renders that ``_addEditEntry`` /
+    // ``_removeEditEntry`` perform, so a single binding covers all
+    // entry-list editors for all artifact types. Inline ``onclick``
+    // handlers would violate the page CSP (``script-src 'self'``) and
+    // are intentionally not used.
+    if (_entryListDelegationBound) return;
+    _entryListDelegationBound = true;
+    document.addEventListener("click", (ev) => {
+        const target = ev.target;
+        if (!(target instanceof Element)) return;
+        const addBtn = target.closest('[data-action="add-entry"]');
+        if (addBtn) {
+            ev.preventDefault();
+            const fieldName = addBtn.getAttribute("data-entry-list-field");
+            if (fieldName) _addEditEntry(fieldName);
+            return;
+        }
+        const removeBtn = target.closest('[data-action="remove-entry"]');
+        if (removeBtn) {
+            ev.preventDefault();
+            const fieldName = removeBtn.getAttribute("data-entry-list-field");
+            const idxAttr = removeBtn.getAttribute("data-entry-idx");
+            const idx = idxAttr !== null ? parseInt(idxAttr, 10) : -1;
+            if (fieldName && idx >= 0) _removeEditEntry(fieldName, idx);
+            return;
+        }
+    });
+}
+
+function _showEditConflict(message) {
+    const el = document.getElementById("ver-edit-conflict");
+    if (!el) return;
+    el.textContent = message || t("versions_edit_conflict");
+    el.hidden = false;
+}
+
+function _clearEditConflict() {
+    const el = document.getElementById("ver-edit-conflict");
+    if (!el) return;
+    el.textContent = "";
+    el.hidden = true;
+}
+
+async function _openEditDialog() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    if (!_isEditableType(versionsState.type)) return;
+    if (!versionsState.selectedId) {
+        alert(t("versions_edit_no_record"));
+        return;
+    }
+    const dialog = document.getElementById("ver-edit-dialog");
+    const titleEl = document.getElementById("ver-edit-title");
+    const kickerEl = document.getElementById("ver-edit-kicker");
+    const fieldsEl = document.getElementById("ver-edit-fields");
+    if (!dialog || !fieldsEl) return;
+    _clearEditConflict();
+
+    // Fetch the current record so the form is initialized from the
+    // server's view of truth, not from the list summary. This also
+    // gives us the server_revision we'll send as expected_revision.
+    let currentRecord = null;
+    let serverRevision = null;
+    try {
+        const resp = await fetch(API_BASE + cfg.itemPath(versionsState.selectedId));
+        const text = await resp.text();
+        let body = null;
+        try { body = JSON.parse(text); } catch { body = null; }
+        if (!resp.ok || body?.status !== "ok") {
+            const msg = body?.message || body?.code || `HTTP ${resp.status}`;
+            alert(`${t("versions_edit_load_failed")}${msg}`);
+            return;
+        }
+        currentRecord = body.record;
+        serverRevision = body.record.server_revision;
+    } catch (err) {
+        alert(`${t("versions_edit_load_failed")}${err?.message || err}`);
+        return;
+    }
+
+    // Stash the loaded revision so the submit step can send it as
+    // expected_revision (If-Match). This is read by _submitEditForm.
+    versionsState.editContext = {
+        id: versionsState.selectedId,
+        serverRevision,
+        type: versionsState.type,
+    };
+
+    if (titleEl) titleEl.textContent = t(cfg.editLabelKey);
+    if (kickerEl) kickerEl.textContent = t(cfg.labelKey);
+
+    // The record envelope wraps the artifact under a type-specific key
+    // (dossier / review). Pull the inner artifact so field lookups work.
+    const artifact = currentRecord[cfg.stateField.replace(/s$/, "")] || currentRecord.dossier || currentRecord.review || {};
+    const fieldsHtml = cfg.editFormFields.map((field) => {
+        const currentValue = artifact[field.name];
+        return _renderEditField(field, currentValue, cfg);
+    }).join("");
+    // Append entry-list editors (supporting_evidence, risks, sections,
+    // etc.) after the regular fields. The entry-list config is optional;
+    // brief is the only artifact type that does not have entryLists.
+    const entryListsHtml = (cfg.entryLists || []).map((listCfg) => {
+        const entries = artifact[listCfg.fieldName] || [];
+        return _renderEditEntryList(listCfg, entries, cfg);
+    }).join("");
+    fieldsEl.innerHTML = fieldsHtml + entryListsHtml;
+
+    // Set select values after render (innerHTML doesn't honour selected
+    // when the value isn't in the options at parse time).
+    cfg.editFormFields.forEach((field) => {
+        const el = document.getElementById(`ver-edit-input-${field.name}`);
+        if (!el) return;
+        const v = artifact[field.name];
+        if (field.type === "select-status") {
+            el.value = v || cfg.validStatuses[0];
+        } else if (field.type === "select-decision-dossier" || field.type === "select-decision-review") {
+            el.value = v || "";
+        } else if (field.type === "select") {
+            el.value = v || "";
+        }
+    });
+
+    // Set select-enum values inside entry-list entries after render.
+    // Each entry field id is ver-edit-entry-<listField>-<idx>-<subField>.
+    (cfg.entryLists || []).forEach((listCfg) => {
+        const entries = artifact[listCfg.fieldName] || [];
+        entries.forEach((entry, idx) => {
+            listCfg.fields.forEach((field) => {
+                if (field.type !== "select-enum") return;
+                const el = document.getElementById(`ver-edit-entry-${listCfg.fieldName}-${idx}-${field.name}`);
+                if (!el) return;
+                const v = entry?.[field.name];
+                if (v && field.options.includes(v)) {
+                    el.value = v;
+                }
+            });
+        });
+    });
+
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+}
+
+function _closeEditDialog() {
+    const dialog = document.getElementById("ver-edit-dialog");
+    if (!dialog) return;
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+    _clearEditConflict();
+    versionsState.editContext = null;
+}
+
+function _collectEditForm() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const form = document.getElementById("ver-edit-form");
+    if (!form) return { ok: false, error: "form_missing" };
+    const data = {};
+    let firstMissing = null;
+    for (const field of cfg.editFormFields) {
+        const el = document.getElementById(`ver-edit-input-${field.name}`);
+        if (!el) continue;
+        const raw = (el.value || "").trim();
+        if (field.required && !raw) {
+            firstMissing = firstMissing || field;
+            el.style.borderColor = "var(--danger)";
+        } else {
+            el.style.borderColor = "";
+        }
+        // Coerce types so the API receives the right shape:
+        //  - decision "" -> null (no decision)
+        //  - final_score_* "" -> null (unknown score)
+        //  - number fields "" -> null
+        //  - nullable text fields "" -> null (e.g. kickoff_at,
+        //    linked_scenario_tree_id, linked_post_match_review_id on
+        //    briefings: the Pydantic model expects str | None, and an
+        //    empty string would fail datetime parsing or carry a
+        //    semantic "no link" value that should be null instead)
+        //  - list-strings fields: split by newline, trim, drop empties
+        if (field.name === "decision" && raw === "") {
+            data[field.name] = null;
+        } else if (field.type === "number" && raw === "") {
+            data[field.name] = null;
+        } else if (field.type === "number") {
+            const n = Number(raw);
+            data[field.name] = Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+        } else if (field.type === "list-strings") {
+            const lines = (el.value || "").split("\n").map((s) => s.trim()).filter((s) => s.length > 0);
+            data[field.name] = lines;
+        } else if (field.nullable && raw === "") {
+            data[field.name] = null;
+        } else {
+            data[field.name] = raw;
+        }
+    }
+    if (firstMissing) {
+        return { ok: false, error: "required_missing", field: firstMissing };
+    }
+    // Collect entry-list fields (supporting_evidence, risks, etc.).
+    // Each list uses full-list replacement: the caller sends the
+    // complete new list. The server re-validates each entry's schema,
+    // id uniqueness and enum values; here we only catch the most common
+    // caller mistakes (missing id, missing required fields, invalid
+    // enum) so the maintainer gets fast, localized feedback.
+    if (Array.isArray(cfg.entryLists)) {
+        for (const listCfg of cfg.entryLists) {
+            const entries = _readEditEntryListFromDom(listCfg);
+            // Validate each entry: id must be non-empty, required fields
+            // must be non-empty, enum values must be in the options set.
+            let entryInvalid = false;
+            const seenIds = new Set();
+            const dupIds = [];
+            for (const entry of entries) {
+                const idVal = (entry[listCfg.idField] || "").trim();
+                if (!idVal) {
+                    entryInvalid = true;
+                    break;
+                }
+                if (seenIds.has(idVal)) {
+                    dupIds.push(idVal);
+                }
+                seenIds.add(idVal);
+                for (const field of listCfg.fields) {
+                    const v = entry[field.name];
+                    if (field.type === "select-enum") {
+                        if (field.required && !field.options.includes(v)) {
+                            entryInvalid = true;
+                            break;
+                        }
+                        if (v && !field.options.includes(v)) {
+                            entryInvalid = true;
+                            break;
+                        }
+                    } else if (field.required && field.type !== "list-strings") {
+                        if (!v || !String(v).trim()) {
+                            entryInvalid = true;
+                            break;
+                        }
+                    }
+                }
+                if (entryInvalid) break;
+            }
+            if (entryInvalid) {
+                return {
+                    ok: false,
+                    error: "entry_list_invalid",
+                    message: t("versions_edit_list_required"),
+                };
+            }
+            if (dupIds.length > 0) {
+                return {
+                    ok: false,
+                    error: "entry_list_dup_id",
+                    message: t("versions_edit_list_dup_id") + dupIds.join(", "),
+                };
+            }
+            data[listCfg.fieldName] = entries;
+        }
+    }
+    // Client-side decision consistency check. The server re-checks, but
+    // surfacing it here gives the maintainer a faster, localized error.
+    // Only applies to artifact types that have a status/decision state
+    // machine (dossier, review). Briefings and briefs have no
+    // ``decisionRequiredStatus`` and must skip this check entirely —
+    // otherwise ``undefined === undefined`` would block every edit.
+    if (cfg.decisionRequiredStatus !== undefined) {
+        const status = data.status;
+        const decision = data.decision;
+        if (status === cfg.decisionRequiredStatus && !decision) {
+            const msgKey = cfg.decisionRequiredStatus === "finalized"
+                ? "versions_edit_decision_required_finalized"
+                : "versions_edit_decision_required";
+            return { ok: false, error: "decision_required", message: t(msgKey) };
+        }
+        if (status !== cfg.decisionRequiredStatus && decision !== null) {
+            const msgKey = cfg.decisionRequiredStatus === "finalized"
+                ? "versions_edit_decision_not_allowed_review"
+                : "versions_edit_decision_not_allowed";
+            return { ok: false, error: "decision_not_allowed", message: t(msgKey) };
+        }
+    }
+    return { ok: true, data };
+}
+
+async function _submitEditForm() {
+    const cfg = _versionTypeConfig(versionsState.type);
+    const submitBtn = document.getElementById("ver-edit-submit");
+    const ctx = versionsState.editContext;
+    if (!ctx || ctx.type !== versionsState.type || ctx.id !== versionsState.selectedId) {
+        // The maintainer changed the type/record selection while the
+        // dialog was open. Bail out and let them re-open.
+        _closeEditDialog();
+        return;
+    }
+    const result = _collectEditForm();
+    if (!result.ok) {
+        if (result.error === "required_missing" && result.field) {
+            alert(t("versions_edit_required_missing") + (result.field.labelKey ? t(result.field.labelKey) : result.field.name));
+        } else if (result.message) {
+            alert(result.message);
+        }
+        return;
+    }
+    if (submitBtn) submitBtn.disabled = true;
+    _clearEditConflict();
+    try {
+        const resp = await fetch(API_BASE + cfg.editPath(ctx.id), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                fields: result.data,
+                expected_revision: ctx.serverRevision,
+            }),
+        });
+        const text = await resp.text();
+        let body = null;
+        try { body = JSON.parse(text); } catch { body = null; }
+        if (resp.status === 409) {
+            // Revision conflict: the record changed since we loaded it.
+            // Surface inline and keep the dialog open so the maintainer
+            // can refresh (close + re-open) without losing their input.
+            const code = body?.detail?.code || body?.code || "revision_conflict";
+            _showEditConflict(`${t("versions_edit_conflict")} (${code})`);
+            return;
+        }
+        if (!resp.ok || body?.status !== "ok") {
+            const msg = body?.detail?.message || body?.message || body?.code || `HTTP ${resp.status}`;
+            alert(`${t("versions_edit_failed")}${msg}`);
+            return;
+        }
+        // Success: close the dialog, refresh state, surface the new rev.
+        const newRev = body.record?.server_revision ?? "?";
+        _closeEditDialog();
+        await _fetchVersionRecords();
+        _renderVersionRecordOptions();
+        if (versionsState.selectedId) {
+            await _fetchVersionBackups(versionsState.selectedId);
+        }
+        _renderVersionSummary();
+        _renderVersionTimeline();
+        _renderVersionDiff();
+        _updateVersionActionButtons();
+        _renderVersionStatusRail();
+        _updateEditButtonVisibility();
+        alert(`${t("versions_edit_success")}${newRev}`);
+    } catch (err) {
+        alert(`${t("versions_edit_failed")}${err?.message || err}`);
+    } finally {
+        if (submitBtn) submitBtn.disabled = false;
+    }
+}
+
+function _renderVersionSummary() {
+    const briefCount = document.getElementById("ver-brief-count");
+    const briefingCount = document.getElementById("ver-briefing-count");
+    const backupCount = document.getElementById("ver-backup-count");
+    if (briefCount) briefCount.textContent = String(versionsState.briefs.length);
+    if (briefingCount) briefingCount.textContent = String(versionsState.briefings.length);
+    if (backupCount) backupCount.textContent = String(versionsState.backups.length);
+}
+
+function _renderVersionStatusRail() {
+    const rail = document.getElementById("ver-status-rail");
+    if (!rail) return;
+    const parts = _versionStatusLabel();
+    const offline = (versionsState.briefsError || versionsState.briefingsError)
+        ? ` <strong>${escapeHtml(t("versions_offline"))}</strong>`
+        : "";
+    rail.innerHTML = parts.map((p) => `<span>${escapeHtml(p)}</span>`).join("") + offline;
+}
+
+let _versionControlsWired = false;
+function _wireVersionControlsOnce() {
+    if (_versionControlsWired) return;
+    _versionControlsWired = true;
+    const typeSelect = document.getElementById("ver-type-select");
+    const recordSelect = document.getElementById("ver-record-select");
+    const refreshBtn = document.getElementById("ver-refresh");
+    const loadBtn = document.getElementById("ver-load-backup");
+    const diffBtn = document.getElementById("ver-diff-backup");
+    const restoreBtn = document.getElementById("ver-restore-backup");
+    const exportPackBtn = document.getElementById("ver-export-pack");
+    const createBtn = document.getElementById("ver-create");
+    const createCloseBtn = document.getElementById("ver-create-close");
+    const createCancelBtn = document.getElementById("ver-create-cancel");
+    const createForm = document.getElementById("ver-create-form");
+    const editBtn = document.getElementById("ver-edit");
+    const editCloseBtn = document.getElementById("ver-edit-close");
+    const editCancelBtn = document.getElementById("ver-edit-cancel");
+    const editForm = document.getElementById("ver-edit-form");
+
+    if (typeSelect) {
+        typeSelect.addEventListener("change", async () => {
+            versionsState.type = typeSelect.value;
+            versionsState.selectedId = "";
+            versionsState.backups = [];
+            versionsState.selectedBackup = null;
+            versionsState.diff = null;
+            await renderVersions();
+        });
+    }
+    if (createBtn) {
+        createBtn.addEventListener("click", () => {
+            // No pre-fill when the maintainer opens the dialog directly from
+            // the versions view toolbar.
+            _openCreateDialog({});
+        });
+    }
+    if (createCloseBtn) {
+        createCloseBtn.addEventListener("click", () => _closeCreateDialog());
+    }
+    if (createCancelBtn) {
+        createCancelBtn.addEventListener("click", () => _closeCreateDialog());
+    }
+    if (createForm) {
+        createForm.addEventListener("submit", (ev) => {
+            ev.preventDefault();
+            void _submitCreateForm();
+        });
+    }
+    if (editBtn) {
+        editBtn.addEventListener("click", () => {
+            // No pre-fill when the maintainer opens the dialog directly from
+            // the versions view toolbar. The current record is loaded
+            // inside _openEditDialog so the form is initialised from the
+            // server's view of truth, not from the list summary.
+            void _openEditDialog();
+        });
+    }
+    if (editCloseBtn) {
+        editCloseBtn.addEventListener("click", () => _closeEditDialog());
+    }
+    if (editCancelBtn) {
+        editCancelBtn.addEventListener("click", () => _closeEditDialog());
+    }
+    if (editForm) {
+        editForm.addEventListener("submit", (ev) => {
+            ev.preventDefault();
+            void _submitEditForm();
+        });
+    }
+    if (recordSelect) {
+        recordSelect.addEventListener("change", async () => {
+            versionsState.selectedId = recordSelect.value;
+            versionsState.selectedBackup = null;
+            versionsState.diff = null;
+            if (versionsState.selectedId) {
+                await _fetchVersionBackups(versionsState.selectedId);
+            }
+            _updateEditButtonVisibility();
+            _renderVersionSummary();
+            _renderVersionTimeline();
+            _renderVersionDiff();
+            _updateVersionActionButtons();
+            _renderVersionStatusRail();
+        });
+    }
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => renderVersions());
+    }
+    if (loadBtn) {
+        loadBtn.addEventListener("click", async () => {
+            if (!versionsState.selectedId || !versionsState.selectedBackupFilename) return;
+            try {
+                await _loadVersionBackup(versionsState.selectedId, versionsState.selectedBackupFilename);
+                _renderVersionStatusRail();
+            } catch (err) {
+                versionsState.selectedBackup = null;
+                _renderVersionStatusRail();
+            }
+        });
+    }
+    if (diffBtn) {
+        diffBtn.addEventListener("click", async () => {
+            if (!versionsState.selectedId || !versionsState.selectedBackupFilename) return;
+            await _diffVersionBackup(versionsState.selectedId, versionsState.selectedBackupFilename);
+            _renderVersionDiff();
+        });
+    }
+    if (restoreBtn) {
+        restoreBtn.addEventListener("click", async () => {
+            if (!versionsState.selectedId || !versionsState.selectedBackupFilename) return;
+            if (versionsState.currentRevision == null) {
+                alert(t("versions_restore_missing_revision"));
+                return;
+            }
+            if (!confirm(t("versions_restore_confirm"))) return;
+            const statusEls = document.querySelectorAll("#view-versions .toolbar-status");
+            try {
+                const result = await _restoreVersionBackup(
+                    versionsState.selectedId,
+                    versionsState.selectedBackupFilename,
+                    versionsState.currentRevision,
+                );
+                const newRev = result?.server_revision ?? "?";
+                // Refresh state
+                await _fetchVersionRecords();
+                _renderVersionRecordOptions();
+                await _fetchVersionBackups(versionsState.selectedId);
+                _renderVersionSummary();
+                _renderVersionTimeline();
+                _renderVersionDiff();
+                _updateVersionActionButtons();
+                _renderVersionStatusRail();
+                alert(`${t("versions_restore_success")}${newRev}`);
+            } catch (err) {
+                alert(`${t("versions_restore_failed")}${err?.message || err}`);
+            }
+        });
+    }
+    if (exportPackBtn) {
+        exportPackBtn.addEventListener("click", async () => {
+            const statusEl = document.getElementById("ver-pack-status");
+            if (statusEl) statusEl.textContent = "…";
+            try {
+                const pack = await _exportPortablePack();
+                const briefCount = pack?.pack?.sections?.recruitment_briefs?.count ?? 0;
+                const briefingCount = pack?.pack?.sections?.opposition_briefings?.count ?? 0;
+                const total = briefCount + briefingCount;
+                const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                const ts = new Date().toISOString().replace(/[:.]/g, "-");
+                a.download = `scoutfootball-portable-pack-${ts}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                if (statusEl) statusEl.textContent = `${t("versions_pack_exported")}${total} 条）`;
+            } catch (err) {
+                if (statusEl) statusEl.textContent = `${t("versions_pack_failed")}${err?.message || err}`;
+            }
+        });
+    }
+    const importPackBtn = document.getElementById("ver-import-pack");
+    const importPackInput = document.getElementById("ver-import-pack-input");
+    if (importPackBtn && importPackInput) {
+        importPackBtn.addEventListener("click", () => {
+            // Reset so selecting the same file twice still fires change.
+            importPackInput.value = "";
+            importPackInput.click();
+        });
+        importPackInput.addEventListener("change", async (event) => {
+            const statusEl = document.getElementById("ver-pack-status");
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            if (statusEl) statusEl.textContent = "…";
+            let packObj;
+            try {
+                const text = await file.text();
+                let parsed;
+                try {
+                    parsed = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error(t("versions_pack_invalid_json") + (parseErr?.message || parseErr));
+                }
+                // Accept either { pack: {...} } (full export response) or
+                // the bare pack object. The inner pack must declare the
+                // portable-pack schema.
+                packObj = (parsed && typeof parsed === "object" && parsed.pack && typeof parsed.pack === "object")
+                    ? parsed.pack
+                    : parsed;
+                if (!packObj || typeof packObj !== "object" || packObj.schema !== "scoutfootball.portable-pack") {
+                    throw new Error(t("versions_pack_invalid_structure"));
+                }
+            } catch (err) {
+                if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${err?.message || err}`;
+                return;
+            }
+            // Phase 1: safe import (overwrite=false). New records are
+            // created; conflicts are reported but not modified.
+            let result;
+            try {
+                result = await _importPortablePack(packObj, false);
+            } catch (err) {
+                if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${err?.message || err}`;
+                return;
+            }
+            if (result?.status !== "ok") {
+                if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${result?.message || JSON.stringify(result)}`;
+                return;
+            }
+            const summary = result.summary || { total_imported: 0, total_conflicts: 0, total_skipped: 0 };
+            // Phase 2: if there are conflicts, ask the user whether to
+            // overwrite. This second pass replaces the conflicting local
+            // records via a revision bump (creates a backup).
+            if (summary.total_conflicts > 0) {
+                const confirmMsg = t("versions_pack_import_confirm_overwrite")
+                    .replace("{conflicts}", String(summary.total_conflicts));
+                if (confirm(confirmMsg)) {
+                    try {
+                        const overwriteResult = await _importPortablePack(packObj, true);
+                        if (overwriteResult?.status === "ok") {
+                            const ow = overwriteResult.summary || { total_imported: 0, total_conflicts: 0, total_skipped: 0 };
+                            // Refresh version records to reflect the new
+                            // revisions created by the overwrite pass.
+                            await _fetchVersionRecords();
+                            _renderVersionRecordOptions();
+                            _renderVersionSummary();
+                            _renderVersionTimeline();
+                            _renderVersionStatusRail();
+                            if (statusEl) statusEl.textContent = t("versions_pack_imported")
+                                .replace("{imported}", String(ow.total_imported))
+                                .replace("{conflicts}", String(ow.total_conflicts))
+                                .replace("{skipped}", String(ow.total_skipped));
+                            return;
+                        } else {
+                            if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${overwriteResult?.message || JSON.stringify(overwriteResult)}`;
+                            return;
+                        }
+                    } catch (err) {
+                        if (statusEl) statusEl.textContent = `${t("versions_pack_import_failed")}${err?.message || err}`;
+                        return;
+                    }
+                }
+            }
+            // No conflicts, or user declined to overwrite: report phase-1
+            // results. Refresh records to show newly imported ones.
+            await _fetchVersionRecords();
+            _renderVersionRecordOptions();
+            _renderVersionSummary();
+            _renderVersionTimeline();
+            _renderVersionStatusRail();
+            const sectionErrors = result.section_errors || [];
+            let msg = t("versions_pack_imported")
+                .replace("{imported}", String(summary.total_imported))
+                .replace("{conflicts}", String(summary.total_conflicts))
+                .replace("{skipped}", String(summary.total_skipped));
+            if (sectionErrors.length > 0) {
+                const errs = sectionErrors.map((e) => `${e.section}:${e.code}`).join(", ");
+                msg += " " + t("versions_pack_section_errors").replace("{errors}", errs);
+            }
+            if (statusEl) statusEl.textContent = msg;
+        });
+    }
 }
 
 async function renderCalibration() {
@@ -13958,12 +19497,12 @@ async function renderCalibration() {
                 xAxis: { type: "value", name: "Predicted", min: 0, max: 1 },
                 yAxis: { type: "value", name: "Actual", min: 0, max: 1 },
                 series: [
-                    { type: "line", data: [[0, 0], [1, 1]], lineStyle: { type: "dashed", color: "#888" }, symbol: "none", silent: true },
+                    { type: "line", data: [[0, 0], [1, 1]], lineStyle: { type: "dashed", color: "#8e8e93" }, symbol: "none", silent: true },
                     {
                         type: "scatter",
                         data: calPlot.map(p => [p.mean_predicted, p.mean_actual]),
                         symbolSize: calPlot.map(p => Math.max(8, Math.sqrt(p.n_matches) * 3)),
-                        itemStyle: { color: "#4a90d9" },
+                        itemStyle: { color: "#007aff" },
                         label: { show: false },
                     },
                 ],
@@ -13984,7 +19523,7 @@ async function renderCalibration() {
                         <span>${escapeHtml(String(b.n_matches))} ${escapeHtml(appState.lang === "zh" ? "场" : "matches")}</span>
                         <span>${escapeHtml(appState.lang === "zh" ? "实际" : "Actual")}: ${escapeHtml(String(b.actual_pct))}%</span>
                         <span>${escapeHtml(appState.lang === "zh" ? "预测" : "Pred")}: ${escapeHtml(String(b.mean_predicted_pct))}%</span>
-                        <span style="color:${b.calibration_error > 5 ? '#ff6b6b' : '#57d68d'}">${escapeHtml(String(b.calibration_error))}% err</span>
+                        <span style="color:${b.calibration_error > 5 ? '#ff3b30' : '#34c759'}">${escapeHtml(String(b.calibration_error))}% err</span>
                     </div>`
                 ).join("");
             }
@@ -14339,7 +19878,7 @@ function _renderDecayTuning(data) {
         const hl = c.half_life_days === Infinity || c.half_life_days === "inf"
             ? "∞"
             : fmtMetric(c.half_life_days);
-        const cls = isBest ? ' style="background:var(--accent-alpha, rgba(100,180,255,0.12))"' : "";
+        const cls = isBest ? ' style="background:var(--accent-alpha, rgba(0,122,255,0.12))"' : "";
         const badge = isBest
             ? ` <span class="status-pill status-high" style="font-size:0.6rem">BEST</span>`
             : "";
@@ -14432,7 +19971,7 @@ function _renderCalibrationDrift(data) {
 
     const windowRows = windows.map((w) => {
         const isLatest = latest && w.start_date === latest.start_date && w.end_date === latest.end_date;
-        const cls = isLatest ? ' style="background:var(--accent-alpha, rgba(100,180,255,0.12))"' : "";
+        const cls = isLatest ? ' style="background:var(--accent-alpha, rgba(0,122,255,0.12))"' : "";
         const badge = isLatest
             ? ` <span class="status-pill status-medium" style="font-size:0.6rem">${z ? "最新" : "LATEST"}</span>`
             : "";
@@ -14459,13 +19998,13 @@ function _renderCalibrationDrift(data) {
     const latestBlock = latest ? `
         <div class="detail-grid" style="margin-top:0.8rem">
             <div><span>${escapeHtml(z ? "最新窗口 RPS" : "Latest RPS")}</span><strong>${fmtMetric(latest.rps_1x2)}</strong></div>
-            <div><span>${escapeHtml(z ? "相对变化" : "Relative change")}</span><strong style="color:${driftDetected ? "var(--warn, #f59e0b)" : "var(--accent)"}">${latestRelChange !== null ? `${(latestRelChange >= 0 ? "+" : "")}${(latestRelChange * 100).toFixed(2)}%` : "—"}</strong></div>
+            <div><span>${escapeHtml(z ? "相对变化" : "Relative change")}</span><strong style="color:${driftDetected ? "var(--warn, #ff9500)" : "var(--accent)"}">${latestRelChange !== null ? `${(latestRelChange >= 0 ? "+" : "")}${(latestRelChange * 100).toFixed(2)}%` : "—"}</strong></div>
             <div><span>${escapeHtml(z ? "阈值" : "Threshold")}</span><strong>${(Number(driftThreshold) * 100).toFixed(1)}%</strong></div>
         </div>` : "";
 
     body.innerHTML = `
         <div class="detail-grid" style="margin-bottom:0.8rem">
-            <div><span>${escapeHtml(z ? "漂移检测" : "Drift detected")}</span><strong style="color:${driftDetected ? "var(--warn, #f59e0b)" : "var(--accent)"}">${driftDetected ? (z ? "是" : "YES") : (z ? "否" : "NO")}</strong></div>
+            <div><span>${escapeHtml(z ? "漂移检测" : "Drift detected")}</span><strong style="color:${driftDetected ? "var(--warn, #ff9500)" : "var(--accent)"}">${driftDetected ? (z ? "是" : "YES") : (z ? "否" : "NO")}</strong></div>
             <div><span>${escapeHtml(z ? "监控指标" : "Drift metric")}</span><strong>${escapeHtml(String(driftMetric))}</strong></div>
             <div><span>${escapeHtml(z ? "窗口数" : "Windows")}</span><strong>${escapeHtml(String(nWindows))}</strong></div>
             <div><span>${escapeHtml(z ? "整体 RPS" : "Overall RPS")}</span><strong>${fmtMetric(overall.rps_1x2)}</strong></div>
@@ -14539,8 +20078,8 @@ function _renderEnsembleWeights(data) {
             <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.2rem">
                 <span>${escapeHtml(k)}</span><strong>${pct}%</strong>
             </div>
-            <div style="height:6px;background:var(--bg-elevated, rgba(255,255,255,0.08));border-radius:3px;overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:var(--accent, #64b5f6);border-radius:3px"></div>
+            <div style="height:6px;background:var(--bg-elevated, rgba(255,255,255,0.08));border-radius:var(--radius-xs);overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:var(--accent, #007aff);border-radius:var(--radius-xs)"></div>
             </div>
         </div>`;
     }).join("");
@@ -14552,7 +20091,7 @@ function _renderEnsembleWeights(data) {
             ${data.saved_at ? `<div><span>${escapeHtml(t("ensemble_saved_at"))}</span><strong style="font-size:0.75rem">${escapeHtml(String(data.saved_at).slice(0, 19).replace("T", " "))}</strong></div>` : ""}
         </div>`;
 
-    body.innerHTML = `${weightBars}${meta}`;
+    body.innerHTML = [weightBars, meta].join("");
 }
 
 function _renderCalibrationComparison(data) {
@@ -14586,7 +20125,7 @@ function _renderCalibrationComparison(data) {
     // Overall metrics card
     const brierImp = improvement.brier_improvement_pct;
     const rpsImp = improvement.rps_improvement_pct;
-    const impColor = (v) => v != null && v < 0 ? "var(--accent, #64b5f6)" : "var(--warn, #f59e0b)";
+    const impColor = (v) => v != null && v < 0 ? "var(--accent, #007aff)" : "var(--warn, #ff9500)";
 
     const overallHtml = `
         <h4 style="margin:0 0 0.5rem;font-size:0.85rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em">${escapeHtml(t("calibration_comparison_overall"))}</h4>
@@ -14675,7 +20214,7 @@ function _renderCalibrationComparison(data) {
             </table>`;
     }
 
-    body.innerHTML = `${overallHtml}${scoreLineHtml}${leagueHtml}`;
+    body.innerHTML = [overallHtml, scoreLineHtml, leagueHtml].join("");
 }
 
 function _renderBacktestFoldChart(data, models, folds) {
@@ -14695,7 +20234,7 @@ function _renderBacktestFoldChart(data, models, folds) {
     const metricLabels = z
         ? { log_loss: "Log Loss", brier: "Brier", rps: "RPS" }
         : { log_loss: "Log Loss", brier: "Brier", rps: "RPS" };
-    const modelColors = ["#4f9cff", "#6bcf7f", "#f5a623"];
+    const modelColors = ["#007aff", "#6bcf7f", "#ff9500"];
 
     const foldLabels = folds.map((f) => String(f.fold));
 
@@ -14740,13 +20279,13 @@ function _renderBacktestFoldChart(data, models, folds) {
             type: "category",
             data: foldLabels,
             name: z ? "折" : "Fold",
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
         },
         yAxis: {
             type: "value",
             name: z ? "指标值（越低越好）" : "Metric (lower=better)",
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
         },
@@ -14799,7 +20338,7 @@ function _renderTemporalValidationChart(data) {
                 type: "value",
                 name: z ? "误差（越低越好）" : "Error (lower=better)",
                 position: "left",
-                nameTextStyle: { color: "#888", fontSize: 10 },
+                nameTextStyle: { color: "#8e8e93", fontSize: 10 },
                 axisLabel: { color: "#aaa", fontSize: 10 },
                 splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
             },
@@ -14809,15 +20348,15 @@ function _renderTemporalValidationChart(data) {
                 position: "right",
                 min: 0,
                 max: 100,
-                nameTextStyle: { color: "#888", fontSize: 10 },
+                nameTextStyle: { color: "#8e8e93", fontSize: 10 },
                 axisLabel: { color: "#aaa", fontSize: 10, formatter: "{value}%" },
                 splitLine: { show: false },
             },
         ],
         series: [
-            mkSeries("brier", "Brier", "#4f9cff"),
+            mkSeries("brier", "Brier", "#007aff"),
             mkSeries("rps", "RPS", "#6bcf7f"),
-            mkSeries("log_loss", "Log Loss", "#f5a623"),
+            mkSeries("log_loss", "Log Loss", "#ff9500"),
             {
                 name: z ? "准确率" : "Accuracy",
                 type: "line",
@@ -14924,7 +20463,7 @@ function _renderProbabilityHeatmapChart(data) {
                 left: "center",
                 bottom: "2%",
                 textStyle: { color: "#aaa", fontSize: 9 },
-                inRange: { color: ["#f87171", "#fbbf24", "#4ade80"] },
+                inRange: { color: ["#ff3b30", "#ff9500", "#34c759"] },
                 seriesIndex: 0,
                 text: [z ? "高准确率" : "High acc", z ? "低准确率" : "Low acc"],
             },
@@ -14936,7 +20475,7 @@ function _renderProbabilityHeatmapChart(data) {
                 left: "center",
                 bottom: "12%",
                 textStyle: { color: "#aaa", fontSize: 9 },
-                inRange: { color: ["#1e293b", "#4f9cff"] },
+                inRange: { color: ["#1e293b", "#007aff"] },
                 seriesIndex: 1,
                 text: [z ? "高密度" : "High density", z ? "低密度" : "Low density"],
                 show: false,
@@ -15010,14 +20549,14 @@ function _renderCIPlotChart(data) {
             name: z ? "置信度" : "Confidence",
             min: 0,
             max: 1,
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
         },
         yAxis: {
             type: "value",
             name: z ? "CI 宽度" : "CI width",
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
         },
@@ -15027,14 +20566,14 @@ function _renderCIPlotChart(data) {
                 type: "scatter",
                 data: correct,
                 symbolSize: 6,
-                itemStyle: { color: "#4ade80", opacity: 0.7 },
+                itemStyle: { color: "#34c759", opacity: 0.7 },
             },
             {
                 name: z ? "错误" : "Wrong",
                 type: "scatter",
                 data: wrong,
                 symbolSize: 6,
-                itemStyle: { color: "#f87171", opacity: 0.7 },
+                itemStyle: { color: "#ff3b30", opacity: 0.7 },
             },
         ],
     }, true);
@@ -15072,7 +20611,7 @@ function _renderFeatureImportanceChart(data) {
         xAxis: {
             type: "value",
             name: z ? "重要性（Brier 分离度）" : "Importance (Brier separation)",
-            nameTextStyle: { color: "#888", fontSize: 10 },
+            nameTextStyle: { color: "#8e8e93", fontSize: 10 },
             axisLabel: { color: "#aaa", fontSize: 10 },
             splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
         },
@@ -15088,7 +20627,7 @@ function _renderFeatureImportanceChart(data) {
                 data: importanceValues,
                 itemStyle: {
                     color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                        { offset: 0, color: "#4f9cff" },
+                        { offset: 0, color: "#007aff" },
                         { offset: 1, color: "#6bcf7f" },
                     ]),
                 },
@@ -15176,7 +20715,7 @@ function _renderDriftHeatmapChart(data) {
             left: "center",
             bottom: "2%",
             textStyle: { color: "#aaa", fontSize: 9 },
-            inRange: { color: ["#4ade80", "#fbbf24", "#f87171"] },
+            inRange: { color: ["#34c759", "#ff9500", "#ff3b30"] },
             text: [z ? "高 Brier" : "High Brier", z ? "低 Brier" : "Low Brier"],
         },
         series: [
@@ -15215,7 +20754,7 @@ function _renderPredictionStreaksChart(data) {
         if (p.streak_break_type === "upset") {
             markPoints.push({
                 coord: [i, streakSigned[i]],
-                itemStyle: { color: "#f87171" },
+                itemStyle: { color: "#ff3b30" },
                 symbol: "pin",
                 symbolSize: 36,
                 value: z ? "爆冷" : "Upset",
@@ -15223,7 +20762,7 @@ function _renderPredictionStreaksChart(data) {
         } else if (p.streak_break_type === "recovery") {
             markPoints.push({
                 coord: [i, streakSigned[i]],
-                itemStyle: { color: "#4ade80" },
+                itemStyle: { color: "#34c759" },
                 symbol: "pin",
                 symbolSize: 36,
                 value: z ? "反弹" : "Recovery",
@@ -15276,7 +20815,7 @@ function _renderPredictionStreaksChart(data) {
                 type: "value",
                 name: z ? "连胜长度" : "Streak length",
                 position: "left",
-                nameTextStyle: { color: "#888", fontSize: 10 },
+                nameTextStyle: { color: "#8e8e93", fontSize: 10 },
                 axisLabel: { color: "#aaa", fontSize: 10 },
                 splitLine: { lineStyle: { color: "rgba(128,128,128,0.15)" } },
             },
@@ -15286,7 +20825,7 @@ function _renderPredictionStreaksChart(data) {
                 position: "right",
                 min: 0,
                 max: 1,
-                nameTextStyle: { color: "#888", fontSize: 10 },
+                nameTextStyle: { color: "#8e8e93", fontSize: 10 },
                 axisLabel: { color: "#aaa", fontSize: 10, formatter: "{value}" },
                 splitLine: { show: false },
             },
@@ -15298,7 +20837,7 @@ function _renderPredictionStreaksChart(data) {
                 data: streakSigned.map((v, i) => ({
                     value: v,
                     itemStyle: {
-                        color: v > 0 ? "#4ade80" : v < 0 ? "#f87171" : "#94a3b8",
+                        color: v > 0 ? "#34c759" : v < 0 ? "#ff3b30" : "#94a3b8",
                     },
                 })),
                 markPoint: { data: markPoints, symbolSize: 36 },
@@ -15312,8 +20851,8 @@ function _renderPredictionStreaksChart(data) {
                 symbol: "circle",
                 symbolSize: 4,
                 data: confidence,
-                lineStyle: { width: 2, color: "#4f9cff" },
-                itemStyle: { color: "#4f9cff" },
+                lineStyle: { width: 2, color: "#007aff" },
+                itemStyle: { color: "#007aff" },
             },
         ],
     }, true);
@@ -15350,47 +20889,47 @@ async function fetchAndRenderPredictionStreaks() {
             none: z ? "无" : "None",
         }[data.current_streak_type || "none"] || "–";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${fmtNum(data.n_matches)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600;color:var(--accent)">${fmtNum(data.current_streak)} <span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(currentTypeLabel)}</span></div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_current"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.1rem;font-weight:600;color:#4ade80">${fmtNum(data.longest_correct_streak)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.1rem;font-weight:600;color:#34c759">${fmtNum(data.longest_correct_streak)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_longest_correct"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.1rem;font-weight:600;color:#f87171">${fmtNum(data.longest_wrong_streak)}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.1rem;font-weight:600;color:#ff3b30">${fmtNum(data.longest_wrong_streak)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_longest_wrong"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${fmtNum(data.total_streak_breaks)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_total_breaks"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:#f87171">${fmtNum(data.upset_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.upset_rate)})</span></div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:#ff3b30">${fmtNum(data.upset_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.upset_rate)})</span></div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_upset_breaks"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:#4ade80">${fmtNum(data.recovery_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.recovery_rate)})</span></div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:#34c759">${fmtNum(data.recovery_breaks)} <span style="font-size:0.7rem;color:var(--text-muted)">(${fmtPct(data.recovery_rate)})</span></div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_recovery_breaks"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${fmtNum(data.neutral_breaks)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_neutral_breaks"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.avg_correct_streak_length || 0).toFixed(2)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_avg_correct"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${Number(data.avg_wrong_streak_length || 0).toFixed(2)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("streaks_avg_wrong"))}</div>
             </div>
@@ -15441,23 +20980,23 @@ async function fetchAndRenderBacktestReportCard() {
         const z = appState.lang === "zh";
         const fmtPct = (v) => (v == null) ? "–" : `${(Number(v) * 100).toFixed(1)}%`;
         const fmtScore = (v) => (v == null) ? "–" : Number(v).toFixed(1);
-        const gradeColors = { A: "#4ade80", B: "#a3e635", C: "#facc15", D: "#fb923c", F: "#f87171" };
+        const gradeColors = { A: "#34c759", B: "#a3e635", C: "#facc15", D: "#fb923c", F: "#ff3b30" };
         const overallGrade = data.overall_grade || "–";
         const gradeColor = gradeColors[overallGrade] || "var(--text-base)";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-bottom:0.8rem">
-            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.6rem;font-weight:700;color:${gradeColor}">${escapeHtml(overallGrade)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_grade"))}</div>
             </div>
-            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.2rem;font-weight:600">${fmtScore(data.overall_score)}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_score"))}</div>
             </div>
-            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_matches ?? "–"))}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.5rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${escapeHtml(data.model_type || "–")}</div>
                 <div style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("report_card_model_type"))}</div>
             </div>
@@ -15532,8 +21071,8 @@ function _renderReportCardChart(data) {
                 value: values,
                 name: z ? "得分" : "Score",
                 areaStyle: { color: "rgba(79,156,255,0.18)" },
-                lineStyle: { color: "#4f9cff", width: 2 },
-                itemStyle: { color: "#4f9cff" },
+                lineStyle: { color: "#007aff", width: 2 },
+                itemStyle: { color: "#007aff" },
             }],
         }],
     }, true);
@@ -15564,7 +21103,7 @@ async function fetchAndRenderPredictionAnomalies() {
         }
         const z = appState.lang === "zh";
         const fmtPct = (v) => (v == null) ? "–" : `${(Number(v) * 100).toFixed(1)}%`;
-        const sevColors = { critical: "#dc2626", high: "#f87171", medium: "#fbbf24", low: "#a3e635" };
+        const sevColors = { critical: "#ff3b30", high: "#ff3b30", medium: "#ff9500", low: "#a3e635" };
         const typeLabels = {
             high_entropy: t("anomalies_high_entropy"),
             overconfident_wrong: t("anomalies_overconfident_wrong"),
@@ -15580,24 +21119,24 @@ async function fetchAndRenderPredictionAnomalies() {
         };
         const counts = data.anomaly_counts || {};
         let html = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_matches ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.1rem;font-weight:600;color:#f87171">${escapeHtml(String(data.n_anomalies ?? "–"))}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.1rem;font-weight:600;color:#ff3b30">${escapeHtml(String(data.n_anomalies ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_n_anomalies"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600">${escapeHtml(String(counts.high_entropy ?? 0))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_high_entropy"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:#f87171">${escapeHtml(String(counts.overconfident_wrong ?? 0))}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:#ff3b30">${escapeHtml(String(counts.overconfident_wrong ?? 0))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_overconfident_wrong"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
-                <div style="font-size:1.0rem;font-weight:600;color:#4ade80">${escapeHtml(String(counts.underconfident_correct ?? 0))}</div>
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
+                <div style="font-size:1.0rem;font-weight:600;color:#34c759">${escapeHtml(String(counts.underconfident_correct ?? 0))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("anomalies_underconfident_correct"))}</div>
             </div>
         </div>`;
@@ -15606,7 +21145,7 @@ async function fetchAndRenderPredictionAnomalies() {
             html += `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("anomalies_no_anomalies"))}</p>`;
         } else {
             html += `<p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.3rem">${escapeHtml(t("anomalies_table_tip"))}</p>`;
-            html += `<div style="max-height:320px;overflow:auto;border:1px solid var(--border-color);border-radius:6px"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
+            html += `<div style="max-height:320px;overflow:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm)"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
                 <thead style="position:sticky;top:0;background:var(--bg-elevated)"><tr style="text-align:left;color:var(--text-muted)">
                     <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_idx"))}</th>
                     <th style="padding:0.3rem">${escapeHtml(t("anomalies_col_type"))}</th>
@@ -15707,68 +21246,68 @@ async function fetchAndRenderTeamProfile(team) {
             underperformer: t("team_profile_underperformer"),
             aligned: t("team_profile_aligned"),
         };
-        const assessmentColor = { overperformer: "#4ade80", underperformer: "#f87171", aligned: "var(--text-base)" };
+        const assessmentColor = { overperformer: "#34c759", underperformer: "#ff3b30", aligned: "var(--text-base)" };
         const assessment = data.assessment || "aligned";
         let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_matches ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_n_matches"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_home ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_home"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.1rem;font-weight:600">${escapeHtml(String(data.n_away ?? "–"))}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_away"))}</div>
             </div>
-            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.4rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:1.0rem;font-weight:600;color:${assessmentColor[assessment] || "var(--text-base)"}">${escapeHtml(assessmentMap[assessment] || assessment)}</div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(t("team_profile_assessment"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.overall_accuracy)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_overall_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.home_accuracy)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_home_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.away_accuracy)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_away_acc"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.avg_confidence)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_avg_conf"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtNum(data.calibration_gap, 3)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_cal_gap"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600;color:${assessmentColor[assessment] || "var(--text-base)"}">${fmtNum(data.overperformance, 3)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_overperf"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600">${escapeHtml(String(data.n_wins ?? 0))}/${escapeHtml(String(data.n_draws ?? 0))}/${escapeHtml(String(data.n_losses ?? 0))}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_wdl"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.9rem;font-weight:600">${fmtNum(data.avg_goals_scored, 2)}/${fmtNum(data.avg_goals_conceded, 2)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_avg_gf"))}/${escapeHtml(t("team_profile_avg_ga"))}</div>
             </div>
         </div>`;
         html += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.4rem;margin-bottom:0.6rem">
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.clean_sheet_rate)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_clean_sheet"))}</div>
             </div>
-            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:6px">
+            <div style="text-align:center;padding:0.35rem;background:var(--bg-elevated);border-radius:var(--radius-sm)">
                 <div style="font-size:0.95rem;font-weight:600">${fmtPct(data.btts_rate)}</div>
                 <div style="font-size:0.62rem;color:var(--text-muted)">${escapeHtml(t("team_profile_btts"))}</div>
             </div>
@@ -15778,14 +21317,14 @@ async function fetchAndRenderTeamProfile(team) {
             html += `<h4 style="margin:0.4rem 0 0.2rem;font-size:0.82rem">${escapeHtml(t("team_profile_common_scorelines"))}</h4>`;
             html += `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.6rem">`;
             for (const s of scorelines) {
-                html += `<span style="padding:0.2rem 0.5rem;background:var(--bg-elevated);border-radius:4px;font-size:0.75rem;font-family:monospace">${escapeHtml(String(s[0] || "–"))} × ${escapeHtml(String(s[1] || 0))}</span>`;
+                html += `<span style="padding:0.2rem 0.5rem;background:var(--bg-elevated);border-radius:var(--radius-xs);font-size:0.75rem;font-family:monospace">${escapeHtml(String(s[0] || "–"))} × ${escapeHtml(String(s[1] || 0))}</span>`;
             }
             html += `</div>`;
         }
         const renderPredList = (title, preds) => {
             if (!Array.isArray(preds) || preds.length === 0) return "";
             let h = `<h4 style="margin:0.4rem 0 0.2rem;font-size:0.82rem">${escapeHtml(title)}</h4>`;
-            h += `<div style="max-height:200px;overflow:auto;border:1px solid var(--border-color);border-radius:6px"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
+            h += `<div style="max-height:200px;overflow:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm)"><table style="width:100%;border-collapse:collapse;font-size:0.74rem">
                 <thead style="position:sticky;top:0;background:var(--bg-elevated)"><tr style="text-align:left;color:var(--text-muted)">
                     <th style="padding:0.3rem">${escapeHtml(t("team_profile_col_match"))}</th>
                     <th style="padding:0.3rem">${escapeHtml(t("team_profile_col_pred"))}</th>
@@ -15954,8 +21493,14 @@ function bindEvents() {
     document.getElementById("wc-matchday-filter").addEventListener("change", () => renderWcSchedule());
     document.getElementById("wc-squad-team").addEventListener("change", async (e) => {
         appState.wcSquadTeam = e.target.value;
-        await fetchWcSquad(e.target.value);
         renderWcSquads();
+        renderWcSquadScoutingNeeds();
+        await Promise.all([
+            fetchWcSquad(e.target.value),
+            fetchWcSquadScoutingNeeds(e.target.value),
+        ]);
+        renderWcSquads();
+        renderWcSquadScoutingNeeds();
     });
     document.getElementById("wc-compare-a").addEventListener("change", async (e) => {
         appState.wcCompareA = e.target.value;
@@ -17216,6 +22761,8 @@ function bindEvents() {
     if (scoutDecisionPackCsvButton) {
         scoutDecisionPackCsvButton.addEventListener("click", exportShortlistDecisionPackCSV);
     }
+    _wireDecisionPackImportButton();
+    _wireDecisionPackPreviewButton();
     const scoutShortlistTacticalButton = document.getElementById("scout-shortlist-to-tactical");
     if (scoutShortlistTacticalButton) {
         scoutShortlistTacticalButton.addEventListener("click", sendShortlistToTacticalBoard);
@@ -17424,6 +22971,7 @@ let wcApiData = {
     groups: null,       // from /world-cup/groups
     schedule: null,     // from /world-cup/schedule
     squadCache: {},     // team -> from /world-cup/squads/{team}
+    squadScoutingNeedsCache: {}, // team -> from /world-cup/squads/{team}/scouting-needs
     squadBalanceComparisonCache: {}, // ordered team pair -> role-depth comparison
     predictions: null,  // from /world-cup/predictions
     knockout: null,     // from /world-cup/knockout
@@ -17433,11 +22981,16 @@ let wcApiData = {
     teams: null,        // from /worldcup/teams
     apiOnline: false,
     squadLoading: new Set(),
+    squadScoutingNeedsLoading: new Set(),
     outlookLoading: new Set(),
     tournament: null,       // from /world-cup/tournament/summary
     tournamentMatches: null, // from /world-cup/tournament/matches
+    tournamentMatchPredictions: null, // from /world-cup/tournament/match-predictions
     tournamentQualificationImpact: null, // selected group local standings impact
     tournamentTiebreakDiagnostics: null, // selected group local tied clusters
+    tournamentStandingsProbabilities: null, // selected group with advance/win_group prob
+    tournamentOverallLeaderboard: null, // all 48 teams ranked by advancement prob
+    tournamentMatchImpact: null, // remaining matches ranked by advancement prob impact
     tournamentScenarios: null, // team -> scenarios
     tournamentSelectedGroup: "A",
     tournamentLoading: false,
@@ -17448,6 +23001,13 @@ let wcApiData = {
     knockoutScenarios: {},  // team → scenario data from /world-cup/tournament/knockout/scenarios/{team}
     groupStageSimulation: null,  // from /world-cup/tournament/group-simulation
     tournamentExport: null,  // from /world-cup/tournament/export
+    // Round 102 — WC match intelligence additions
+    matchSpotlightCache: {},  // home|away -> player spotlight from /world-cup/match-briefings/{home}/{away}/spotlight
+    teamFormTrendCache: {},  // team -> form trend from /world-cup/teams/{team}/form-trend
+    tournamentKnockoutMatchImpact: null,  // from /world-cup/tournament/knockout/match-impact
+    tournamentTopMatches: null,  // from /world-cup/tournament/top-matches
+    matchSpotlightLoading: new Set(),
+    teamFormTrendLoading: new Set(),
 };
 
 /* ── No demo squad data — API must be online for WC squads ─────────── */
@@ -17504,6 +23064,24 @@ async function fetchWcSquad(team) {
         wcApiData.squadLoading.delete(team);
         if (appState.view === "wc_squads" && appState.wcSquadTeam === team) {
             renderWcSquads();
+        }
+    }
+}
+
+async function fetchWcSquadScoutingNeeds(team) {
+    if (wcApiData.squadScoutingNeedsCache[team]) return wcApiData.squadScoutingNeedsCache[team];
+    wcApiData.squadScoutingNeedsLoading.add(team);
+    try {
+        const data = await fetchJson(`/world-cup/squads/${encodeURIComponent(team)}/scouting-needs`, { fetchOpts: { signal: AbortSignal.timeout(60000) } });
+        wcApiData.squadScoutingNeedsCache[team] = data;
+        return data;
+    } catch (e) {
+        console.warn("[WC] fetchWcSquadScoutingNeeds failed:", e.message);
+        return null;
+    } finally {
+        wcApiData.squadScoutingNeedsLoading.delete(team);
+        if (appState.view === "wc_squads" && appState.wcSquadTeam === team) {
+            renderWcSquadScoutingNeeds();
         }
     }
 }
@@ -17590,7 +23168,7 @@ function renderWcOutlook(outlook) {
 
     function probBar(label, value, color) {
         const pct = Math.max(0, Math.min(100, (value || 0) * 100));
-        const barColor = color || "var(--accent, #4f9cff)";
+        const barColor = color || "var(--accent, #007aff)";
         return `<div class="prob-row" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
             <span style="min-width:60px;font-size:0.8rem;color:var(--text-muted)">${escapeHtml(label)}</span>
             <div class="probability-track" style="flex:1">
@@ -17604,7 +23182,7 @@ function renderWcOutlook(outlook) {
     const finishBars = ["p1st", "p2nd", "p3rd", "p4th", "p_advance"]
         .map((key, i) => {
             const label = z ? ["第1", "第2", "第3", "第4", "出线"][i] : ["1st", "2nd", "3rd", "4th", "Advance"][i];
-            const colors = ["#4f9cff", "#6bcf7f", "#f5a623", "#e0556a", "#9b6cf5"];
+            const colors = ["#007aff", "#6bcf7f", "#ff9500", "#e0556a", "#9b6cf5"];
             if (gf[key] === undefined || gf[key] === null) return "";
             return probBar(label, gf[key], colors[i]);
         })
@@ -17691,7 +23269,7 @@ function renderWcOutlook(outlook) {
             ${champPct === null
                 ? `<p style="color:var(--text-muted);font-size:0.8rem">—</p>`
                 : `<div style="display:flex;align-items:baseline;gap:0.3rem">
-                    <span style="font-size:1.8rem;font-weight:700;color:var(--accent, #4f9cff)">${champPct.toFixed(2)}%</span>
+                    <span style="font-size:1.8rem;font-weight:700;color:var(--accent, #007aff)">${champPct.toFixed(2)}%</span>
                 </div>`
             }
             <h4 style="font-size:0.85rem;margin:0.8rem 0 0.5rem;color:var(--text-secondary, #ccc)">${z ? "阵容强度分解" : "Squad Strength Breakdown"}</h4>
@@ -17720,7 +23298,7 @@ function renderWcOutlook(outlook) {
     <div style="margin-top:1rem">
         <h4 style="font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-secondary, #ccc)">${z ? "阵容位置深度" : "Squad Role Depth"}</h4>
         <div>${roleBalance || `<span style="color:var(--text-muted);font-size:0.8rem">—</span>`}</div>
-        ${planningFlags.length ? `<p style="font-size:0.72rem;color:var(--warn, #f5a623);margin:0.45rem 0 0">${escapeHtml(z ? "规划关注：" : "Planning flags: ")}${escapeHtml(planningFlags.join(" · "))}</p>` : ""}
+        ${planningFlags.length ? `<p style="font-size:0.72rem;color:var(--warn, #ff9500);margin:0.45rem 0 0">${escapeHtml(z ? "规划关注：" : "Planning flags: ")}${escapeHtml(planningFlags.join(" · "))}</p>` : ""}
         ${balanceNote}
     </div>
     <div style="margin-top:1rem">
@@ -17773,6 +23351,75 @@ async function fetchWcTournamentMatches(group) {
     }
 }
 
+async function fetchWcTournamentMatchPredictions(group) {
+    const params = group ? `group=${encodeURIComponent(group)}` : "";
+    try {
+        const data = await fetchJson("/world-cup/tournament/match-predictions", {
+            params,
+            fetchOpts: { signal: AbortSignal.timeout(60000) },
+        });
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentMatchPredictions = data;
+        }
+        return data;
+    } catch (e) {
+        console.warn("[WC Tournament] fetchWcTournamentMatchPredictions failed:", e.message);
+        return null;
+    }
+}
+
+/**
+ * Build a compact prediction pill for a single match.
+ *
+ * Renders a 3-segment stacked bar (home_win / draw / away_win) with
+ * percentages for pending matches, or an "actual vs predicted" delta
+ * badge for completed matches. Returns a muted placeholder when the
+ * prediction data is unavailable or the match is not found in the
+ * predictions payload.
+ *
+ * @param {string} matchId - The match identifier.
+ * @returns {string} HTML string (escaped).
+ */
+function _wcMatchPredictionPill(matchId) {
+    const data = wcApiData.tournamentMatchPredictions;
+    if (!data || data.status !== "ok" || !Array.isArray(data.predictions)) {
+        return `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`;
+    }
+    const entry = data.predictions.find((p) => p && p.match_id === matchId);
+    if (!entry) {
+        return `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`;
+    }
+    if (entry.status === "team_not_found") {
+        return `<span class="status-pill status-low" style="font-size:0.65rem;padding:0.15rem 0.4rem" title="${escapeAttr(t("wc_match_pred_team_not_found"))}">${escapeHtml(t("wc_match_pred_team_not_found"))}</span>`;
+    }
+    if (entry.status === "error") {
+        return `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`;
+    }
+    if (entry.completed && entry.delta) {
+        const cls = entry.delta.classification;
+        const label = cls === "as_expected"
+            ? t("wc_match_pred_as_expected")
+            : cls === "upset"
+                ? t("wc_match_pred_upset")
+                : t("wc_match_pred_hold");
+        const pillClass = cls === "as_expected"
+            ? "status-high"
+            : cls === "upset"
+                ? "status-low"
+                : "status-medium";
+        return `<span class="status-pill ${pillClass}" style="font-size:0.65rem;padding:0.15rem 0.4rem" title="${escapeAttr(t("wc_match_pred_expected").replace("{score}", `${entry.most_likely_scoreline.home_goals}-${entry.most_likely_scoreline.away_goals}`))}">${escapeHtml(label)}</span>`;
+    }
+    // Pending match: render 3-segment stacked bar
+    const hw = Math.round((entry.home_win_prob || 0) * 100);
+    const dr = Math.round((entry.draw_prob || 0) * 100);
+    const aw = Math.max(0, 100 - hw - dr);
+    return `<div style="display:flex;align-items:center;gap:0.2rem;font-size:0.65rem" title="${escapeAttr(`${t("wc_match_pred_home")} ${hw}% · ${t("wc_match_pred_draw")} ${dr}% · ${t("wc_match_pred_away")} ${aw}%`)}">
+        <span style="background:#34c759;color:#fff;padding:0.1rem 0.25rem;border-radius:var(--radius-xs) 0 0 var(--radius-xs);min-width:1.6rem;text-align:center">${hw}</span>
+        <span style="background:#ff9500;color:#fff;padding:0.1rem 0.25rem;min-width:1.6rem;text-align:center">${dr}</span>
+        <span style="background:#ff3b30;color:#fff;padding:0.1rem 0.25rem;border-radius:0 2px 2px 0;min-width:1.6rem;text-align:center">${aw}</span>
+    </div>`;
+}
+
 async function fetchWcTournamentQualificationImpact(group) {
     try {
         const data = await fetchJson(`/world-cup/tournament/qualification-impact?group=${encodeURIComponent(group)}`, {
@@ -17802,6 +23449,142 @@ async function fetchWcTournamentTiebreakDiagnostics(group) {
         console.warn("[WC Tournament] tiebreak diagnostics unavailable:", e.message);
     }
     wcApiData.tournamentTiebreakDiagnostics = null;
+    return null;
+}
+
+async function fetchWcTournamentStandingsProbabilities(group) {
+    try {
+        const data = await fetchJson(
+            `/world-cup/tournament/standings-probabilities?group=${encodeURIComponent(group)}&num_simulations=2000`,
+            {
+                timeout: 30000,
+            },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentStandingsProbabilities = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] standings probabilities unavailable:", e.message);
+    }
+    wcApiData.tournamentStandingsProbabilities = null;
+    return null;
+}
+
+async function fetchWcTournamentOverallLeaderboard(sortBy) {
+    try {
+        const data = await fetchJson(
+            `/world-cup/tournament/overall-leaderboard?sort_by=${encodeURIComponent(sortBy || "advance_prob")}&num_simulations=2000`,
+            {
+                timeout: 30000,
+            },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentOverallLeaderboard = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] overall leaderboard unavailable:", e.message);
+    }
+    wcApiData.tournamentOverallLeaderboard = null;
+    return null;
+}
+
+async function fetchWcTournamentMatchImpact(group) {
+    try {
+        const params = group
+            ? `group=${encodeURIComponent(group)}&num_simulations=1000&top_n=10`
+            : `num_simulations=1000&top_n=10`;
+        const data = await fetchJson(
+            `/world-cup/tournament/match-impact?${params}`,
+            { timeout: 60000 },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentMatchImpact = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] match impact unavailable:", e.message);
+    }
+    wcApiData.tournamentMatchImpact = null;
+    return null;
+}
+
+// Round 102 — fetch helpers for WC match intelligence endpoints.
+async function fetchWcMatchPlayerSpotlight(home, away, topN = 5) {
+    if (!home || !away) return null;
+    const cacheKey = `${home}|${away}`;
+    if (wcApiData.matchSpotlightCache[cacheKey]) return wcApiData.matchSpotlightCache[cacheKey];
+    wcApiData.matchSpotlightLoading.add(cacheKey);
+    try {
+        const data = await fetchJson(
+            `/world-cup/match-briefings/${encodeURIComponent(home)}/${encodeURIComponent(away)}/spotlight?top_n=${topN}`,
+            { fetchOpts: { signal: AbortSignal.timeout(60000) } },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.matchSpotlightCache[cacheKey] = data;
+            wcApiData.apiOnline = true;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Spotlight] fetch failed:", e.message);
+    }
+    wcApiData.matchSpotlightCache[cacheKey] = null;
+    return null;
+}
+
+async function fetchWcTeamFormTrend(team, lastN = 6) {
+    if (!team) return null;
+    if (wcApiData.teamFormTrendCache[team]) return wcApiData.teamFormTrendCache[team];
+    wcApiData.teamFormTrendLoading.add(team);
+    try {
+        const data = await fetchJson(
+            `/world-cup/teams/${encodeURIComponent(team)}/form-trend?last_n=${lastN}`,
+            { fetchOpts: { signal: AbortSignal.timeout(60000) } },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.teamFormTrendCache[team] = data;
+            wcApiData.apiOnline = true;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Form Trend] fetch failed:", e.message);
+    }
+    wcApiData.teamFormTrendCache[team] = null;
+    return null;
+}
+
+async function fetchWcTournamentKnockoutMatchImpact(numSimulations = 5000, topN = 10) {
+    try {
+        const data = await fetchJson(
+            `/world-cup/tournament/knockout/match-impact?num_simulations=${numSimulations}&top_n=${topN}`,
+            { fetchOpts: { signal: AbortSignal.timeout(120000) } },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentKnockoutMatchImpact = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] KO match impact unavailable:", e.message);
+    }
+    wcApiData.tournamentKnockoutMatchImpact = null;
+    return null;
+}
+
+async function fetchWcTournamentTopMatches(groupTopN = 5, knockoutTopN = 5, numSimulations = 1000) {
+    try {
+        const data = await fetchJson(
+            `/world-cup/tournament/top-matches?group_top_n=${groupTopN}&knockout_top_n=${knockoutTopN}&num_simulations=${numSimulations}`,
+            { fetchOpts: { signal: AbortSignal.timeout(120000) } },
+        );
+        if (data && (data.status === "ok" || data.status === "no_data")) {
+            wcApiData.tournamentTopMatches = data;
+            return data;
+        }
+    } catch (e) {
+        console.warn("[WC Tournament] top matches unavailable:", e.message);
+    }
+    wcApiData.tournamentTopMatches = null;
     return null;
 }
 
@@ -17921,11 +23704,69 @@ async function loadAndRenderWcTournament() {
     await Promise.all([
         fetchWcTournamentSummary(),
         fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+        fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentQualificationImpact(wcApiData.tournamentSelectedGroup),
         fetchWcTournamentTiebreakDiagnostics(wcApiData.tournamentSelectedGroup),
+        fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
+        fetchWcTournamentOverallLeaderboard("advance_prob"),
+        fetchWcTournamentMatchImpact(),
+        fetchWcTournamentTopMatches(5, 5, 1000),
     ]);
     wcApiData.tournamentLoading = false;
     renderWcTournament();
+}
+
+function _renderWcKoImpactBody(z) {
+    const body = document.getElementById("wc-ko-impact-body");
+    if (!body) return;
+    const data = wcApiData.tournamentKnockoutMatchImpact;
+    if (!data) {
+        body.innerHTML = `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${z ? "暂无数据" : "No data"}</p>`;
+        return;
+    }
+    if (data.status === "no_data") {
+        body.innerHTML = `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${escapeHtml(data.disclaimer || (z ? "暂无待处理淘汰赛比赛" : "No pending knockout matches"))}</p>`;
+        return;
+    }
+    const matches = data.matches || [];
+    if (matches.length === 0) {
+        body.innerHTML = `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${z ? "暂无待处理淘汰赛比赛" : "No pending knockout matches"}</p>`;
+        return;
+    }
+    body.innerHTML = `<table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>${z ? "轮次" : "Round"}</th>
+                <th>${z ? "比赛" : "Match"}</th>
+                <th>${z ? "夺冠概率波动" : "Championship Swing"}</th>
+                <th>${z ? "最大影响球队" : "Top Affected"}</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${matches.map((m, i) => {
+                const swingVal = m.max_swing != null ? m.max_swing : 0;
+                const impactCls = swingVal >= 0.15 ? "status-high" : swingVal >= 0.05 ? "status-medium" : "status-low";
+                const swingPct = (swingVal * 100).toFixed(1) + "%";
+                const topTeam = m.max_swing_team || (m.per_team && m.per_team[0] && m.per_team[0].team) || "—";
+                const topSwing = m.max_swing != null
+                    ? (m.max_swing * 100).toFixed(1) + "%"
+                    : (m.per_team && m.per_team[0] ? (m.per_team[0].swing * 100).toFixed(1) + "%" : "—");
+                const totalImpactStr = (m.total_impact || 0).toFixed(2);
+                const dateStr = m.date ? `<br><span style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(m.date)}</span>` : "";
+                return `<tr>
+                    <td><span class="status-pill" style="font-size:0.6rem">${i + 1}</span></td>
+                    <td><span class="status-pill status-medium" style="font-size:0.6rem">${escapeHtml(m.round || m.round_label || "—")}</span></td>
+                    <td><strong>${escapeHtml(m.home || "—")}</strong> vs <strong>${escapeHtml(m.away || "—")}</strong>${dateStr}</td>
+                    <td><span class="status-pill ${impactCls}" style="font-size:0.65rem">${swingPct}</span> <span style="font-size:0.6rem;color:var(--text-muted)">(Σ ${totalImpactStr})</span></td>
+                    <td>${escapeHtml(topTeam)} <span style="font-size:0.65rem;color:var(--text-muted)">(${topSwing})</span></td>
+                </tr>`;
+            }).join("")}
+        </tbody>
+    </table>
+    <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+        ${z ? "每场比赛对所有球队夺冠概率的最大波动；蒙特卡洛模拟。" : "Max championship probability swing per match; Monte-Carlo simulated."}
+    </p>`;
 }
 
 function renderWcTournament() {
@@ -17971,6 +23812,16 @@ function renderWcTournament() {
 
     // Standings for selected group
     const groupStandings = (data.standings && data.standings[selectedGroup]) || [];
+
+    // Standings probabilities (enriched with advance/win_group prob)
+    const standingsProb = wcApiData.tournamentStandingsProbabilities;
+    const probByTeam = {};
+    if (standingsProb?.status === "ok" && standingsProb.groups?.[selectedGroup]) {
+        for (const row of standingsProb.groups[selectedGroup]) {
+            probByTeam[row.team] = row;
+        }
+    }
+    const hasProbData = Object.keys(probByTeam).length > 0;
 
     // Best thirds (list of dicts)
     const bestThirds = data.best_thirds || [];
@@ -18030,12 +23881,22 @@ function renderWcTournament() {
                                 <th>GA</th>
                                 <th>GD</th>
                                 <th>Pts</th>
+                                ${hasProbData ? `<th>${escapeHtml(t("wc_standings_prob_advance_col"))}</th><th>${escapeHtml(t("wc_standings_prob_win_col"))}</th>` : ""}
                             </tr>
                         </thead>
                         <tbody>
                             ${groupStandings.map((s, i) => {
                                 const pos = i + 1;
                                 const cls = pos === 1 ? "status-high" : pos === 2 ? "status-medium" : (pos === 3 ? "status-low" : "");
+                                const probRow = probByTeam[s.team];
+                                const advPct = probRow ? (probRow.advance_prob * 100).toFixed(0) + "%" : "";
+                                const winPct = probRow ? (probRow.win_group_prob * 100).toFixed(0) + "%" : "";
+                                const advCls = probRow
+                                    ? probRow.advance_prob >= 0.7 ? "status-high" : probRow.advance_prob >= 0.3 ? "status-medium" : "status-low"
+                                    : "";
+                                const winCls = probRow
+                                    ? probRow.win_group_prob >= 0.5 ? "status-high" : probRow.win_group_prob >= 0.15 ? "status-medium" : "status-low"
+                                    : "";
                                 return `<tr>
                                     <td><span class="status-pill ${cls}" style="font-size:0.6rem">${pos}</span></td>
                                     <td>${escapeHtml(s.team)}</td>
@@ -18047,6 +23908,7 @@ function renderWcTournament() {
                                     <td>${s.goals_against}</td>
                                     <td>${s.goal_difference >= 0 ? "+" : ""}${s.goal_difference}</td>
                                     <td><strong>${s.points}</strong></td>
+                                    ${hasProbData ? `<td>${probRow ? `<span class="status-pill ${advCls}" style="font-size:0.65rem">${advPct}</span>` : "—"}</td><td>${probRow ? `<span class="status-pill ${winCls}" style="font-size:0.65rem">${winPct}</span>` : "—"}</td>` : ""}
                                 </tr>`;
                             }).join("")}
                         </tbody>
@@ -18055,6 +23917,8 @@ function renderWcTournament() {
                 <p style="font-size:0.7rem;color:var(--text-muted);margin-top:0.5rem">
                     ${z ? "前 2 名直接出线，第 3 名参与最佳小组第三评比" : "Top 2 advance; 3rd enters best-thirds ranking"}
                 </p>
+                ${hasProbData ? `<p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.3rem;line-height:1.4">${escapeHtml(t("wc_standings_prob_disclaimer"))}</p>` : ""}
+                ${standingsProb?.status === "no_data" ? `<p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.3rem">${escapeHtml(standingsProb.disclaimer || "")}</p>` : ""}
                 ${impact ? `<div style="margin-top:0.6rem;padding:0.5rem;border-left:2px solid var(--accent);font-size:0.72rem">
                     <div style="display:flex;justify-content:space-between;gap:0.4rem"><strong>${z ? "本地出线影响" : "Local qualification impact"}</strong><button class="text-button" id="wc-qualification-export" type="button" style="font-size:0.65rem">${z ? "导出 JSON" : "Export JSON"}</button></div>
                     ${z ? "第三名" : "Third"}: ${escapeHtml(impact.third_place?.team || "—")} · ${z ? "跨组排名" : "cross-group rank"} ${impact.third_place?.rank || "—"}/${impact.third_place?.cutoff_rank || 8}
@@ -18077,17 +23941,20 @@ function renderWcTournament() {
                                 <th>${z ? "主队" : "Home"}</th>
                                 <th>${z ? "比分" : "Score"}</th>
                                 <th>${z ? "客队" : "Away"}</th>
+                                <th>${escapeHtml(t("wc_match_pred_col"))}</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             ${matches.map((m) => {
+                                const predPill = _wcMatchPredictionPill(m.match_id);
                                 if (m.completed) {
                                     return `<tr>
                                         <td>${m.matchday}</td>
                                         <td>${escapeHtml(m.home)}</td>
                                         <td><strong>${m.result.home_goals}-${m.result.away_goals}</strong></td>
                                         <td>${escapeHtml(m.away)}</td>
+                                        <td>${predPill}</td>
                                         <td><button class="text-button wc-tournament-clear" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">${z ? "清除" : "Clear"}</button></td>
                                     </tr>`;
                                 }
@@ -18100,14 +23967,215 @@ function renderWcTournament() {
                                         <input type="number" min="0" max="30" class="wc-tournament-input" data-match-id="${escapeAttr(m.match_id)}" data-side="away" style="width:2.5rem" placeholder="-">
                                     </td>
                                     <td>${escapeHtml(m.away)}</td>
+                                    <td>${predPill}</td>
                                     <td><button class="text-button wc-tournament-apply" data-match-id="${escapeAttr(m.match_id)}" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">${z ? "录入" : "Apply"}</button></td>
                                 </tr>`;
                             }).join("")}
                         </tbody>
                     </table>
                 </div>
+                <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.4rem;line-height:1.4">
+                    ${escapeHtml(t("wc_match_pred_disclaimer"))}
+                </p>
             </article>
         </div>
+
+        <article class="liquid-panel compact" style="margin-bottom:1rem">
+            <div class="panel-head">
+                <h3>${escapeHtml(t("wc_overall_title"))}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <select id="wc-overall-sort" class="filter-select" style="min-width:120px;font-size:0.75rem">
+                        <option value="advance_prob">${escapeHtml(t("wc_overall_sort_advance"))}</option>
+                        <option value="win_group_prob">${escapeHtml(t("wc_overall_sort_win_group"))}</option>
+                        <option value="points">${escapeHtml(t("wc_overall_sort_points"))}</option>
+                        <option value="goal_difference">${escapeHtml(t("wc_overall_sort_gd"))}</option>
+                        <option value="goals_for">${escapeHtml(t("wc_overall_sort_gf"))}</option>
+                    </select>
+                </div>
+            </div>
+            <div class="table-scroll" style="max-height:420px;overflow-y:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>${z ? "球队" : "Team"}</th>
+                            <th>${z ? "小组" : "Grp"}</th>
+                            <th>P</th>
+                            <th>Pts</th>
+                            <th>GD</th>
+                            <th>${escapeHtml(t("wc_standings_prob_advance_col"))}</th>
+                            <th>${escapeHtml(t("wc_standings_prob_win_col"))}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${(wcApiData.tournamentOverallLeaderboard?.status === "ok" && wcApiData.tournamentOverallLeaderboard.teams)
+                            ? wcApiData.tournamentOverallLeaderboard.teams.map((t) => {
+                                const advPct = (t.advance_prob * 100).toFixed(0) + "%";
+                                const winPct = (t.win_group_prob * 100).toFixed(0) + "%";
+                                const advCls = t.advance_prob >= 0.7 ? "status-high" : t.advance_prob >= 0.3 ? "status-medium" : "status-low";
+                                const winCls = t.win_group_prob >= 0.5 ? "status-high" : t.win_group_prob >= 0.15 ? "status-medium" : "status-low";
+                                const posCls = t.position === 1 ? "status-high" : t.position === 2 ? "status-medium" : (t.position === 3 ? "status-low" : "");
+                                return `<tr>
+                                    <td><span class="status-pill" style="font-size:0.6rem">${t.rank}</span></td>
+                                    <td>${escapeHtml(t.team)}</td>
+                                    <td><span class="status-pill ${posCls}" style="font-size:0.6rem">${t.group}-${t.position}</span></td>
+                                    <td>${t.played}</td>
+                                    <td><strong>${t.points}</strong></td>
+                                    <td>${t.goal_difference >= 0 ? "+" : ""}${t.goal_difference}</td>
+                                    <td><span class="status-pill ${advCls}" style="font-size:0.65rem">${advPct}</span></td>
+                                    <td><span class="status-pill ${winCls}" style="font-size:0.65rem">${winPct}</span></td>
+                                </tr>`;
+                            }).join("")
+                            : `<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem">
+                                ${wcApiData.tournamentOverallLeaderboard?.status === "no_data"
+                                    ? escapeHtml(wcApiData.tournamentOverallLeaderboard.disclaimer || "")
+                                    : (z ? "加载中..." : "Loading...")}
+                            </td></tr>`}
+                    </tbody>
+                </table>
+            </div>
+            <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+                ${escapeHtml(t("wc_overall_disclaimer"))}
+            </p>
+        </article>
+
+        <article class="liquid-panel compact" style="margin-bottom:1rem">
+            <div class="panel-head">
+                <h3>${escapeHtml(t("wc_impact_title"))}</h3>
+                <span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(t("wc_impact_subtitle"))}</span>
+            </div>
+            <div class="table-scroll" style="max-height:500px;overflow-y:auto">
+                ${(() => {
+                    const mi = wcApiData.tournamentMatchImpact;
+                    if (!mi) {
+                        return `<p style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("wc_impact_loading"))}</p>`;
+                    }
+                    if (mi.status === "no_data") {
+                        return `<p style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem">${escapeHtml(mi.disclaimer || t("wc_impact_no_data"))}</p>`;
+                    }
+                    if (!mi.matches || mi.matches.length === 0) {
+                        return `<p style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("wc_impact_no_matches"))}</p>`;
+                    }
+                    return `<table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>${escapeHtml(t("wc_impact_match"))}</th>
+                                <th>${escapeHtml(t("wc_impact_group"))}</th>
+                                <th>${escapeHtml(t("wc_impact_total_impact"))}</th>
+                                <th>${escapeHtml(t("wc_impact_max_swing"))}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${mi.matches.map((m, i) => {
+                                const impactCls = m.total_impact >= 1.5 ? "status-high" : m.total_impact >= 0.5 ? "status-medium" : "status-low";
+                                const swingCls = m.max_swing >= 0.5 ? "status-high" : m.max_swing >= 0.2 ? "status-medium" : "status-low";
+                                const topTeams = (m.per_team || []).slice(0, 3).map((pt) => {
+                                    const ptCls = pt.swing >= 0.5 ? "status-high" : pt.swing >= 0.2 ? "status-medium" : "status-low";
+                                    const hwPct = (pt.home_win_prob * 100).toFixed(0) + "%";
+                                    const drPct = (pt.draw_prob * 100).toFixed(0) + "%";
+                                    const awPct = (pt.away_win_prob * 100).toFixed(0) + "%";
+                                    const swPct = (pt.swing * 100).toFixed(0) + "%";
+                                    return `<tr style="font-size:0.7rem">
+                                        <td colspan="2" style="padding-left:1.5rem;color:var(--text-muted)">${escapeHtml(pt.team)}</td>
+                                        <td colspan="3">
+                                            <span class="status-pill" style="font-size:0.55rem;margin:0.1rem">${escapeHtml(t("wc_impact_home_win"))} ${hwPct}</span>
+                                            <span class="status-pill" style="font-size:0.55rem;margin:0.1rem">${escapeHtml(t("wc_impact_draw"))} ${drPct}</span>
+                                            <span class="status-pill" style="font-size:0.55rem;margin:0.1rem">${escapeHtml(t("wc_impact_away_win"))} ${awPct}</span>
+                                            <span class="status-pill ${ptCls}" style="font-size:0.55rem;margin:0.1rem">${escapeHtml(t("wc_impact_swing"))} ${swPct}</span>
+                                        </td>
+                                    </tr>`;
+                                }).join("");
+                                return `<tr style="border-bottom:2px solid var(--border-color,rgba(255,255,255,0.05))">
+                                    <td><span class="status-pill" style="font-size:0.6rem">${i + 1}</span></td>
+                                    <td><strong>${escapeHtml(m.home)}</strong> vs <strong>${escapeHtml(m.away)}</strong><br><span style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(m.date || "")} ${m.venue ? "· " + escapeHtml(m.venue) : ""}</span></td>
+                                    <td><span class="status-pill" style="font-size:0.6rem">${escapeHtml(m.group)}</span></td>
+                                    <td><span class="status-pill ${impactCls}" style="font-size:0.65rem">${m.total_impact.toFixed(2)}</span></td>
+                                    <td><span class="status-pill ${swingCls}" style="font-size:0.65rem">${(m.max_swing * 100).toFixed(0)}%</span></td>
+                                </tr>${topTeams}`;
+                            }).join("")}
+                        </tbody>
+                    </table>`;
+                })()}
+            </div>
+            <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+                ${escapeHtml(t("wc_impact_disclaimer"))}
+            </p>
+        </article>
+
+        <article class="liquid-panel compact" style="margin-bottom:1rem">
+            <div class="panel-head">
+                <h3>${z ? "重点比赛排行" : "Top Matches to Watch"}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <span style="font-size:0.7rem;color:var(--text-muted)">${z ? "跨阶段统一榜单" : "cross-stage unified ranking"}</span>
+                    <button class="text-button" id="wc-top-matches-refresh" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">↻</button>
+                </div>
+            </div>
+            <div class="table-scroll" style="max-height:380px;overflow-y:auto">
+                ${(() => {
+                    const tm = wcApiData.tournamentTopMatches;
+                    if (!tm) {
+                        return `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${z ? "加载中..." : "Loading..."}</p>`;
+                    }
+                    if (tm.status === "no_data") {
+                        return `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${escapeHtml(tm.disclaimer || (z ? "暂无数据" : "No data"))}</p>`;
+                    }
+                    if (!tm.matches || tm.matches.length === 0) {
+                        return `<p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">${z ? "暂无重点比赛" : "No top matches"}</p>`;
+                    }
+                    return `<table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>${z ? "阶段" : "Stage"}</th>
+                                <th>${z ? "比赛" : "Match"}</th>
+                                <th>${z ? "小组" : "Group"}</th>
+                                <th>${z ? "总影响" : "Total Impact"}</th>
+                                <th>${z ? "指标" : "Metric"}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tm.matches.map((m, i) => {
+                                const stageLabel = m.stage === "knockout"
+                                    ? (z ? "淘汰赛" : "Knockout")
+                                    : (z ? "小组赛" : "Group");
+                                const stageCls = m.stage === "knockout" ? "status-high" : "status-medium";
+                                const impactCls = m.total_impact >= 1.5 ? "status-high" : m.total_impact >= 0.5 ? "status-medium" : "status-low";
+                                const metricLabel = m.impact_metric === "championship_prob_swing"
+                                    ? (z ? "夺冠概率波动" : "Championship swing")
+                                    : (z ? "出线概率波动" : "Advancement swing");
+                                const roundLabel = m.round_label ? `<span style="font-size:0.6rem;color:var(--text-muted)"> · ${escapeHtml(m.round_label)}</span>` : "";
+                                return `<tr>
+                                    <td><span class="status-pill" style="font-size:0.6rem">${i + 1}</span></td>
+                                    <td><span class="status-pill ${stageCls}" style="font-size:0.6rem">${stageLabel}</span></td>
+                                    <td><strong>${escapeHtml(m.home || "—")}</strong> vs <strong>${escapeHtml(m.away || "—")}</strong>${roundLabel}<br><span style="font-size:0.65rem;color:var(--text-muted)">${escapeHtml(m.date || "")} ${m.venue ? "· " + escapeHtml(m.venue) : ""}</span></td>
+                                    <td>${m.group ? `<span class="status-pill" style="font-size:0.6rem">${escapeHtml(m.group)}</span>` : "—"}</td>
+                                    <td><span class="status-pill ${impactCls}" style="font-size:0.65rem">${m.total_impact.toFixed(2)}</span></td>
+                                    <td><span style="font-size:0.65rem;color:var(--text-muted)">${metricLabel}</span></td>
+                                </tr>`;
+                            }).join("")}
+                        </tbody>
+                    </table>`;
+                })()}
+            </div>
+            <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+                ${z ? "基于剩余比赛对各队出线/夺冠概率的影响排序，使用蒙特卡洛模拟。" : "Ranked by impact on each team's advancement/championship probability. Monte-Carlo simulated."}
+            </p>
+        </article>
+
+        <article class="liquid-panel compact" style="margin-bottom:1rem">
+            <div class="panel-head">
+                <h3>${z ? "淘汰赛比赛重要性" : "Knockout Match Impact"}</h3>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <button class="text-button" id="wc-ko-impact-load" type="button" style="font-size:0.7rem;padding:0.2rem 0.5rem">${z ? "加载" : "Load"}</button>
+                </div>
+            </div>
+            <div class="table-scroll" style="max-height:380px;overflow-y:auto" id="wc-ko-impact-body">
+                <p style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.85rem">
+                    ${z ? "点击「加载」计算淘汰赛阶段每场比赛对夺冠概率的影响" : "Click \"Load\" to compute knockout match impact on championship probability"}
+                </p>
+            </div>
+        </article>
 
         <article class="liquid-panel compact" style="margin-bottom:1rem">
             <div class="panel-head">
@@ -18220,10 +24288,20 @@ function renderWcTournament() {
             wcApiData.tournamentSelectedGroup = e.target.value;
             await Promise.all([
                 fetchWcTournamentMatches(e.target.value),
+                fetchWcTournamentMatchPredictions(e.target.value),
                 fetchWcTournamentSummary(),
                 fetchWcTournamentQualificationImpact(e.target.value),
                 fetchWcTournamentTiebreakDiagnostics(e.target.value),
+                fetchWcTournamentStandingsProbabilities(e.target.value),
             ]);
+            renderWcTournament();
+        });
+    }
+    const overallSortSelect = document.getElementById("wc-overall-sort");
+    if (overallSortSelect && !overallSortSelect.dataset.bound) {
+        overallSortSelect.dataset.bound = "1";
+        overallSortSelect.addEventListener("change", async (e) => {
+            await fetchWcTournamentOverallLeaderboard(e.target.value);
             renderWcTournament();
         });
     }
@@ -18238,12 +24316,50 @@ function renderWcTournament() {
         refreshBtn.addEventListener("click", () => loadAndRenderWcTournament());
     }
 
+    // Round 102 — Top Matches refresh button
+    const topMatchesRefresh = document.getElementById("wc-top-matches-refresh");
+    if (topMatchesRefresh && !topMatchesRefresh.dataset.bound) {
+        topMatchesRefresh.dataset.bound = "1";
+        topMatchesRefresh.addEventListener("click", async () => {
+            topMatchesRefresh.disabled = true;
+            await fetchWcTournamentTopMatches(5, 5, 1000);
+            topMatchesRefresh.disabled = false;
+            renderWcTournament();
+        });
+    }
+
+    // Round 102 — KO Match Impact load button (lazy load; expensive simulation)
+    const koImpactLoad = document.getElementById("wc-ko-impact-load");
+    if (koImpactLoad && !koImpactLoad.dataset.bound) {
+        koImpactLoad.dataset.bound = "1";
+        koImpactLoad.addEventListener("click", async () => {
+            koImpactLoad.disabled = true;
+            koImpactLoad.textContent = z ? "计算中..." : "Computing...";
+            await fetchWcTournamentKnockoutMatchImpact(3000, 10);
+            koImpactLoad.disabled = false;
+            koImpactLoad.textContent = z ? "刷新" : "Refresh";
+            _renderWcKoImpactBody(z);
+        });
+        // If data already cached from a prior load, render immediately
+        if (wcApiData.tournamentKnockoutMatchImpact) {
+            _renderWcKoImpactBody(z);
+        }
+    }
+
     const resetBtn = document.getElementById("wc-tournament-reset");
     if (resetBtn && !resetBtn.dataset.bound) {
         resetBtn.dataset.bound = "1";
         resetBtn.addEventListener("click", async () => {
             await resetTournament();
-            await fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup);
+            await Promise.all([
+                fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+                fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
+                fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
+                fetchWcTournamentOverallLeaderboard(
+                    wcApiData.tournamentOverallLeaderboard?.sort_by || "advance_prob"
+                ),
+                fetchWcTournamentMatchImpact(),
+            ]);
             renderWcTournament();
         });
     }
@@ -18264,10 +24380,16 @@ function renderWcTournament() {
             }
             const result = await postTournamentResult(matchId, hg, ag);
             if (result && result.status === "ok") {
-                // Refresh summary and matches, then re-render
+                // Refresh summary, matches, predictions, and probabilities, then re-render
                 await Promise.all([
                     fetchWcTournamentSummary(),
                     fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentOverallLeaderboard(
+                        wcApiData.tournamentOverallLeaderboard?.sort_by || "advance_prob"
+                    ),
+                    fetchWcTournamentMatchImpact(),
                 ]);
                 renderWcTournament();
             }
@@ -18285,6 +24407,12 @@ function renderWcTournament() {
                 await Promise.all([
                     fetchWcTournamentSummary(),
                     fetchWcTournamentMatches(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentMatchPredictions(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentStandingsProbabilities(wcApiData.tournamentSelectedGroup),
+                    fetchWcTournamentOverallLeaderboard(
+                        wcApiData.tournamentOverallLeaderboard?.sort_by || "advance_prob"
+                    ),
+                    fetchWcTournamentMatchImpact(),
                 ]);
                 renderWcTournament();
             }
@@ -18414,6 +24542,11 @@ function renderWcTournament() {
         koPrintBtn.addEventListener("click", () => {
             window.print();
         });
+    }
+
+    // Round 102 — auto-render KO Match Impact body if cached
+    if (wcApiData.tournamentKnockoutMatchImpact) {
+        _renderWcKoImpactBody(z);
     }
 
     // Auto-render knockout bracket if data is available
@@ -18605,7 +24738,7 @@ function renderWcKnockoutReviewLedger() {
                     : (z ? "无方向判断" : "No call");
         return `<tr><td>${escapeHtml(review.match_id || "")}</td><td>${escapeHtml(fixture.home_team || "TBD")} ${outcome.home_goals ?? "-"}-${outcome.away_goals ?? "-"} ${escapeHtml(fixture.away_team || "TBD")}</td><td>${escapeHtml(direction)}</td></tr>`;
     }).join("");
-    panel.innerHTML = `<div style="margin-bottom:0.65rem;padding:0.65rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03))">
+    panel.innerHTML = `<div style="margin-bottom:0.65rem;padding:0.65rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03))">
         <div style="display:flex;justify-content:space-between;gap:0.5rem;align-items:center"><strong style="font-size:0.8rem">${z ? "本地赛果复盘总览" : "Local Result Review Ledger"}</strong><button class="text-button" id="wc-ko-review-ledger-export" type="button" style="font-size:0.68rem">${z ? "导出 JSON" : "Export JSON"}</button></div>
         <p style="font-size:0.67rem;color:var(--text-muted);margin:0.3rem 0">${z ? "已完成" : "Completed"}: ${summary.completed_matches || 0} · ${z ? "有赛前快照" : "Snapshots"}: ${summary.reviews_with_snapshot || 0} · ${z ? "缺失" : "Missing"}: ${summary.snapshots_missing || 0} · ${z ? "方向一致" : "Matched"}: ${summary.matched_direction || 0} · ${z ? "本地冷门" : "Upsets"}: ${summary.recorded_upset || 0}</p>
         ${rows ? `<div class="table-scroll"><table style="font-size:0.7rem"><thead><tr><th>ID</th><th>${z ? "本地录入赛果" : "Local recorded result"}</th><th>${z ? "对照" : "Comparison"}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p style="font-size:0.7rem;color:var(--text-muted)">${z ? "尚无已录入淘汰赛赛果。" : "No local knockout results have been recorded."}</p>`}
@@ -18696,7 +24829,7 @@ function renderWcKnockoutScenarios(team) {
     const nm = data.next_match;
     const scenarios = data.scenarios || [];
 
-    let html = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
+    let html = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
             <h4 style="font-size:0.9rem">${escapeHtml(team)} ${z ? "夺冠情景分析" : "Championship Scenarios"}</h4>
             <button class="text-button" onclick="document.getElementById('wc-ko-scenarios-display').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
@@ -18875,7 +25008,7 @@ function renderWcShareDialog() {
         exported_at: data.exported_at,
     }, null, 2);
 
-    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
+    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
             <h4 style="font-size:0.9rem">${z ? "分享锦标赛状态" : "Share Tournament State"}</h4>
             <button class="text-button" onclick="document.getElementById('wc-ko-share-dialog').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
@@ -18884,7 +25017,7 @@ function renderWcShareDialog() {
             ${z ? "格式" : "Format"}: ${escapeHtml(data.format || "")} · ${z ? "大小" : "Size"}: ${sizeKb} KB · ${z ? "导出时间" : "Exported"}: ${escapeHtml(data.exported_at || "")}
         </div>
         <p style="font-size:0.75rem;margin-bottom:0.4rem">${z ? "复制下方编码字符串，在其他设备粘贴到「导入」对话框即可恢复锦标赛状态。" : "Copy the encoded string below and paste it into the Import dialog on another device to restore the tournament state."}</p>
-        <textarea id="wc-ko-share-code" readonly style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:4px;background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical" onclick="this.select()">${escapeHtml(encoded)}</textarea>
+        <textarea id="wc-ko-share-code" readonly style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-xs);background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical" onclick="this.select()">${escapeHtml(encoded)}</textarea>
         <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
             <button class="text-button" id="wc-ko-share-copy" type="button" style="font-size:0.75rem">${z ? "复制编码" : "Copy Code"}</button>
             <button class="text-button" id="wc-ko-share-download" type="button" style="font-size:0.75rem">${z ? "下载 JSON" : "Download JSON"}</button>
@@ -18936,13 +25069,13 @@ function renderWcImportDialog() {
         bracketPanel.parentElement.insertBefore(dlg, bracketPanel);
     }
 
-    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
+    dlg.innerHTML = `<div style="padding:0.8rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03));margin-bottom:1rem">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
             <h4 style="font-size:0.9rem">${z ? "导入锦标赛状态" : "Import Tournament State"}</h4>
             <button class="text-button" onclick="document.getElementById('wc-ko-import-dialog').remove()" style="font-size:0.7rem;padding:0.2rem 0.5rem">✕</button>
         </div>
         <p style="font-size:0.75rem;margin-bottom:0.4rem">${z ? "先预览编码的状态差异，再确认替换本地应用中的锦标赛状态。" : "Preview state differences first, then explicitly confirm replacement of the local application tournament state."}</p>
-        <textarea id="wc-ko-import-code" placeholder="${z ? "粘贴编码..." : "Paste encoded string..."}" style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:4px;background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical"></textarea>
+        <textarea id="wc-ko-import-code" placeholder="${z ? "粘贴编码..." : "Paste encoded string..."}" style="width:100%;height:80px;font-size:0.65rem;font-family:monospace;padding:0.4rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-xs);background:var(--bg-color,rgba(0,0,0,0.3));color:var(--text);resize:vertical"></textarea>
         <div id="wc-ko-import-msg" style="font-size:0.7rem;margin-top:0.4rem;min-height:1rem"></div>
         <div id="wc-ko-import-details" style="font-size:0.7rem;color:var(--text-muted)"></div>
         <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
@@ -19107,12 +25240,12 @@ function renderWcGroupStageSimulation() {
             const winPct = (t.win_group_prob * 100).toFixed(1);
             const barWidth = Math.max(1, t.advance_prob * 100);
             const barColor = t.advance_prob >= 0.8 ? "var(--status-high-color,#4caf50)" :
-                             t.advance_prob >= 0.4 ? "var(--status-medium-color,#ff9800)" :
+                             t.advance_prob >= 0.4 ? "var(--status-medium-color,#ff9500)" :
                              "var(--status-low-color,#f44336)";
             html += `<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.7rem">
                 <span style="min-width:30px;color:var(--text-muted)">${escapeHtml(t.group)}</span>
                 <span style="min-width:100px">${escapeHtml(t.team)}</span>
-                <div style="flex:1;background:var(--border-color,rgba(255,255,255,0.1));border-radius:3px;height:6px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:${barColor}"></div></div>
+                <div style="flex:1;background:var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-xs);height:6px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:${barColor}"></div></div>
                 <span style="min-width:45px;text-align:right">${advPct}%</span>
                 <span style="min-width:60px;text-align:right;color:var(--text-muted)">${z ? "小组第一" : "Win"} ${winPct}%</span>
             </div>`;
@@ -19163,7 +25296,7 @@ function renderWcKnockoutBracket() {
     let html = "";
 
     if (champ) {
-        html += `<div style="text-align:center;padding:0.8rem;margin-bottom:1rem;background:var(--panel-bg,rgba(255,255,255,0.05));border-radius:8px">
+        html += `<div style="text-align:center;padding:0.8rem;margin-bottom:1rem;background:var(--panel-bg,rgba(255,255,255,0.05));border-radius:var(--radius-sm)">
             <span style="font-size:1.2rem">🏆</span>
             <span style="font-size:1.1rem;font-weight:bold;margin-left:0.5rem">${escapeHtml(champ)}</span>
             <span style="color:var(--text-muted);margin-left:0.5rem">${z ? "冠军" : "Champion"}</span>
@@ -19177,7 +25310,7 @@ function renderWcKnockoutBracket() {
     // Tournament win odds table
     if (probsData && probsData.tournament_win_probability && probsData.tournament_win_probability.length > 0) {
         const odds = probsData.tournament_win_probability.slice(0, 8);
-        html += `<div style="margin-bottom:1rem;padding:0.6rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;background:var(--panel-bg,rgba(255,255,255,0.03))">
+        html += `<div style="margin-bottom:1rem;padding:0.6rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);background:var(--panel-bg,rgba(255,255,255,0.03))">
             <h4 style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em">${z ? "夺冠概率" : "Tournament Win Odds"} <span style="font-weight:normal;text-transform:none">(${z ? "蒙特卡洛 " + probsData.num_simulations + " 次模拟" : "MC " + probsData.num_simulations + " sims"})</span></h4>
             <div style="display:flex;flex-wrap:wrap;gap:0.4rem">`;
         for (const t of odds) {
@@ -19185,7 +25318,7 @@ function renderWcKnockoutBracket() {
             const barWidth = Math.max(2, t.win_probability * 100);
             html += `<div style="min-width:110px;flex:1">
                 <div style="font-size:0.7rem;margin-bottom:0.1rem">${escapeHtml(t.team)}</div>
-                <div style="background:var(--border-color,rgba(255,255,255,0.1));border-radius:3px;height:4px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:var(--accent-color,#4a9eff)"></div></div>
+                <div style="background:var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-xs);height:4px;overflow:hidden"><div style="width:${barWidth}%;height:100%;background:var(--accent-color,#4a9eff)"></div></div>
                 <div style="font-size:0.65rem;color:var(--text-muted)">${pct}%</div>
             </div>`;
         }
@@ -19292,7 +25425,7 @@ function renderKnockoutMatchCard(m, z, prob) {
             : comparison.directional_result === "recorded_upset"
                 ? (z ? "本地录入结果偏离模型方向" : "recorded upset")
                 : (z ? "没有方向性判断" : "no directional call");
-        reviewHtml = `<div style="margin-top:0.35rem;padding:0.3rem;background:var(--bg-elevated);border-radius:4px;font-size:0.62rem;color:var(--text-muted)">
+        reviewHtml = `<div style="margin-top:0.35rem;padding:0.3rem;background:var(--bg-elevated);border-radius:var(--radius-xs);font-size:0.62rem;color:var(--text-muted)">
             <div>${z ? "赛前本地快照" : "Pre-recording snapshot"}: ${(Number(prediction.home_win_probability || 0) * 100).toFixed(0)}% / ${(Number(prediction.away_win_probability || 0) * 100).toFixed(0)}%</div>
             <div>${escapeHtml(resultText)} · ${z ? "胜方当时概率" : "winner probability"} ${(Number(comparison.recorded_winner_probability || 0) * 100).toFixed(0)}%</div>
             <div style="margin-top:0.15rem">${z ? "仅与本地录入结果对照，不构成模型评估。" : "Local result comparison only; not a model evaluation."}</div>
@@ -19305,7 +25438,7 @@ function renderKnockoutMatchCard(m, z, prob) {
     const probBar = (prob && prob.home_win_probability != null && prob.away_win_probability != null)
         ? `<div style="display:flex;align-items:center;gap:0.2rem;margin-top:0.2rem;font-size:0.6rem;color:var(--text-muted)">
               <span style="font-weight:bold;color:var(--text-secondary)">${(prob.home_win_probability * 100).toFixed(0)}%</span>
-              <div style="flex:1;height:3px;border-radius:2px;overflow:hidden;display:flex">
+              <div style="flex:1;height:3px;border-radius:var(--radius-xs);overflow:hidden;display:flex">
                   <div style="width:${prob.home_win_probability * 100}%;background:var(--accent-color,#4a9eff)"></div>
                   <div style="width:${prob.away_win_probability * 100}%;background:var(--border-color,rgba(255,255,255,0.2))"></div>
               </div>
@@ -19314,7 +25447,7 @@ function renderKnockoutMatchCard(m, z, prob) {
         : "";
 
     if (hasResult) {
-        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
+        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
             <div style="display:flex;justify-content:space-between;align-items:center">
                 <span style="font-weight:${m.winner === m.home ? 'bold' : 'normal'}">${escapeHtml(home)}</span>
                 <span style="font-weight:bold;margin:0 0.3rem">${hg}-${ag}${decidedByPen ? " (pen)" : ""}</span>
@@ -19326,7 +25459,7 @@ function renderKnockoutMatchCard(m, z, prob) {
     }
 
     if (!isReady) {
-        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;opacity:0.6;background:var(--panel-bg,rgba(255,255,255,0.03))">
+        return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);font-size:0.8rem;opacity:0.6;background:var(--panel-bg,rgba(255,255,255,0.03))">
             <div style="display:flex;justify-content:space-between">
                 <span>${escapeHtml(home)}</span>
                 <span style="color:var(--text-muted)">vs</span>
@@ -19336,7 +25469,7 @@ function renderKnockoutMatchCard(m, z, prob) {
     }
 
     // Ready for input
-    return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:6px;font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
+    return `<div data-ko-card="${escapeAttr(m.match_id)}" style="padding:0.5rem;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:var(--radius-sm);font-size:0.8rem;background:var(--panel-bg,rgba(255,255,255,0.03))">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
             <span>${escapeHtml(home)}</span>
             <span style="color:var(--text-muted);font-size:0.7rem">vs</span>
@@ -19741,6 +25874,7 @@ async function openWcFixtureBriefing(home, away) {
 }
 
 function renderWcSchedule() {
+    const z = appState.lang === "zh";
     const groupFilter = document.getElementById("wc-group-filter").value;
     const mdFilter = document.getElementById("wc-matchday-filter").value;
 
@@ -19904,6 +26038,152 @@ function renderWcSchedule() {
             await openWcFixtureBriefing(button.dataset.wcHome, button.dataset.wcAway);
         });
     });
+
+    // Round 102 — populate team dropdown for form trend panel
+    const formTrendTeamSelect = document.getElementById("wc-form-trend-team");
+    if (formTrendTeamSelect && !formTrendTeamSelect.dataset.populated) {
+        const teams = wcAllTeams();
+        if (teams.length > 0) {
+            formTrendTeamSelect.innerHTML = teams.map((tm) =>
+                `<option value="${escapeAttr(tm)}">${escapeHtml(tm)}</option>`
+            ).join("");
+            formTrendTeamSelect.dataset.populated = "1";
+        }
+    }
+    const formTrendTitle = document.getElementById("wc-form-trend-title");
+    if (formTrendTitle) {
+        formTrendTitle.textContent = z ? "球队状态趋势" : "Team Form Trend";
+    }
+    const formTrendBtn = document.getElementById("wc-form-trend-btn");
+    if (formTrendBtn && !formTrendBtn.dataset.bound) {
+        formTrendBtn.dataset.bound = "1";
+        formTrendBtn.textContent = z ? "加载" : "Load";
+        formTrendBtn.addEventListener("click", async () => {
+            const team = document.getElementById("wc-form-trend-team").value;
+            if (!team) return;
+            formTrendBtn.disabled = true;
+            formTrendBtn.textContent = z ? "加载中..." : "Loading...";
+            await fetchWcTeamFormTrend(team, 6);
+            formTrendBtn.disabled = false;
+            formTrendBtn.textContent = z ? "刷新" : "Refresh";
+            renderWcFormTrendPanel(team);
+        });
+        // Auto-render if cached
+        const cachedTeam = formTrendTeamSelect.value;
+        if (cachedTeam && wcApiData.teamFormTrendCache[cachedTeam]) {
+            renderWcFormTrendPanel(cachedTeam);
+        }
+    }
+}
+
+// Round 102 — render form trend chart panel.
+function renderWcFormTrendPanel(team) {
+    const panel = document.getElementById("wc-form-trend-panel");
+    if (!panel) return;
+    const z = appState.lang === "zh";
+    const data = wcApiData.teamFormTrendCache[team];
+    if (!data || data.status !== "ok") {
+        const limitations = data?.limitations || [];
+        const disclaimer = limitations.length
+            ? limitations.join(" ")
+            : (z ? "暂无数据" : "No data");
+        panel.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:1rem;font-size:0.85rem">${escapeHtml(disclaimer)}</p>`;
+        return;
+    }
+    const matches = data.matches || [];
+    const summary = data.summary || {};
+    const formScore = Number(summary.form_score_normalized || 0);
+    const formCls = formScore >= 0.7 ? "status-high" : formScore >= 0.4 ? "status-medium" : "status-low";
+
+    // Build form row W/D/L pills
+    const formPills = matches.map((m) => {
+        const outcome = m.outcome || "";
+        let cls = "status-low";
+        let label = "—";
+        if (outcome === "W" || outcome === "win") { cls = "status-high"; label = "W"; }
+        else if (outcome === "D" || outcome === "draw") { cls = "status-medium"; label = "D"; }
+        else if (outcome === "L" || outcome === "loss") { cls = "status-low"; label = "L"; }
+        const projTag = m.kind === "recorded" ? "" : `<span style="font-size:0.55rem;color:var(--text-muted)">★</span>`;
+        return `<span class="status-pill ${cls}" style="font-size:0.65rem;margin:0.1rem">${label}${projTag}</span>`;
+    }).join("");
+
+    panel.innerHTML = `
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;margin-bottom:0.6rem">
+            <div><span style="font-size:0.75rem;color:var(--text-muted)">${z ? "球队" : "Team"}</span><strong style="margin-left:0.4rem">${escapeHtml(team)}</strong></div>
+            <div><span style="font-size:0.75rem;color:var(--text-muted)">${z ? "近 N 场" : "Last N"}</span><strong style="margin-left:0.4rem">${matches.length}</strong></div>
+            <div><span style="font-size:0.75rem;color:var(--text-muted)">${z ? "战绩" : "Record"}</span>
+                <strong style="margin-left:0.4rem">${summary.wins || 0}W-${summary.draws || 0}D-${summary.losses || 0}L</strong></div>
+            <div><span style="font-size:0.75rem;color:var(--text-muted)">${z ? "状态分" : "Form"}</span>
+                <span class="status-pill ${formCls}" style="font-size:0.7rem;margin-left:0.4rem">${(formScore * 100).toFixed(0)}%</span></div>
+            <div style="font-size:0.7rem;color:var(--text-muted)">${z ? "★ = 预测（未录入）" : "★ = projected"}</div>
+        </div>
+        <div style="margin-bottom:0.8rem">${formPills || `<span style="color:var(--text-muted);font-size:0.85rem">${z ? "暂无比赛" : "No matches"}</span>`}</div>
+        <div id="wc-form-trend-chart" class="chart-box" style="height:240px"></div>
+        <div class="table-scroll" style="max-height:280px;margin-top:0.6rem">
+            <table>
+                <thead>
+                    <tr>
+                        <th>${z ? "日期" : "Date"}</th>
+                        <th>${z ? "对手" : "Opponent"}</th>
+                        <th>${z ? "场地" : "Venue"}</th>
+                        <th>${z ? "结果/预测" : "Result/Proj"}</th>
+                        <th>${z ? "进球" : "Goals"}</th>
+                        <th>${z ? "来源" : "Source"}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${matches.map((m) => {
+                        const isHome = m.venue === "home";
+                        const opp = m.opponent;
+                        const venueLabel = isHome ? (z ? "主" : "H") : (z ? "客" : "A");
+                        const teamGoals = Number(m.team_goals || 0);
+                        const oppGoals = Number(m.opponent_goals || 0);
+                        const resultStr = m.kind === "recorded"
+                            ? `${Math.round(teamGoals)}-${Math.round(oppGoals)}`
+                            : `${teamGoals.toFixed(1)}-${oppGoals.toFixed(1)}`;
+                        const outcome = m.outcome || "";
+                        let outcomeCls = "status-low";
+                        if (outcome === "W" || outcome === "win") outcomeCls = "status-high";
+                        else if (outcome === "D" || outcome === "draw") outcomeCls = "status-medium";
+                        return `<tr>
+                            <td>${escapeHtml(m.date || "—")}</td>
+                            <td>${escapeHtml(opp || "—")}</td>
+                            <td><span class="status-pill" style="font-size:0.6rem">${venueLabel}</span></td>
+                            <td><span class="status-pill ${outcomeCls}" style="font-size:0.6rem">${escapeHtml(outcome || "—")}</span> ${escapeHtml(resultStr)}</td>
+                            <td style="font-size:0.7rem">${teamGoals.toFixed(1)} / ${oppGoals.toFixed(1)}</td>
+                            <td style="font-size:0.7rem;color:var(--text-muted)">${m.kind === "recorded" ? (z ? "已录入" : "recorded") : (z ? "预测" : "projected")}</td>
+                        </tr>`;
+                    }).join("") || `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:1rem">${z ? "暂无比赛" : "No matches"}</td></tr>`}
+                </tbody>
+            </table>
+        </div>
+        <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+            ${z ? "状态分综合已录入与预测比赛的胜平负；预测使用世界杯强度模型。" : "Form score blends recorded and projected matches; projections use WC strength model."}
+        </p>
+    `;
+    // Initialize chart after DOM is ready
+    setTimeout(() => {
+        const chartEl = document.getElementById("wc-form-trend-chart");
+        if (chartEl && typeof echarts !== "undefined") {
+            const innerChart = echarts.init(chartEl);
+            const xLabels = matches.map((m, i) => `M${i + 1}`);
+            const teamGoals = matches.map((m) => Number(m.team_goals || 0));
+            const oppGoals = matches.map((m) => Number(m.opponent_goals || 0));
+            innerChart.setOption({
+                animation: false,
+                grid: {left: 50, right: 20, top: 30, bottom: 30},
+                legend: {data: [z ? "本队预期进球" : "Team xG", z ? "对手预期进球" : "Opp xG"], textStyle: {color: chartTextColor(), fontSize: 11}},
+                tooltip: {trigger: "axis"},
+                xAxis: {type: "category", data: xLabels, axisLabel: {color: chartTextColor(), fontSize: 10}},
+                yAxis: {type: "value", axisLabel: {color: chartTextColor(), fontSize: 10}, splitLine: {lineStyle: {color: chartGridColor()}}},
+                series: [
+                    {name: z ? "本队预期进球" : "Team xG", type: "line", smooth: true, data: teamGoals, itemStyle: {color: "#007aff"}},
+                    {name: z ? "对手预期进球" : "Opp xG", type: "line", smooth: true, data: oppGoals, itemStyle: {color: "#ff7c7c"}},
+                ],
+            });
+            innerChart.resize();
+        }
+    }, 50);
 }
 
 function renderWcSquads() {
@@ -19920,7 +26200,7 @@ function renderWcSquads() {
             summary.innerHTML = `<div class="wc-metric"><span class="metric-value">${loading ? "…" : "—"}</span><span>${escapeHtml(message)}</span></div>`;
         }
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">${escapeHtml(message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">${escapeHtml(message)}</td></tr>`;
         }
         const chart = getChart("wc-squad-chart");
         if (chart) chart.clear();
@@ -19972,12 +26252,16 @@ function renderWcSquads() {
         const confText = p.hasRating ? p.confidence : (appState.lang === "zh" ? "\u65E0\u6570\u636E" : "N/A");
         const ratingText = p.hasRating ? p.rating.toFixed(2) : "\u2014";
         const posText = p.position || "\u2014";
+        const needPill = _wcScoutingNeedPill(team, p);
         return `<tr>
             <td>${escapeHtml(p.name)}</td><td>${escapeHtml(posText)}</td><td>${escapeHtml(p.club)}</td><td>${escapeHtml(p.league)}</td>
             <td>${escapeHtml(ratingText)}</td>
             <td><span class="status-pill ${confClass}">${escapeHtml(confText)}</span></td>
+            <td>${needPill}</td>
         </tr>`;
     }).join("");
+
+    _wireWcScoutingNeedPills();
 
     // Rating distribution chart
     const chart = getChart("wc-squad-chart");
@@ -19988,13 +26272,192 @@ function renderWcSquads() {
         grid: {left: 80, right: 20, top: 20, bottom: 40},
         xAxis: {type: "value", axisLabel: {color: chartTextColor()}, splitLine: {lineStyle: {color: chartGridColor()}}},
         yAxis: {type: "category", data: chartData.map((p) => p.name), axisLabel: {color: chartTextColor(), fontSize: 11}},
-        series: [{type: "bar", data: chartData.map((p) => p.rating), itemStyle: {color: "#7ca8ff"}}],
+        series: [{type: "bar", data: chartData.map((p) => p.rating), itemStyle: {color: "#007aff"}}],
     }, true);
     chart.resize();
 
     if (squad.length > 0 && rated.length / squad.length < 0.5) {
         document.getElementById("wc-squad-summary").innerHTML += `<div class="wc-warning">\u25B2 ${escapeHtml(t("wc_low_coverage"))}</div>`;
     }
+}
+
+/**
+ * Build the scouting-need pill HTML for a WC squad player.
+ *
+ * Looks up the cached scouting-needs payload for `team` and finds the
+ * player entry matching `player.name` (and `player.position` as a tiebreaker).
+ * Returns one of:
+ *   - A clickable <button> pill with the gap type label (shallow/low_quality/missing)
+ *     carrying data-wc-scout-club / data-wc-scout-position attributes for the
+ *     click handler to navigate to the scouting dashboard.
+ *   - A muted "team not found" pill if the player's club is not in the rating matrix.
+ *   - An empty "<span>—</span>" placeholder when no gap exists, no data is
+ *     cached, or data is still loading.
+ *
+ * All dynamic content goes through escapeHtml / escapeAttr.
+ */
+function _wcScoutingNeedPill(team, player) {
+    const data = wcApiData.squadScoutingNeedsCache[team];
+    if (!data || data.status !== "ok" || !Array.isArray(data.players)) {
+        // Loading or unavailable — emit a muted placeholder rather than a pill
+        return `<span style="color:var(--text-muted)">—</span>`;
+    }
+    // Find the matching player entry. Use name + position + club to disambiguate.
+    const entry = data.players.find((pp) =>
+        pp && pp.name === player.name
+        && (pp.position || "") === (player.position || "")
+        && (pp.club || "") === (player.club || "")
+    );
+    if (!entry) {
+        return `<span style="color:var(--text-muted)">—</span>`;
+    }
+    const gap = entry.scouting_need;
+    if (!gap) {
+        // No gap at this position — emit a muted "ok" dot
+        return `<span style="color:var(--text-muted)" aria-label="${escapeAttr(t("wc_scouting_need_summary_empty"))}">·</span>`;
+    }
+    const labelMap = {
+        shallow: t("wc_scouting_need_pill_shallow"),
+        low_quality: t("wc_scouting_need_pill_low_quality"),
+        missing: t("wc_scouting_need_pill_missing"),
+    };
+    const label = labelMap[gap.gap_type] || gap.gap_type || "—";
+    const title = t("wc_scouting_need_open_dashboard").replace("{team}", player.club || "");
+    return `<button type="button" class="status-pill status-low" `
+        + `data-wc-scout-club="${escapeAttr(player.club || "")}" `
+        + `data-wc-scout-position="${escapeAttr(player.position || "")}" `
+        + `title="${escapeAttr(title)}" `
+        + `style="cursor:pointer;font-size:0.65rem;padding:0.1rem 0.4rem;text-decoration:none">`
+        + `${escapeHtml(label)}`
+        + `</button>`;
+}
+
+/**
+ * Wire click handlers on scouting-need pills rendered by `_wcScoutingNeedPill`.
+ *
+ * Clicking a pill navigates the user to the scouting view and pre-fills the
+ * cross-scouting dashboard team input with the player's club team, so the
+ * user can immediately see the gap report for that club.
+ */
+function _wireWcScoutingNeedPills() {
+    const pills = document.querySelectorAll("#wc-squad-table button[data-wc-scout-club]");
+    pills.forEach((btn) => {
+        if (btn.dataset.wcScoutingWired === "1") return;
+        btn.dataset.wcScoutingWired = "1";
+        btn.addEventListener("click", () => {
+            const club = btn.dataset.wcScoutClub || "";
+            if (!club) return;
+            // Pre-fill the scouting dashboard team input and switch view
+            const teamInput = document.getElementById("cross-scouting-dashboard-team");
+            if (teamInput) teamInput.value = club;
+            setView("scouting");
+            // Surface a small confirmation via the dashboard button title
+            const dashBtn = document.getElementById("cross-scouting-dashboard-btn");
+            if (dashBtn) {
+                const hint = t("wc_scouting_need_open_dashboard").replace("{team}", club);
+                dashBtn.setAttribute("title", hint);
+            }
+        });
+    });
+}
+
+/**
+ * Render the WC squad scouting-needs overview panel below the squad table.
+ *
+ * Shows a summary line counting players with each gap type, and a table
+ * of players who have a scouting need (filtered from the full squad).
+ * The panel degrades gracefully when data is loading, unavailable, or
+ * when the squad has no gaps at all.
+ */
+function renderWcSquadScoutingNeeds() {
+    const team = appState.wcSquadTeam;
+    const wrap = document.getElementById("wc-scouting-needs-panel");
+    if (!wrap) return;
+    const statusEl = document.getElementById("wc-scouting-needs-status");
+    const data = wcApiData.squadScoutingNeedsCache[team];
+    const loading = wcApiData.squadScoutingNeedsLoading.has(team);
+
+    if (!data) {
+        const msg = loading ? t("wc_scouting_need_loading") : t("wc_scouting_need_no_data");
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(msg)}</p>`;
+        if (statusEl) statusEl.textContent = loading ? "…" : "—";
+        return;
+    }
+    if (data.status === "no_data") {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("wc_scouting_need_no_data"))}</p>`;
+        if (statusEl) statusEl.textContent = "—";
+        return;
+    }
+    if (data.status !== "ok" || !Array.isArray(data.players)) {
+        wrap.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(t("wc_scouting_need_fetch_fail"))}</p>`;
+        if (statusEl) statusEl.textContent = "!";
+        return;
+    }
+
+    const playersWithNeed = data.players.filter((p) => p && p.scouting_need);
+    const counts = { shallow: 0, low_quality: 0, missing: 0 };
+    for (const p of playersWithNeed) {
+        const gt = p.scouting_need.gap_type;
+        if (counts[gt] !== undefined) counts[gt] += 1;
+    }
+    const totalGaps = playersWithNeed.length;
+
+    let summaryLine;
+    if (totalGaps === 0) {
+        summaryLine = t("wc_scouting_need_summary_empty");
+    } else {
+        summaryLine = t("wc_scouting_need_summary")
+            .replace("{n}", String(totalGaps))
+            .replace("{shallow}", String(counts.shallow))
+            .replace("{low_q}", String(counts.low_quality))
+            .replace("{missing}", String(counts.missing));
+    }
+    if (statusEl) statusEl.textContent = totalGaps > 0 ? String(totalGaps) : "0";
+
+    const labelMap = {
+        shallow: t("wc_scouting_need_pill_shallow"),
+        low_quality: t("wc_scouting_need_pill_low_quality"),
+        missing: t("wc_scouting_need_pill_missing"),
+    };
+    const rows = playersWithNeed.map((p) => {
+        const gap = p.scouting_need;
+        const label = labelMap[gap.gap_type] || gap.gap_type;
+        const reason = gap.reason || "";
+        const meanScore = (gap.mean_score !== undefined && gap.mean_score !== null)
+            ? Number(gap.mean_score).toFixed(1)
+            : "—";
+        const nPlayers = (gap.n_players !== undefined && gap.n_players !== null)
+            ? String(gap.n_players)
+            : "—";
+        return `<tr>
+            <td>${escapeHtml(p.name || "")}</td>
+            <td>${escapeHtml(p.position || "")}</td>
+            <td>${escapeHtml(p.club || "")}</td>
+            <td><span class="status-pill status-low" style="font-size:0.65rem;padding:0.1rem 0.4rem">${escapeHtml(label)}</span></td>
+            <td>${escapeHtml(nPlayers)}</td>
+            <td>${escapeHtml(meanScore)}</td>
+            <td style="font-size:0.68rem;color:var(--text-muted)">${escapeHtml(reason)}</td>
+        </tr>`;
+    }).join("");
+
+    const tableHtml = totalGaps === 0
+        ? `<p style="color:var(--text-muted);font-size:0.85rem">${escapeHtml(summaryLine)}</p>`
+        : `<p style="font-size:0.82rem;margin:0 0 0.5rem">${escapeHtml(summaryLine)}</p>`
+          + `<div class="table-scroll"><table>`
+          + `<thead><tr>`
+          + `<th data-i18n="th_player">${escapeHtml(t("th_player"))}</th>`
+          + `<th data-i18n="th_pos">${escapeHtml(t("th_pos"))}</th>`
+          + `<th data-i18n="wc_club">${escapeHtml(t("wc_club"))}</th>`
+          + `<th data-i18n="wc_scouting_need_col">${escapeHtml(t("wc_scouting_need_col"))}</th>`
+          + `<th data-i18n="wc_scouting_need_players_label">${escapeHtml(t("wc_scouting_need_players_label"))}</th>`
+          + `<th data-i18n="wc_scouting_need_mean_score_label">${escapeHtml(t("wc_scouting_need_mean_score_label"))}</th>`
+          + `<th data-i18n="wc_scouting_need_reason_label">${escapeHtml(t("wc_scouting_need_reason_label"))}</th>`
+          + `</tr></thead>`
+          + `<tbody>${rows}</tbody>`
+          + `</table></div>`;
+
+    wrap.innerHTML = tableHtml
+        + `<p style="font-size:0.68rem;color:var(--text-muted);margin-top:0.5rem">${escapeHtml(t("wc_scouting_need_disclaimer"))}</p>`;
 }
 
 function renderWcCompare() {
@@ -20062,7 +26525,7 @@ function renderWcCompare() {
             grid: {left: 80, right: 20, top: 20, bottom: 40},
             xAxis: {type: "value", axisLabel: {color: chartTextColor()}, splitLine: {lineStyle: {color: chartGridColor()}}},
             yAxis: {type: "category", data: allRated.map((p) => p.name), axisLabel: {color: chartTextColor(), fontSize: 11}},
-            series: [{type: "bar", data: allRated.map((p) => ({value: p.rating, itemStyle: {color: p.team === teamA ? "#7ca8ff" : "#57d68d"}}))}],
+            series: [{type: "bar", data: allRated.map((p) => ({value: p.rating, itemStyle: {color: p.team === teamA ? "#007aff" : "#34c759"}}))}],
         }, true);
         chart.resize();
     }
@@ -20079,6 +26542,7 @@ function renderWcCompare() {
     renderTop([...ratedB], document.getElementById("wc-compare-b-top"));
 
     renderWcMatchPredictionPanel(teamA, teamB);
+    renderWcMatchSpotlightPanel(teamA, teamB);
 }
 
 function renderWcMatchPredictionPanel(teamA, teamB) {
@@ -20197,6 +26661,125 @@ function renderWcMatchPredictionPanel(teamA, teamB) {
     if (exportCsv && briefing?.status === "ok") {
         exportCsv.addEventListener("click", () => exportWcBriefingCSV(briefing));
     }
+}
+
+// Round 102 — Player Spotlight panel for match compare view.
+// Ranks players from both squads by spotlight_score, which blends rating,
+// position weight, confidence, and matchup vs opponent weak spots.
+function renderWcMatchSpotlightPanel(teamA, teamB) {
+    const panel = document.getElementById("wc-match-spotlight-panel");
+    if (!panel) return;
+    const z = appState.lang === "zh";
+    const cacheKey = `${teamA}|${teamB}`;
+    const spotlight = wcApiData.matchSpotlightCache[cacheKey];
+    const isLoading = wcApiData.matchSpotlightLoading.has(cacheKey);
+
+    if (!spotlight && !isLoading) {
+        // Lazy-load on first render of compare view
+        panel.innerHTML = `
+            <article class="liquid-panel compact-panel">
+                <div class="panel-head">
+                    <h3>${escapeHtml(z ? "球员聚光灯" : "Player Spotlight")}</h3>
+                    <button class="text-button wc-load-spotlight" type="button" style="font-size:0.8rem;padding:0.35rem 0.65rem">${escapeHtml(z ? "加载聚光灯" : "Load Spotlight")}</button>
+                </div>
+                <p style="font-size:0.75rem;color:var(--text-muted);margin:0.5rem 0">
+                    ${escapeHtml(z ? "基于评分、位置权重、信心和对手弱点的球员影响力排序。" : "Ranks players by rating, position weight, confidence, and opponent weakness.")}
+                </p>
+            </article>`;
+        const loadBtn = panel.querySelector(".wc-load-spotlight");
+        if (loadBtn) {
+            loadBtn.addEventListener("click", async () => {
+                loadBtn.disabled = true;
+                loadBtn.textContent = z ? "加载中..." : "Loading...";
+                await fetchWcMatchPlayerSpotlight(teamA, teamB, 5);
+                renderWcMatchSpotlightPanel(teamA, teamB);
+            });
+        }
+        return;
+    }
+
+    if (isLoading && !spotlight) {
+        panel.innerHTML = `
+            <article class="liquid-panel compact-panel">
+                <div class="panel-head"><h3>${escapeHtml(z ? "球员聚光灯" : "Player Spotlight")}</h3></div>
+                <p style="color:var(--text-muted);padding:0.8rem 0">${escapeHtml(z ? "加载中..." : "Loading...")}</p>
+            </article>`;
+        return;
+    }
+
+    if (!spotlight || spotlight.status !== "ok") {
+        const limitations = spotlight?.limitations || [];
+        const disclaimer = limitations.length
+            ? limitations.join(" ")
+            : t("wc_no_data");
+        panel.innerHTML = `
+            <article class="liquid-panel compact-panel">
+                <div class="panel-head"><h3>${escapeHtml(z ? "球员聚光灯" : "Player Spotlight")}</h3></div>
+                <p style="color:var(--text-muted);padding:0.8rem 0">${escapeHtml(disclaimer)}</p>
+            </article>`;
+        return;
+    }
+
+    const players = spotlight.players || [];
+    if (players.length === 0) {
+        panel.innerHTML = `
+            <article class="liquid-panel compact-panel">
+                <div class="panel-head"><h3>${escapeHtml(z ? "球员聚光灯" : "Player Spotlight")}</h3></div>
+                <p style="color:var(--text-muted);padding:0.8rem 0">${escapeHtml(z ? "暂无评分球员" : "No rated players")}</p>
+            </article>`;
+        return;
+    }
+
+    const maxScore = Math.max(...players.map((p) => p.spotlight_score || 0), 0.0001);
+    panel.innerHTML = `
+        <article class="liquid-panel compact-panel">
+            <div class="panel-head">
+                <h3>${z ? "球员聚光灯" : "Player Spotlight"}</h3>
+                <span class="status-pill status-medium" style="font-size:0.65rem">${escapeHtml(spotlight.model_version || "spotlight-v1")}</span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>${z ? "球员" : "Player"}</th>
+                            <th>${z ? "球队" : "Team"}</th>
+                            <th>${z ? "位置" : "Pos"}</th>
+                            <th>${z ? "评分" : "Rating"}</th>
+                            <th>${z ? "聚光灯分" : "Spotlight"}</th>
+                            <th>${z ? "原因" : "Reason"}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${players.map((p, i) => {
+                            const scorePct = ((p.spotlight_score || 0) / maxScore * 100).toFixed(0);
+                            const scoreCls = (p.spotlight_score || 0) >= maxScore * 0.85 ? "status-high" : (p.spotlight_score || 0) >= maxScore * 0.6 ? "status-medium" : "status-low";
+                            const teamCls = p.team === teamA ? "status-high" : "status-medium";
+                            const ratingStr = p.rating != null ? Number(p.rating).toFixed(1) : "—";
+                            return `<tr>
+                                <td><span class="status-pill" style="font-size:0.6rem">${i + 1}</span></td>
+                                <td><strong>${escapeHtml(p.name)}</strong></td>
+                                <td><span class="status-pill ${teamCls}" style="font-size:0.6rem">${escapeHtml(p.team)}</span></td>
+                                <td>${escapeHtml(p.position || "—")}</td>
+                                <td>${ratingStr}</td>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:0.4rem">
+                                        <span class="status-pill ${scoreCls}" style="font-size:0.65rem">${(p.spotlight_score || 0).toFixed(3)}</span>
+                                        <div style="width:60px;height:6px;background:var(--border-color,rgba(128,128,128,0.2));border-radius:var(--radius-xs);overflow:hidden">
+                                            <div style="width:${sanitizeCssPercent(Number(scorePct))}%;height:100%;background:var(--accent,#007aff)"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(p.reason || "—")}</td>
+                            </tr>`;
+                        }).join("")}
+                    </tbody>
+                </table>
+            </div>
+            <p style="font-size:0.65rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.4">
+                ${z ? "聚光灯分基于评分、位置权重、信心系数和对手弱点匹配。仅作为观赛参考。" : "Spotlight score blends rating, position weight, confidence, and opponent-weakness matchup. Observational guide only."}
+            </p>
+        </article>`;
 }
 
 function renderWcProbability() {
@@ -20409,6 +26992,7 @@ async function initWorldCup() {
     await Promise.all([
         fetchWcSquad("Argentina"),
         fetchWcSquad("France"),
+        fetchWcSquadScoutingNeeds(appState.wcSquadTeam || "Argentina"),
         fetchWcSquadBalanceComparison("Argentina", "France"),
         fetchWcMatchPrediction("Argentina", "France"),
         fetchWcTeamOutlook("Argentina"),
@@ -20417,6 +27001,7 @@ async function initWorldCup() {
     // Re-render all WC views with API data
     renderWcSchedule();
     renderWcSquads();
+    renderWcSquadScoutingNeeds();
     renderWcCompare();
     renderWcProbability();
     renderWcKnockout();
@@ -20483,6 +27068,7 @@ function syncObjectPropertyUI(obj) {
 }
 
 function renderTactical() {
+    _syncTacticalDesktopNotice();
     if (!tacticalProject) {
         tacticalProject = TACTICAL_BOARD.createProject("ScoutFootball 战术板");
         // Load default formation
@@ -20596,6 +27182,58 @@ function buildPrematchDecisionPack(match) {
         ],
     });
 }
+
+// ── Tactical board: desktop-only editing gate ────────────────────────
+// Below 760px the board stays visible for reading but editing controls
+// (formations, pitch type, drawing tools, save, export) are disabled so
+// users on phones do not accidentally mutate a dense tactical canvas.
+
+const TACTICAL_DESKTOP_BREAKPOINT = 760;
+
+function _tacticalEditingControls() {
+    const ids = [
+        "tactical-formation",
+        "tactical-pitch-type",
+        "tactical-display-mode",
+        "tactical-tool",
+        "tactical-color",
+        "tactical-save",
+        "tactical-export",
+        "tactical-clear",
+        "tactical-undo",
+        "tactical-redo",
+        "tactical-add-text",
+        "tactical-add-arrow",
+        "tactical-play",
+    ];
+    const out = [];
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) out.push(el);
+    }
+    return out;
+}
+
+function _syncTacticalDesktopNotice() {
+    const notice = document.getElementById("tactical-desktop-notice");
+    if (!notice) return;
+    const narrow = window.innerWidth < TACTICAL_DESKTOP_BREAKPOINT;
+    notice.hidden = !narrow;
+    const controls = _tacticalEditingControls();
+    for (const el of controls) {
+        if (narrow) {
+            el.setAttribute("disabled", "disabled");
+            el.setAttribute("aria-disabled", "true");
+        } else {
+            el.removeAttribute("disabled");
+            el.removeAttribute("aria-disabled");
+        }
+    }
+}
+
+window.addEventListener("resize", () => {
+    if (appState.view === "tactical") _syncTacticalDesktopNotice();
+});
 
 function renderTacticalDecisionPack() {
     const el = document.getElementById("tactical-decision-pack");
@@ -20849,7 +27487,7 @@ function renderTacticalProjectList() {
             const input = document.createElement("input");
             input.type = "text";
             input.value = currentTitle;
-            input.style.cssText = "font-size:inherit;font-weight:bold;width:100%;padding:0 0.15rem;border:1px solid var(--accent,#7ca8ff);border-radius:3px;background:var(--bg,#1a1a2e);color:var(--text,#e0e0e0)";
+            input.style.cssText = "font-size:inherit;font-weight:bold;width:100%;padding:0 0.15rem;border:1px solid var(--accent,#007aff);border-radius:var(--radius-xs);background:var(--bg,#1a1a2e);color:var(--text,#e0e0e0)";
             titleSpan.replaceWith(input);
             input.focus();
             input.select();
@@ -20969,6 +27607,12 @@ function renderTacticalFrameList() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+    // A deterministic browser-visible readiness signal for local E2E checks.
+    // It is set only after the same initial API/static data loading path that a
+    // maintainer uses has settled, rather than relying on network-idle in an app
+    // that intentionally keeps a periodic local health poll running.
+    document.documentElement.dataset.scoutfootballInitialLoad = "loading";
+
     // Restore theme preference
     const savedTheme = localStorage.getItem("sf-theme");
     if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
@@ -20984,6 +27628,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Start WC init early — it runs in parallel with other API calls
     const wcInitPromise = initWorldCup();
     bindEvents();
+    // Wire delegated click handling for entry-list editors in the versions
+    // edit dialog. Must be called once at startup so add/remove buttons
+    // work under the page CSP (no inline ``onclick`` attributes).
+    _initEntryListDelegation();
     setView("overview");
 
     // Load scouting localStorage state
@@ -21104,7 +27752,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (existingBanner) return;
         const demoBanner = document.createElement("div");
         demoBanner.id = "global-demo-banner";
-        demoBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;padding:0.3rem 1rem;background:rgba(255,107,107,0.15);color:#ff6b6b;font-size:0.72rem;text-align:center;border-bottom:1px solid rgba(255,107,107,0.3)";
+        demoBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;padding:0.3rem 1rem;background:rgba(255,107,107,0.15);color:#ff3b30;font-size:0.72rem;text-align:center;border-bottom:1px solid rgba(255,107,107,0.3)";
         const z = appState.lang === "zh";
         demoBanner.textContent = z
             ? "◆ API 离线 — 使用静态缓存数据。启动后端获取实时数据：PYTHONPATH=src uv run python -m scoutfootball serve"
@@ -21139,8 +27787,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Poll every 10s so backend coming online is detected automatically
     setInterval(checkApiStatus, 10000);
 
+    // Detailed health (/health/detailed) — fire one shot on initial load.
+    // The fail-soft path keeps the panel hidden if the API is offline; the
+    // force-refresh button on the panel lets the operator re-fetch on demand.
+    _initDetailedHealthButton();
+    fetchDetailedHealth(false);
+
     // Initialize World Cup — already started in parallel above, just await completion
     await wcInitPromise;
+    document.documentElement.dataset.scoutfootballInitialLoad = "ready";
+    document.dispatchEvent(new Event("scoutfootball:initial-load-ready"));
 });
 
 const SCOUT_QUEUE_KEY = "scout-queue-statuses";
@@ -21648,31 +28304,651 @@ function isInPlayerWatchlist(playerKey) {
 function isInPlayerShortlist(playerKey) {
     return getPlayerShortlist().some((p) => p.key === playerKey);
 }
+
+// Round 87: shortlist / watchlist source provenance.
+//
+// Both toggle functions previously used a binary add-or-remove keyed on
+// player.key alone. Once a player was in the list, any △ click from a
+// different source (e.g. gap-target panel vs dashboard) would REMOVE them
+// entirely, silently discarding the original source attribution.
+//
+// The new behaviour accumulates reason codes in a `reason_codes` array:
+//  - player NOT in list → add entry with reason_codes: [code]
+//  - player IN list, toggling with a NEW code → append code to reason_codes
+//  - player IN list, toggling with an EXISTING code → remove that code;
+//    if reason_codes becomes empty, remove the entry (preserves toggle-off)
+//
+// Legacy entries that only have a `reason_code` string are migrated on read
+// via _entryReasonCodes(). The `reason_code` field is kept in sync (set to
+// the first code) for backward-compat with existing render/export code that
+// reads player.reason_code directly.
+//
+// Returns { added: bool, reason_codes: string[], source_change: "added"|"merged"|"removed"|"noop" }
+// so callers can surface an appropriate status line.
+function _entryReasonCodes(entry) {
+    if (!entry) return [];
+    if (Array.isArray(entry.reason_codes)) return entry.reason_codes.slice();
+    if (entry.reason_code) return [entry.reason_code];
+    return [];
+}
+
+function _normalizeEntryReasonCodes(entry) {
+    const codes = _entryReasonCodes(entry);
+    entry.reason_codes = codes;
+    entry.reason_code = codes[0] || "";
+    return entry;
+}
+
+// Round 87: render reason codes as small pills so the user can see at a
+// glance which sources recommended a player. Each code is escaped; codes
+// are deduped and sorted by first-seen order (the order in the array).
+//
+// Round 88: when `listType` ("shortlist"|"watchlist") is provided, each pill
+// gets a × button that removes just that source from the entry (calling the
+// toggle function with the specific reason code). Entries with only one
+// source are removed entirely when their sole × is clicked.
+function _renderReasonCodePills(entry, listType) {
+    const codes = _entryReasonCodes(entry);
+    if (codes.length === 0) return "";
+    const playerKey = entry.key || entry.player_name || entry.name || "";
+    return codes.map((code) => {
+        const close = listType
+            ? `<button class="reason-pill-x" data-reason-remove="1" data-reason-code="${escapeAttr(code)}" data-reason-list="${escapeAttr(listType)}" data-reason-player="${escapeAttr(playerKey)}" type="button" title="${escapeAttr(t("remove_source"))}" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 0.15rem;font-size:0.7rem;line-height:1">&times;</button>`
+            : "";
+        return `<span class="status-pill status-low reason-pill" style="margin-left:0.25rem;font-size:0.65rem;display:inline-flex;align-items:center;gap:0.1rem">${escapeHtml(code)}${close}</span>`;
+    }).join("");
+}
+
+// Round 88: source summary strip + click-to-filter for shortlist/watchlist.
+//
+// Module-level filter state — arrays of reason-code strings. When non-empty,
+// only entries with at least one matching code are shown. Clicking a chip
+// toggles the code in the array; "All" clears it.
+// Round 90: both filter arrays persist to localStorage so the user's
+// filter choice survives page reloads.
+const SHORTLIST_SOURCE_FILTER_KEY = "sf-shortlist-source-filter";
+const WATCHLIST_SOURCE_FILTER_KEY = "sf-watchlist-source-filter";
+const SHORTLIST_COMPARE_SELECTION_KEY = "sf-shortlist-compare-selection";
+
+function _loadStringArray(key) {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(key));
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((v) => typeof v === "string").slice(0, 100);
+    } catch {
+        return [];
+    }
+}
+
+function _saveStringArray(key, arr) {
+    try {
+        localStorage.setItem(key, JSON.stringify(arr));
+    } catch {}
+}
+
+let _shortlistSourceFilter = _loadStringArray(SHORTLIST_SOURCE_FILTER_KEY);
+let _watchlistSourceFilter = _loadStringArray(WATCHLIST_SOURCE_FILTER_KEY);
+
+function _persistShortlistSourceFilter() {
+    _saveStringArray(SHORTLIST_SOURCE_FILTER_KEY, _shortlistSourceFilter);
+}
+
+function _persistWatchlistSourceFilter() {
+    _saveStringArray(WATCHLIST_SOURCE_FILTER_KEY, _watchlistSourceFilter);
+}
+
+function _computeSourceCounts(entries) {
+    const counts = {};
+    for (const entry of entries) {
+        const codes = _entryReasonCodes(entry);
+        for (const code of codes) {
+            counts[code] = (counts[code] || 0) + 1;
+        }
+    }
+    return counts;
+}
+
+function _filterBySource(entries, filterArr) {
+    if (!filterArr || filterArr.length === 0) return entries;
+    return entries.filter((entry) => {
+        const codes = _entryReasonCodes(entry);
+        return codes.some((c) => filterArr.includes(c));
+    });
+}
+
+function _renderSourceSummary(entries, filterArr, listType) {
+    const counts = _computeSourceCounts(entries);
+    const codes = Object.keys(counts).sort();
+    if (codes.length === 0) return "";
+    const allActive = filterArr.length === 0;
+    let html = '<div class="source-summary-strip" style="display:flex;flex-wrap:wrap;gap:0.25rem;margin-bottom:0.5rem;align-items:center">';
+    html += `<button class="status-pill ${allActive ? "status-clickable active" : "status-clickable"}" data-source-filter="__all__" data-source-list="${escapeAttr(listType)}" type="button" style="font-size:0.65rem">${escapeHtml(t("all_sources"))} (${entries.length})</button>`;
+    for (const code of codes) {
+        const active = filterArr.includes(code);
+        html += `<button class="status-pill ${active ? "status-clickable active" : "status-clickable"}" data-source-filter="${escapeAttr(code)}" data-source-list="${escapeAttr(listType)}" type="button" style="font-size:0.65rem">${escapeHtml(code)} (${counts[code]})</button>`;
+    }
+    html += "</div>";
+    return html;
+}
+
+function _wireSourceSummary(rootEl, listType) {
+    const btns = rootEl.querySelectorAll(`button[data-source-filter][data-source-list="${listType}"]`);
+    btns.forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const code = btn.getAttribute("data-source-filter") || "";
+            const filterArr = listType === "shortlist" ? _shortlistSourceFilter : _watchlistSourceFilter;
+            if (code === "__all__") {
+                filterArr.length = 0;
+            } else {
+                const idx = filterArr.indexOf(code);
+                if (idx >= 0) {
+                    filterArr.splice(idx, 1);
+                } else {
+                    filterArr.push(code);
+                }
+            }
+            // Round 90: persist filter state to localStorage.
+            if (listType === "shortlist") _persistShortlistSourceFilter();
+            else _persistWatchlistSourceFilter();
+            renderScouting();
+        });
+    });
+}
+
+function _wireReasonPillRemovals(rootEl, listType) {
+    const btns = rootEl.querySelectorAll(`button[data-reason-remove="1"][data-reason-list="${listType}"]`);
+    btns.forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const code = btn.getAttribute("data-reason-code") || "";
+            const playerKey = btn.getAttribute("data-reason-player") || "";
+            const player = { key: playerKey, reason_code: code };
+            if (listType === "shortlist") {
+                togglePlayerShortlist(player);
+            } else if (listType === "watchlist") {
+                togglePlayerWatchlist(player);
+            }
+            renderScouting();
+        });
+    });
+}
+
+// ===== Round 89: Shortlist Quick-Compare =====
+// Multi-select checkboxes on shortlist entries connect to the existing
+// /players/compare-multi API (max 6 players). Selection persists across
+// re-renders; stale entries (player removed from shortlist) are pruned.
+// Round 90: the selection persists to localStorage so checked players
+// survive page reloads (stale keys are pruned on the first render).
+let _shortlistCompareSelection = _loadStringArray(SHORTLIST_COMPARE_SELECTION_KEY);
+const _SHORTLIST_COMPARE_MAX = 6;
+
+function _persistShortlistCompareSelection() {
+    _saveStringArray(SHORTLIST_COMPARE_SELECTION_KEY, _shortlistCompareSelection);
+}
+
+function _toggleShortlistCompareSelect(playerKey) {
+    const key = String(playerKey || "").trim();
+    if (!key) return;
+    const idx = _shortlistCompareSelection.indexOf(key);
+    if (idx >= 0) {
+        _shortlistCompareSelection.splice(idx, 1);
+    } else {
+        if (_shortlistCompareSelection.length >= _SHORTLIST_COMPARE_MAX) return;
+        _shortlistCompareSelection.push(key);
+    }
+    _persistShortlistCompareSelection();
+}
+
+function _clearShortlistCompareSelection() {
+    _shortlistCompareSelection = [];
+    _persistShortlistCompareSelection();
+}
+
+function _pruneShortlistCompareSelection(validKeys) {
+    const set = new Set(validKeys.map((k) => String(k || "").trim()).filter(Boolean));
+    const next = _shortlistCompareSelection.filter((k) => set.has(k));
+    if (next.length !== _shortlistCompareSelection.length) {
+        _shortlistCompareSelection = next;
+        _persistShortlistCompareSelection();
+    }
+}
+
+// ===== Round 91: Shortlist Provenance Audit Log + Reset UI State =====
+// Records browser-local audit entries when togglePlayerShortlist merges a
+// new reason code into an existing entry or removes a code from an entry
+// (the subtle "provenance change" events that are otherwise invisible).
+// Also provides a reset control that clears all 3 persisted UI-state arrays
+// (source filters + compare selection) so the user can return to a clean
+// shortlist view without clearing the shortlist itself.
+const SHORTLIST_PROVENANCE_LOG_KEY = "sf-shortlist-provenance-log";
+const _PROVENANCE_LOG_MAX = 200;
+
+function _loadProvenanceLog() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(SHORTLIST_PROVENANCE_LOG_KEY));
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .filter((v) => v !== null && typeof v === "object" && !Array.isArray(v))
+            .slice(0, _PROVENANCE_LOG_MAX);
+    } catch {
+        return [];
+    }
+}
+
+function _persistShortlistProvenanceLog() {
+    try {
+        localStorage.setItem(
+            SHORTLIST_PROVENANCE_LOG_KEY,
+            JSON.stringify(_shortlistProvenanceLog),
+        );
+    } catch {}
+}
+
+let _shortlistProvenanceLog = _loadProvenanceLog();
+
+function _recordShortlistProvenance(player, action, reasonCode, resultingCodes) {
+    const entry = {
+        timestamp: new Date().toISOString(),
+        player_key: String((player && player.key) || "").slice(0, 180),
+        player_name: String((player && player.name) || "").slice(0, 180),
+        action: action === "merged" ? "merged" : "removed",
+        reason_code: String(reasonCode || "").slice(0, 64),
+        resulting_codes: Array.isArray(resultingCodes)
+            ? resultingCodes.map((c) => String(c || "").slice(0, 64)).slice(0, 20)
+            : [],
+    };
+    _shortlistProvenanceLog.unshift(entry);
+    if (_shortlistProvenanceLog.length > _PROVENANCE_LOG_MAX) {
+        _shortlistProvenanceLog.length = _PROVENANCE_LOG_MAX;
+    }
+    _persistShortlistProvenanceLog();
+}
+
+function _clearShortlistProvenanceLog() {
+    _shortlistProvenanceLog = [];
+    _persistShortlistProvenanceLog();
+}
+
+function _renderProvenanceLog() {
+    const container = document.getElementById("shortlist-provenance-log");
+    if (!container) return;
+    const n = _shortlistProvenanceLog.length;
+    const headerText = t("shortlist_provenance_log_title");
+    let html = '<details class="provenance-log-details" style="margin-top:0.4rem">';
+    html += `<summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted);padding:0.25rem 0">${escapeHtml(headerText)} (${escapeHtml(String(n))})</summary>`;
+    if (n === 0) {
+        html += `<p style="font-size:0.72rem;color:var(--text-muted);padding:0.4rem 0;margin:0">${escapeHtml(t("shortlist_provenance_empty"))}</p>`;
+    } else {
+        html += `<div style="margin-top:0.4rem;max-height:280px;overflow-y:auto;font-size:0.7rem">`;
+        html += `<table class="provenance-log-table" style="width:100%;border-collapse:collapse">`;
+        html += `<thead><tr style="text-align:left;border-bottom:1px solid var(--border-color, #ccc)">`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_time"))}</th>`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_player"))}</th>`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_action"))}</th>`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_code"))}</th>`;
+        html += `<th style="padding:0.2rem">${escapeHtml(t("shortlist_provenance_col_result"))}</th>`;
+        html += `</tr></thead><tbody>`;
+        for (const logEntry of _shortlistProvenanceLog) {
+            const actionLabel = logEntry.action === "merged"
+                ? t("shortlist_provenance_action_merged")
+                : t("shortlist_provenance_action_removed");
+            const resultCodes = (logEntry.resulting_codes || []).join(", ") || "—";
+            html += `<tr style="border-bottom:1px solid var(--border-color, #eee)">`;
+            html += `<td style="padding:0.2rem;white-space:nowrap">${escapeHtml(logEntry.timestamp || "")}</td>`;
+            html += `<td style="padding:0.2rem">${escapeHtml(logEntry.player_name || logEntry.player_key || "")}</td>`;
+            html += `<td style="padding:0.2rem">${escapeHtml(actionLabel)}</td>`;
+            html += `<td style="padding:0.2rem">${escapeHtml(logEntry.reason_code || "")}</td>`;
+            html += `<td style="padding:0.2rem">${escapeHtml(resultCodes)}</td>`;
+            html += `</tr>`;
+        }
+        html += `</tbody></table></div>`;
+        html += `<button class="provenance-log-clear" type="button" style="margin-top:0.4rem;font-size:0.68rem;cursor:pointer;background:none;border:1px solid var(--border-color, #ccc);padding:0.2rem 0.5rem;color:var(--text-muted)">${escapeHtml(t("shortlist_provenance_clear"))}</button>`;
+    }
+    html += '</details>';
+    container.innerHTML = html;
+}
+
+function _wireProvenanceLog() {
+    const container = document.getElementById("shortlist-provenance-log");
+    if (!container) return;
+    const clearBtn = container.querySelector(".provenance-log-clear");
+    if (clearBtn) {
+        clearBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            _clearShortlistProvenanceLog();
+            _renderProvenanceLog();
+            _wireProvenanceLog();
+        });
+    }
+}
+
+function _resetShortlistUiState() {
+    _shortlistSourceFilter = [];
+    _watchlistSourceFilter = [];
+    _shortlistCompareSelection = [];
+    _persistShortlistSourceFilter();
+    _persistWatchlistSourceFilter();
+    _persistShortlistCompareSelection();
+}
+
+function _wireResetShortlistUiState() {
+    const btn = document.getElementById("shortlist-reset-ui-state");
+    if (!btn) return;
+    if (btn.dataset.round91Wired === "1") return;
+    btn.dataset.round91Wired = "1";
+    btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        _resetShortlistUiState();
+        renderScouting();
+    });
+}
+
+function _renderShortlistCompareBar() {
+    const bar = document.getElementById("shortlist-compare-bar");
+    if (!bar) return;
+    const n = _shortlistCompareSelection.length;
+    const canCompare = n >= 2 && n <= _SHORTLIST_COMPARE_MAX;
+    const hint = n < 2 ? t("shortlist_compare_min") : (n > _SHORTLIST_COMPARE_MAX ? t("shortlist_compare_max") : "");
+    let html = '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">';
+    html += `<button class="glass-control" data-shortlist-compare-run="1" type="button" ${canCompare ? "" : "disabled"} style="font-size:0.72rem;padding:0.2rem 0.5rem">${escapeHtml(t("shortlist_compare_btn").replace("{n}", String(n)))}</button>`;
+    if (n > 0) {
+        html += `<button class="text-button" data-shortlist-compare-sync-tray="1" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem" title="${escapeAttr(t("shortlist_compare_sync_tray_title"))}">${escapeHtml(t("shortlist_compare_sync_tray"))}</button>`;
+        html += `<button class="text-button" data-shortlist-compare-clear="1" type="button" style="font-size:0.72rem;padding:0.2rem 0.4rem">${escapeHtml(t("shortlist_compare_clear"))}</button>`;
+    }
+    if (hint) {
+        html += `<span style="font-size:0.7rem;color:var(--text-muted)">${escapeHtml(hint)}</span>`;
+    }
+    html += '</div>';
+    bar.innerHTML = html;
+}
+
+function _wireShortlistCompareBar() {
+    const bar = document.getElementById("shortlist-compare-bar");
+    if (!bar) return;
+    const runBtn = bar.querySelector('button[data-shortlist-compare-run="1"]');
+    if (runBtn) {
+        runBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            if (_shortlistCompareSelection.length < 2) return;
+            const names = _resolveShortlistCompareNames();
+            if (names.length < 2) return;
+            _renderShortlistCompareResult(names);
+        });
+    }
+    const syncBtn = bar.querySelector('button[data-shortlist-compare-sync-tray="1"]');
+    if (syncBtn) {
+        syncBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const result = _syncShortlistCompareToTray();
+            const hintEl = bar.querySelector("span[style*='text-muted']");
+            const msg = _formatSyncTrayMessage(result);
+            if (hintEl && msg) {
+                hintEl.textContent = msg;
+            } else if (msg) {
+                const span = document.createElement("span");
+                span.style.cssText = "font-size:0.7rem;color:var(--text-muted)";
+                span.textContent = msg;
+                bar.querySelector("div").appendChild(span);
+            }
+        });
+    }
+    const clearBtn = bar.querySelector('button[data-shortlist-compare-clear="1"]');
+    if (clearBtn) {
+        clearBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            _clearShortlistCompareSelection();
+            const result = document.getElementById("shortlist-compare-result");
+            if (result) result.innerHTML = "";
+            renderScouting();
+        });
+    }
+}
+
+function _formatSyncTrayMessage(result) {
+    if (!result) return "";
+    if (result.added === 0 && result.skipped_dup === 0 && result.skipped_cap === 0) {
+        return t("shortlist_compare_sync_empty");
+    }
+    const parts = [];
+    if (result.added > 0) {
+        parts.push(t("shortlist_compare_sync_added").replace("{n}", String(result.added)));
+    }
+    if (result.skipped_dup > 0) {
+        parts.push(t("shortlist_compare_sync_dup").replace("{n}", String(result.skipped_dup)));
+    }
+    if (result.skipped_cap > 0) {
+        parts.push(t("shortlist_compare_sync_cap").replace("{n}", String(result.skipped_cap)));
+    }
+    return parts.join(" \u00B7 ");
+}
+
+function _wireShortlistCompareCheckboxes(rootEl) {
+    const boxes = rootEl.querySelectorAll('input[data-shortlist-compare-key]');
+    boxes.forEach((box) => {
+        box.addEventListener("change", () => {
+            const key = box.getAttribute("data-shortlist-compare-key") || "";
+            _toggleShortlistCompareSelect(key);
+            // Re-sync visual state: if max was reached and user tried to
+            // check an extra box, the toggle would have no-op'd, so we
+            // restore the checkbox to the actual selection state.
+            box.checked = _shortlistCompareSelection.includes(key);
+            _renderShortlistCompareBar();
+            _wireShortlistCompareBar();
+        });
+    });
+}
+
+function _resolveShortlistCompareNames() {
+    return _resolveShortlistComparePlayers().map((p) => p.name);
+}
+
+function _resolveShortlistComparePlayers() {
+    const shortlistEl = document.getElementById("shortlist");
+    if (!shortlistEl) return [];
+    const infoByKey = {};
+    shortlistEl.querySelectorAll('input[data-shortlist-compare-key]').forEach((box) => {
+        const key = box.getAttribute("data-shortlist-compare-key") || "";
+        const name = box.getAttribute("data-shortlist-compare-name") || "";
+        const team = box.getAttribute("data-shortlist-compare-team") || "";
+        if (key && name) infoByKey[key] = { key, name, team };
+    });
+    return _shortlistCompareSelection
+        .map((k) => infoByKey[k])
+        .filter((v) => v !== undefined);
+}
+
+function _syncShortlistCompareToTray() {
+    const players = _resolveShortlistComparePlayers();
+    if (players.length === 0) return { added: 0, skipped_dup: 0, skipped_cap: 0 };
+    let added = 0;
+    let skippedDup = 0;
+    let skippedCap = 0;
+    for (const p of players) {
+        if (_crossScoutingCompareTray.some((t) => t.key === p.key)) {
+            skippedDup++;
+            continue;
+        }
+        if (_crossScoutingCompareTray.length >= _CROSS_SCOUTING_COMPARE_MAX) {
+            skippedCap++;
+            continue;
+        }
+        _crossScoutingCompareTray.push(p);
+        added++;
+    }
+    if (added > 0) _renderCompareTray();
+    return { added, skipped_dup: skippedDup, skipped_cap: skippedCap };
+}
+
+async function _renderShortlistCompareResult(names) {
+    const result = document.getElementById("shortlist-compare-result");
+    if (!result) return;
+    result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(t("shortlist_compare_loading"))}</p>`;
+    try {
+        const data = await fetchPlayerComparisonMulti(names);
+        if (data.error || !data.players) {
+            result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(t("shortlist_compare_unavailable"))}</p>`;
+            return;
+        }
+        const players = data.players || [];
+        const percentileMatrix = data.percentile_matrix || [];
+        const metricRankings = data.metric_rankings || [];
+        const composite = data.composite_ranking || [];
+        const pairwise = data.pairwise_similarity || { players: [], matrix: [] };
+        const z = appState.lang === "zh";
+
+        const headerCells = players.map((p) =>
+            `<th>${escapeHtml(p.name || "")}<br><span style="font-weight:normal;font-size:0.72rem;color:var(--text-muted)">${escapeHtml(p.team || "")}</span></th>`
+        ).join("");
+
+        const percentileRows = percentileMatrix.map((row) => {
+            const vals = (row.values || []).map((v) => {
+                const num = Number(v);
+                const cls = num >= 75 ? "status-high" : num >= 50 ? "status-medium" : "status-low";
+                return `<td><span class="status-pill ${cls}">${escapeHtml(Number.isFinite(num) ? num.toFixed(1) : "—")}</span></td>`;
+            }).join("");
+            return `<tr><td>${escapeHtml(row.label || row.dimension || "")}</td>${vals}</tr>`;
+        }).join("");
+
+        const compositeRows = composite.map((c, i) => {
+            const avg = Number(c.avg_percentile);
+            const cls = avg >= 75 ? "status-high" : avg >= 50 ? "status-medium" : "status-low";
+            return `<tr>
+                <td>${escapeHtml(String(c.rank || (i + 1)))}</td>
+                <td><strong>${escapeHtml(c.name || "")}</strong></td>
+                <td><span class="status-pill ${cls}">${escapeHtml(Number.isFinite(avg) ? avg.toFixed(1) : "—")}</span></td>
+            </tr>`;
+        }).join("");
+
+        const pairwiseHeader = (pairwise.players || []).map((n) => `<th>${escapeHtml(n || "")}</th>`).join("");
+        const pairwiseRows = (pairwise.players || []).map((rowName, i) => {
+            const row = (pairwise.matrix || [])[i] || [];
+            const cells = row.map((v) => {
+                const num = Number(v);
+                return `<td>${escapeHtml(Number.isFinite(num) ? num.toFixed(3) : "—")}</td>`;
+            }).join("");
+            return `<tr><td><strong>${escapeHtml(rowName || "")}</strong></td>${cells}</tr>`;
+        }).join("");
+
+        const metricRows = metricRankings.map((mr) => {
+            const ranked = (mr.ranked || []).map((r) =>
+                `<td>${escapeHtml(String(r.value ?? "—"))}</td>`
+            ).join("");
+            return `<tr><td>${escapeHtml(mr.label || mr.dimension || "")}</td>${ranked}</tr>`;
+        }).join("");
+
+        result.innerHTML = [
+            `<h4 style="margin:0.3rem 0;font-size:0.9rem">${escapeHtml(z ? "百分位矩阵" : "Percentile Matrix")}</h4>`,
+            `<div class="table-scroll"><table class="data-table"><thead><tr>`,
+            `<th>${escapeHtml(z ? "维度" : "Dimension")}</th>`,
+            headerCells,
+            `</tr></thead><tbody>${percentileRows}</tbody></table></div>`,
+            `<h4 style="margin:0.6rem 0 0.3rem;font-size:0.9rem">${escapeHtml(z ? "综合排名" : "Composite Ranking")}</h4>`,
+            `<div class="table-scroll"><table class="data-table"><thead><tr>`,
+            `<th>#</th><th>${escapeHtml(z ? "球员" : "Player")}</th><th>${escapeHtml(z ? "平均百分位" : "Avg Percentile")}</th>`,
+            `</tr></thead><tbody>${compositeRows}</tbody></table></div>`,
+            `<h4 style="margin:0.6rem 0 0.3rem;font-size:0.9rem">${escapeHtml(z ? "指标排名" : "Metric Rankings")}</h4>`,
+            metricRows ? `<div class="table-scroll"><table class="data-table"><thead><tr><th>${escapeHtml(z ? "指标" : "Metric")}</th>${headerCells}</tr></thead><tbody>${metricRows}</tbody></table></div>` : "",
+            `<h4 style="margin:0.6rem 0 0.3rem;font-size:0.9rem">${escapeHtml(z ? "两两相似度矩阵" : "Pairwise Similarity Matrix")}</h4>`,
+            pairwiseRows ? `<div class="table-scroll"><table class="data-table"><thead><tr><th></th>${pairwiseHeader}</tr></thead><tbody>${pairwiseRows}</tbody></table></div>` : "",
+            `<p style="font-size:0.72rem;color:var(--text-muted);padding-top:0.3rem">${escapeHtml(z ? "对比数据来自球员对比 API，不构成转会建议。" : "Comparison from player comparison API; not a transfer recommendation.")}</p>`,
+        ].join("");
+    } catch {
+        result.innerHTML = `<p style="color:var(--text-muted)">${escapeHtml(t("shortlist_compare_failed"))}</p>`;
+    }
+}
+
 function togglePlayerWatchlist(player) {
     const list = getPlayerWatchlist();
     const idx = list.findIndex((p) => p.key === player.key);
+    const newCode = player.reason_code || "";
     if (idx >= 0) {
+        const entry = _normalizeEntryReasonCodes(list[idx]);
+        const codes = entry.reason_codes;
+        const codeIdx = newCode ? codes.indexOf(newCode) : -1;
+        if (newCode && codeIdx >= 0) {
+            // toggle off this specific source
+            codes.splice(codeIdx, 1);
+            if (codes.length === 0) {
+                list.splice(idx, 1);
+                savePlayerWatchlist(list);
+                return { added: false, reason_codes: [], source_change: "removed" };
+            }
+            entry.reason_codes = codes;
+            entry.reason_code = codes[0] || "";
+            savePlayerWatchlist(list);
+            return { added: false, reason_codes: codes, source_change: "removed" };
+        }
+        if (newCode && codeIdx < 0) {
+            // accumulate a new source
+            codes.push(newCode);
+            entry.reason_codes = codes;
+            entry.reason_code = codes[0] || "";
+            savePlayerWatchlist(list);
+            return { added: true, reason_codes: codes, source_change: "merged" };
+        }
+        // no reason_code supplied → toggle off entirely (legacy behaviour)
         list.splice(idx, 1);
-    } else {
-        const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
-        if (player.reason_code) entry.reason_code = player.reason_code;
-        list.push(entry);
+        savePlayerWatchlist(list);
+        return { added: false, reason_codes: [], source_change: "removed" };
     }
+    const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
+    if (newCode) {
+        entry.reason_codes = [newCode];
+        entry.reason_code = newCode;
+    } else {
+        entry.reason_codes = [];
+        entry.reason_code = "";
+    }
+    list.push(entry);
     savePlayerWatchlist(list);
-    return idx < 0; // true if added
+    return { added: true, reason_codes: entry.reason_codes, source_change: "added" };
 }
 function togglePlayerShortlist(player) {
     const list = getPlayerShortlist();
     const idx = list.findIndex((p) => p.key === player.key);
+    const newCode = player.reason_code || "";
     if (idx >= 0) {
+        const entry = _normalizeEntryReasonCodes(list[idx]);
+        const codes = entry.reason_codes;
+        const codeIdx = newCode ? codes.indexOf(newCode) : -1;
+        if (newCode && codeIdx >= 0) {
+            codes.splice(codeIdx, 1);
+            if (codes.length === 0) {
+                list.splice(idx, 1);
+                savePlayerShortlist(list);
+                return { added: false, reason_codes: [], source_change: "removed" };
+            }
+            entry.reason_codes = codes;
+            entry.reason_code = codes[0] || "";
+            savePlayerShortlist(list);
+            _recordShortlistProvenance(entry, "removed", newCode, codes);
+            return { added: false, reason_codes: codes, source_change: "removed" };
+        }
+        if (newCode && codeIdx < 0) {
+            codes.push(newCode);
+            entry.reason_codes = codes;
+            entry.reason_code = codes[0] || "";
+            savePlayerShortlist(list);
+            _recordShortlistProvenance(entry, "merged", newCode, codes);
+            return { added: true, reason_codes: codes, source_change: "merged" };
+        }
         list.splice(idx, 1);
-    } else {
-        const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
-        if (player.reason_code) entry.reason_code = player.reason_code;
-        list.push(entry);
+        savePlayerShortlist(list);
+        return { added: false, reason_codes: [], source_change: "removed" };
     }
+    const entry = { key: player.key, name: player.name, team: player.team, position: player.position, rating: player.rating };
+    if (newCode) {
+        entry.reason_codes = [newCode];
+        entry.reason_code = newCode;
+    } else {
+        entry.reason_codes = [];
+        entry.reason_code = "";
+    }
+    list.push(entry);
     savePlayerShortlist(list);
-    return idx < 0;
+    return { added: true, reason_codes: entry.reason_codes, source_change: "added" };
 }
 function sendToTacticalBoard(player) {
     if (!tacticalProject) {
@@ -21853,7 +29129,7 @@ function updateSnapshotStatus() {
 
 function exportReviewQueueCSV() {
     const rows = sortReviewQueue(filterReviewQueue(reviewQueue), scoutSortMode);
-    const header = ["player_id", "player_name", "team", "league", "season", "position_group", "optimized_score", "minutes", "confidence_level", "reason_code", "review_status", "reviewer_note", "as_of_date"];
+    const header = ["player_id", "player_name", "team", "league", "season", "position_group", "optimized_score", "minutes", "confidence_level", "reason_code", "reason_codes", "review_status", "reviewer_note", "as_of_date"];
     const data = rows.map((player) => [
         player.player_id || "",
         player.player_name || player.name || "",
@@ -21865,6 +29141,7 @@ function exportReviewQueueCSV() {
         player.minutes || 0,
         player.confidence_level || player.confidence || "",
         player.reason_code || "",
+        _entryReasonCodes(player).join("|"),
         getQueueStatus(player),
         player.reviewer_note || "",
         player.as_of_date || "",
@@ -21892,6 +29169,7 @@ function buildShortlistDecisionPack() {
                 rating: player.optimized_score ?? player.rating ?? null,
                 confidence: player.confidence_level || player.confidence || "",
                 reason_code: player.reason_code || "",
+                reason_codes: _entryReasonCodes(player),
                 priority: dossier.priority,
                 recommendation: dossier.recommendation,
                 target_role: dossier.target_role,
@@ -21903,18 +29181,44 @@ function buildShortlistDecisionPack() {
             || Number(right.rating || 0) - Number(left.rating || 0)
             || left.player.localeCompare(right.player)
         ));
+    const watchlistPlayers = getPlayerWatchlist().map((entry) => {
+        const codes = _entryReasonCodes(entry);
+        return {
+            player_id: entry.key || "",
+            player: entry.name || "",
+            team: entry.team || "",
+            position: entry.position || "",
+            rating: entry.rating ?? null,
+            reason_code: entry.reason_code || codes[0] || "",
+            reason_codes: codes,
+        };
+    });
     return {
         schema: "scoutfootball.shortlist-decision-pack",
-        version: "1.0.0",
-        status: players.length ? "ok" : "empty",
+        version: "1.2.0",
+        status: players.length || watchlistPlayers.length ? "ok" : "empty",
         exported_at: new Date().toISOString(),
         storage_scope: "browser-local-download",
         player_count: players.length,
         players,
+        watchlist_player_count: watchlistPlayers.length,
+        watchlist_players: watchlistPlayers,
+        provenance_log: _shortlistProvenanceLog.map((entry) => ({
+            timestamp: String(entry.timestamp || ""),
+            player_key: String(entry.player_key || ""),
+            player_name: String(entry.player_name || ""),
+            action: entry.action === "merged" ? "merged" : "removed",
+            reason_code: String(entry.reason_code || ""),
+            resulting_codes: Array.isArray(entry.resulting_codes)
+                ? entry.resulting_codes.map((c) => String(c || ""))
+                : [],
+        })),
         limitations: [
             "Shortlist selection and dossiers are browser-local decision context.",
             "This export is not a server-side audit record, transfer instruction, or cross-device sync artifact.",
             "Ratings and confidence reflect the loaded local or API data snapshot and may have incomplete coverage.",
+            "Provenance log is a browser-local audit trail of source-code merge/remove events; it is not a server-side audit record.",
+            "Watchlist entries are browser-local tracking state without dossier fields; they carry reason_codes for source attribution.",
         ],
     };
 }
@@ -21945,12 +29249,31 @@ function exportShortlistDecisionPackCSV() {
         ["storage_scope", pack.storage_scope],
         ["player_count", pack.player_count],
         [],
-        ["player_id", "player", "team", "position", "rating", "confidence", "reason_code", "priority", "recommendation", "target_role", "rationale_and_risks"],
+        ["player_id", "player", "team", "position", "rating", "confidence", "reason_code", "reason_codes", "priority", "recommendation", "target_role", "rationale_and_risks"],
         ...pack.players.map((player) => [
             player.player_id, player.player, player.team, player.position,
             player.rating ?? "", player.confidence, player.reason_code,
+            (player.reason_codes || []).join("|"),
             player.priority, player.recommendation, player.target_role,
             player.rationale_and_risks,
+        ]),
+        [],
+        ["# Provenance Log"],
+        ["timestamp", "player_key", "player_name", "action", "reason_code", "resulting_codes"],
+        ...(pack.provenance_log || []).map((entry) => [
+            entry.timestamp, entry.player_key, entry.player_name,
+            entry.action, entry.reason_code,
+            (entry.resulting_codes || []).join("|"),
+        ]),
+        [],
+        ["# Watchlist"],
+        ["watchlist_player_count", pack.watchlist_player_count || 0],
+        [],
+        ["player_id", "player", "team", "position", "rating", "reason_code", "reason_codes"],
+        ...(pack.watchlist_players || []).map((player) => [
+            player.player_id, player.player, player.team, player.position,
+            player.rating ?? "", player.reason_code,
+            (player.reason_codes || []).join("|"),
         ]),
         [],
         ["# Limitations"],
@@ -21963,4 +29286,560 @@ function exportShortlistDecisionPackCSV() {
         "scoutfootball-shortlist-decision-pack.csv",
         "text/csv;charset=utf-8",
     );
+}
+
+// Round 93: decision pack import — restores a shortlist from a JSON file
+// produced by exportShortlistDecisionPackJSON. Validates schema + version,
+// then merges each player's reason_codes into the browser-local shortlist
+// (respecting the existing accumulation semantics from Round 87) and
+// restores the dossier fields (priority/recommendation/target_role/rationale)
+// via the existing updateShortlistDossier helper. Does NOT overwrite existing
+// entries — only adds new ones or merges reason codes into existing ones.
+const _DECISION_PACK_SUPPORTED_VERSIONS = ["1.0.0", "1.1.0", "1.2.0"];
+const _DECISION_PACK_SCHEMA = "scoutfootball.shortlist-decision-pack";
+const _DECISION_PACK_LATEST_VERSION = "1.2.0";
+
+function _validateShortlistDecisionPack(pack) {
+    if (!pack || typeof pack !== "object" || Array.isArray(pack)) {
+        return { ok: false, reason: "not_object" };
+    }
+    if (pack.schema !== _DECISION_PACK_SCHEMA) {
+        return { ok: false, reason: "schema_mismatch" };
+    }
+    if (!_DECISION_PACK_SUPPORTED_VERSIONS.includes(pack.version)) {
+        return { ok: false, reason: "unsupported_version" };
+    }
+    if (!Array.isArray(pack.players)) {
+        return { ok: false, reason: "players_not_array" };
+    }
+    // Round 95: v1.2.0 packs may carry a watchlist_players array. When present
+    // it must be an array — absent/omitted is fine for backward compat.
+    if (pack.watchlist_players !== undefined && !Array.isArray(pack.watchlist_players)) {
+        return { ok: false, reason: "watchlist_players_not_array" };
+    }
+    return { ok: true };
+}
+
+// Round 96: schema migration helper — detects the version of an imported
+// decision pack and normalizes it to the latest shape (1.2.0) before
+// validation/import. Older packs (1.0.0 without watchlist_players, 1.1.0
+// without watchlist_players) are transparently upgraded with empty arrays
+// so downstream code can treat all packs uniformly. Returns:
+//   { ok: false, reason }                     — invalid pack
+//   { ok: true, migrated, from_version, pack } — normalized pack
+// `migrated` is true when from_version != LATEST. `from_version` is the
+// original version string (or "" when missing). `pack` is the normalized
+// pack (a shallow copy — does not mutate the input).
+function _migrateDecisionPackVersion(pack) {
+    const validation = _validateShortlistDecisionPack(pack);
+    if (!validation.ok) {
+        return { ok: false, reason: validation.reason };
+    }
+    const fromVersion = String(pack.version || "");
+    const migrated = fromVersion !== _DECISION_PACK_LATEST_VERSION;
+    const normalizedPack = {
+        ...pack,
+        version: _DECISION_PACK_LATEST_VERSION,
+        players: Array.isArray(pack.players) ? pack.players : [],
+        watchlist_players: Array.isArray(pack.watchlist_players)
+            ? pack.watchlist_players
+            : [],
+        provenance_log: Array.isArray(pack.provenance_log) ? pack.provenance_log : [],
+    };
+    return { ok: true, migrated, from_version: fromVersion, pack: normalizedPack };
+}
+
+function _normalizeDecisionPackPlayer(player) {
+    if (!player || typeof player !== "object") return null;
+    const name = String(player.player || player.player_name || player.name || "").trim();
+    if (!name) return null;
+    const key = String(player.player_id || player.player_key || player.key || name).trim();
+    const team = String(player.team || "");
+    const position = String(player.position || "");
+    const rating = player.rating ?? null;
+    const reasonCodes = Array.isArray(player.reason_codes)
+        ? player.reason_codes.map((c) => String(c || "").trim()).filter(Boolean)
+        : (player.reason_code ? [String(player.reason_code).trim()] : []);
+    return {
+        key,
+        name,
+        team,
+        position,
+        rating,
+        reason_codes: reasonCodes,
+        priority: String(player.priority || "standard"),
+        recommendation: String(player.recommendation || "monitor"),
+        target_role: String(player.target_role || ""),
+        rationale: String(player.rationale_and_risks || player.rationale || ""),
+    };
+}
+
+function _mergeProvenanceLogEntries(importedLog) {
+    if (!Array.isArray(importedLog)) return 0;
+    const existingKeys = new Set(
+        _shortlistProvenanceLog.map((e) =>
+            String((e && e.timestamp) || "") + "|" +
+            String((e && e.player_key) || "") + "|" +
+            String((e && e.action) || ""),
+        ),
+    );
+    let added = 0;
+    for (const raw of importedLog) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const timestamp = String(raw.timestamp || "").slice(0, 40);
+        const playerKey = String(raw.player_key || "").slice(0, 180);
+        const playerName = String(raw.player_name || "").slice(0, 180);
+        const action = raw.action === "merged" ? "merged" : "removed";
+        const reasonCode = String(raw.reason_code || "").slice(0, 64);
+        const resultingCodes = Array.isArray(raw.resulting_codes)
+            ? raw.resulting_codes.map((c) => String(c || "").slice(0, 64)).slice(0, 20)
+            : [];
+        if (!timestamp || !playerKey) continue;
+        const dedupKey = timestamp + "|" + playerKey + "|" + action;
+        if (existingKeys.has(dedupKey)) continue;
+        existingKeys.add(dedupKey);
+        _shortlistProvenanceLog.unshift({
+            timestamp,
+            player_key: playerKey,
+            player_name: playerName,
+            action,
+            reason_code: reasonCode,
+            resulting_codes: resultingCodes,
+        });
+        added++;
+    }
+    if (_shortlistProvenanceLog.length > _PROVENANCE_LOG_MAX) {
+        _shortlistProvenanceLog.length = _PROVENANCE_LOG_MAX;
+    }
+    if (added > 0) _persistShortlistProvenanceLog();
+    return added;
+}
+
+function _mergeDecisionPackPlayer(list, player) {
+    const idx = list.findIndex((p) => p.key === player.key);
+    if (idx >= 0) {
+        const entry = _normalizeEntryReasonCodes(list[idx]);
+        let mergedCount = 0;
+        for (const code of player.reason_codes) {
+            if (!entry.reason_codes.includes(code)) {
+                entry.reason_codes.push(code);
+                mergedCount++;
+            }
+        }
+        entry.reason_code = entry.reason_codes[0] || "";
+        if (player.team && !entry.team) entry.team = player.team;
+        if (player.position && !entry.position) entry.position = player.position;
+        if (player.rating != null && entry.rating == null) entry.rating = player.rating;
+        return { kind: "merged", entry, mergedCount };
+    }
+    const entry = {
+        key: player.key,
+        name: player.name,
+        team: player.team,
+        position: player.position,
+        rating: player.rating,
+        reason_codes: player.reason_codes.slice(),
+        reason_code: player.reason_codes[0] || "",
+    };
+    list.push(entry);
+    return { kind: "added", entry, mergedCount: 0 };
+}
+
+// Round 95: watchlist merge helper — mirror of _mergeDecisionPackPlayer but
+// operates on the watchlist (no dossier fields). Dedup by key, accumulate
+// reason_codes without overwriting existing team/position/rating, push a new
+// entry when no match is found. Returns { kind, entry, mergedCount }.
+function _mergeDecisionPackWatchlistPlayer(list, player) {
+    const idx = list.findIndex((p) => p.key === player.key);
+    if (idx >= 0) {
+        const entry = _normalizeEntryReasonCodes(list[idx]);
+        let mergedCount = 0;
+        for (const code of player.reason_codes) {
+            if (!entry.reason_codes.includes(code)) {
+                entry.reason_codes.push(code);
+                mergedCount++;
+            }
+        }
+        entry.reason_code = entry.reason_codes[0] || "";
+        if (player.team && !entry.team) entry.team = player.team;
+        if (player.position && !entry.position) entry.position = player.position;
+        if (player.rating != null && entry.rating == null) entry.rating = player.rating;
+        return { kind: "merged", entry, mergedCount };
+    }
+    const entry = {
+        key: player.key,
+        name: player.name,
+        team: player.team,
+        position: player.position,
+        rating: player.rating,
+        reason_codes: player.reason_codes.slice(),
+        reason_code: player.reason_codes[0] || "",
+    };
+    list.push(entry);
+    return { kind: "added", entry, mergedCount: 0 };
+}
+
+function importShortlistDecisionPackJSON(pack) {
+    // Round 96: route through the migration helper so older packs (1.0.0 /
+    // 1.1.0) are transparently upgraded to 1.2.0 shape before import. This
+    // also surfaces `migrated` + `from_version` in the result so the UI can
+    // tell the user their pack was upgraded.
+    const migration = _migrateDecisionPackVersion(pack);
+    if (!migration.ok) {
+        return { ok: false, error: "invalid", reason: migration.reason };
+    }
+    const normalizedPack = migration.pack;
+    // Round 95: a pack is "empty" only when BOTH players and watchlist_players
+    // are absent/empty. v1.2.0 packs may carry only watchlist entries.
+    const watchlistRaw = normalizedPack.watchlist_players;
+    if (normalizedPack.players.length === 0 && watchlistRaw.length === 0) {
+        return {
+            ok: false,
+            error: "empty",
+            migrated: migration.migrated,
+            from_version: migration.from_version,
+        };
+    }
+    const list = getPlayerShortlist();
+    let addedCount = 0;
+    let mergedCount = 0;
+    const dossierUpdates = [];
+    for (const raw of normalizedPack.players) {
+        const player = _normalizeDecisionPackPlayer(raw);
+        if (!player) continue;
+        const result = _mergeDecisionPackPlayer(list, player);
+        if (result.kind === "added") addedCount++;
+        else if (result.kind === "merged" && result.mergedCount > 0) mergedCount++;
+        dossierUpdates.push(player);
+    }
+    if (normalizedPack.players.length > 0) savePlayerShortlist(list);
+    // Restore dossier fields via the existing helper so validation + persistence fire.
+    for (const player of dossierUpdates) {
+        if (["urgent", "standard", "monitor"].includes(player.priority)) {
+            updateShortlistDossier(player.key, player.name, "priority", player.priority);
+        }
+        if (["target", "monitor", "decline"].includes(player.recommendation)) {
+            updateShortlistDossier(player.key, player.name, "recommendation", player.recommendation);
+        }
+        if (player.target_role) {
+            updateShortlistDossier(player.key, player.name, "target_role", player.target_role);
+        }
+        if (player.rationale) {
+            updateShortlistDossier(player.key, player.name, "rationale", player.rationale);
+        }
+    }
+    // Round 95: merge watchlist players (v1.2.0+). Watchlist entries have no
+    // dossier fields, so we only accumulate reason_codes + fill missing
+    // team/position/rating. The merge respects the same accumulation
+    // semantics as togglePlayerWatchlist.
+    let watchlistAdded = 0;
+    let watchlistMerged = 0;
+    if (watchlistRaw.length > 0) {
+        const watchlist = getPlayerWatchlist();
+        for (const raw of watchlistRaw) {
+            const player = _normalizeDecisionPackPlayer(raw);
+            if (!player) continue;
+            const result = _mergeDecisionPackWatchlistPlayer(watchlist, player);
+            if (result.kind === "added") watchlistAdded++;
+            else if (result.kind === "merged" && result.mergedCount > 0) watchlistMerged++;
+        }
+        savePlayerWatchlist(watchlist);
+    }
+    const provenanceMerged = _mergeProvenanceLogEntries(normalizedPack.provenance_log);
+    return {
+        ok: true,
+        added: addedCount,
+        merged: mergedCount,
+        total: normalizedPack.players.length,
+        provenance_merged: provenanceMerged,
+        watchlist_added: watchlistAdded,
+        watchlist_merged: watchlistMerged,
+        watchlist_total: watchlistRaw.length,
+        migrated: migration.migrated,
+        from_version: migration.from_version,
+    };
+}
+
+// Round 96: dry-run preview — computes what WOULD be added/merged/skipped if
+// the given pack were imported right now, without mutating localStorage or
+// the module-level provenance log. Returns the same shape as
+// importShortlistDecisionPackJSON plus per-player preview lists so the UI
+// can render a "X will be added, Y will merge Z new codes, W will be skipped"
+// breakdown before the user commits to the import.
+function previewDecisionPackImport(pack) {
+    const migration = _migrateDecisionPackVersion(pack);
+    if (!migration.ok) {
+        return { ok: false, error: "invalid", reason: migration.reason };
+    }
+    const normalizedPack = migration.pack;
+    if (normalizedPack.players.length === 0 && normalizedPack.watchlist_players.length === 0) {
+        return {
+            ok: false,
+            error: "empty",
+            migrated: migration.migrated,
+            from_version: migration.from_version,
+        };
+    }
+    const shortlist = getPlayerShortlist();
+    let shortlistAdded = 0;
+    let shortlistMerged = 0;
+    const shortlistPreview = [];
+    for (const raw of normalizedPack.players) {
+        const player = _normalizeDecisionPackPlayer(raw);
+        if (!player) continue;
+        const idx = shortlist.findIndex((entry) => entry.key === player.key);
+        if (idx >= 0) {
+            const entry = _normalizeEntryReasonCodes(shortlist[idx]);
+            let newCodes = 0;
+            for (const code of player.reason_codes) {
+                if (!entry.reason_codes.includes(code)) newCodes++;
+            }
+            if (newCodes > 0) {
+                shortlistMerged++;
+                shortlistPreview.push({
+                    name: player.name,
+                    action: "merge",
+                    new_codes: newCodes,
+                });
+            } else {
+                shortlistPreview.push({
+                    name: player.name,
+                    action: "skip",
+                    new_codes: 0,
+                });
+            }
+        } else {
+            shortlistAdded++;
+            shortlistPreview.push({
+                name: player.name,
+                action: "add",
+                new_codes: player.reason_codes.length,
+            });
+        }
+    }
+    const watchlist = getPlayerWatchlist();
+    let watchlistAdded = 0;
+    let watchlistMerged = 0;
+    const watchlistPreview = [];
+    for (const raw of normalizedPack.watchlist_players) {
+        const player = _normalizeDecisionPackPlayer(raw);
+        if (!player) continue;
+        const idx = watchlist.findIndex((entry) => entry.key === player.key);
+        if (idx >= 0) {
+            const entry = _normalizeEntryReasonCodes(watchlist[idx]);
+            let newCodes = 0;
+            for (const code of player.reason_codes) {
+                if (!entry.reason_codes.includes(code)) newCodes++;
+            }
+            if (newCodes > 0) {
+                watchlistMerged++;
+                watchlistPreview.push({
+                    name: player.name,
+                    action: "merge",
+                    new_codes: newCodes,
+                });
+            } else {
+                watchlistPreview.push({
+                    name: player.name,
+                    action: "skip",
+                    new_codes: 0,
+                });
+            }
+        } else {
+            watchlistAdded++;
+            watchlistPreview.push({
+                name: player.name,
+                action: "add",
+                new_codes: player.reason_codes.length,
+            });
+        }
+    }
+    // Compute provenance preview count without mutating _shortlistProvenanceLog.
+    const existingProvKeys = new Set(
+        _shortlistProvenanceLog.map((e) =>
+            String((e && e.timestamp) || "") + "|" +
+            String((e && e.player_key) || "") + "|" +
+            String((e && e.action) || ""),
+        ),
+    );
+    let provenanceAdded = 0;
+    for (const raw of normalizedPack.provenance_log) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const timestamp = String(raw.timestamp || "");
+        const playerKey = String(raw.player_key || "");
+        if (!timestamp || !playerKey) continue;
+        const action = raw.action === "merged" ? "merged" : "removed";
+        const dedupKey = timestamp + "|" + playerKey + "|" + action;
+        if (existingProvKeys.has(dedupKey)) continue;
+        existingProvKeys.add(dedupKey);
+        provenanceAdded++;
+    }
+    return {
+        ok: true,
+        migrated: migration.migrated,
+        from_version: migration.from_version,
+        shortlist_added: shortlistAdded,
+        shortlist_merged: shortlistMerged,
+        shortlist_total: normalizedPack.players.length,
+        shortlist_preview: shortlistPreview,
+        watchlist_added: watchlistAdded,
+        watchlist_merged: watchlistMerged,
+        watchlist_total: normalizedPack.watchlist_players.length,
+        watchlist_preview: watchlistPreview,
+        provenance_added: provenanceAdded,
+        provenance_total: normalizedPack.provenance_log.length,
+    };
+}
+
+function _setDecisionPackImportStatus(message) {
+    const statusEl = document.getElementById("scout-decision-pack-import-status");
+    if (statusEl) statusEl.textContent = message;
+}
+
+function _handleDecisionPackFileLoad(event) {
+    const file = event.target.files && event.target.files[0];
+    // Reset the input value so the same file can be re-selected later.
+    event.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        let pack;
+        try {
+            pack = JSON.parse(reader.result);
+        } catch {
+            _setDecisionPackImportStatus(t("shortlist_decision_pack_import_invalid").replace(
+                "{reason}", "json_parse_error",
+            ));
+            return;
+        }
+        const result = importShortlistDecisionPackJSON(pack);
+        if (result.ok) {
+            const totalShortlist = result.added + result.merged;
+            const totalWatchlist = result.watchlist_added + result.watchlist_merged;
+            if (totalShortlist === 0 && totalWatchlist === 0) {
+                _setDecisionPackImportStatus(t("shortlist_decision_pack_import_empty"));
+            } else {
+                let msg = t("shortlist_decision_pack_import_ok")
+                    .replace("{n}", String(totalShortlist))
+                    .replace("{merged}", String(result.merged))
+                    .replace("{added}", String(result.added));
+                if (result.provenance_merged > 0) {
+                    msg += " " + t("shortlist_decision_pack_import_provenance")
+                        .replace("{provenance}", String(result.provenance_merged));
+                }
+                if (totalWatchlist > 0) {
+                    msg += " " + t("shortlist_decision_pack_import_watchlist")
+                        .replace("{n}", String(totalWatchlist))
+                        .replace("{added}", String(result.watchlist_added))
+                        .replace("{merged}", String(result.watchlist_merged));
+                }
+                // Round 96: surface migration notice when an older pack was
+                // transparently upgraded to 1.2.0 shape before import.
+                if (result.migrated) {
+                    msg += " " + t("shortlist_decision_pack_migrated")
+                        .replace("{from}", String(result.from_version || ""));
+                }
+                _setDecisionPackImportStatus(msg);
+            }
+            renderScouting();
+        } else if (result.error === "empty") {
+            _setDecisionPackImportStatus(t("shortlist_decision_pack_import_empty"));
+        } else if (result.error === "invalid") {
+            _setDecisionPackImportStatus(
+                t("shortlist_decision_pack_import_invalid").replace("{reason}", result.reason),
+            );
+        }
+    };
+    reader.onerror = () => {
+        _setDecisionPackImportStatus(t("shortlist_decision_pack_import_read_fail"));
+    };
+    reader.readAsText(file);
+}
+
+function _wireDecisionPackImportButton() {
+    const btn = document.getElementById("scout-import-decision-pack");
+    const fileInput = document.getElementById("scout-decision-pack-file");
+    if (!btn || !fileInput) return;
+    if (btn.dataset.round93Wired === "1") return;
+    btn.dataset.round93Wired = "1";
+    btn.title = t("shortlist_decision_pack_import_title");
+    btn.addEventListener("click", () => {
+        fileInput.click();
+    });
+    fileInput.addEventListener("change", _handleDecisionPackFileLoad);
+}
+
+// Round 96: dry-run preview flow — reads a decision pack file but does NOT
+// mutate localStorage. Instead it surfaces a preview of what WOULD be
+// added/merged/skipped so the user can decide whether to commit. The
+// preview renders into #scout-decision-pack-preview-status via textContent
+// (never innerHTML). When the user wants to commit, they invoke the regular
+// import flow (which re-reads the file). The preview result is also stashed
+// on the button via dataset so tests can inspect it.
+function _setDecisionPackPreviewStatus(message) {
+    const statusEl = document.getElementById("scout-decision-pack-preview-status");
+    if (statusEl) statusEl.textContent = message;
+}
+
+function _handleDecisionPackPreviewFileLoad(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        let pack;
+        try {
+            pack = JSON.parse(reader.result);
+        } catch {
+            _setDecisionPackPreviewStatus(t("shortlist_decision_pack_import_invalid").replace(
+                "{reason}", "json_parse_error",
+            ));
+            return;
+        }
+        const result = previewDecisionPackImport(pack);
+        if (result.ok) {
+            const totalShortlist = result.shortlist_added + result.shortlist_merged;
+            const totalWatchlist = result.watchlist_added + result.watchlist_merged;
+            if (totalShortlist === 0 && totalWatchlist === 0 && result.provenance_added === 0) {
+                _setDecisionPackPreviewStatus(t("shortlist_decision_pack_preview_empty"));
+                return;
+            }
+            let msg = t("shortlist_decision_pack_preview_ok")
+                .replace("{n}", String(totalShortlist))
+                .replace("{added}", String(result.shortlist_added))
+                .replace("{merged}", String(result.shortlist_merged))
+                .replace("{wn}", String(totalWatchlist))
+                .replace("{w_added}", String(result.watchlist_added))
+                .replace("{w_merged}", String(result.watchlist_merged))
+                .replace("{prov}", String(result.provenance_added));
+            if (result.migrated) {
+                msg += " " + t("shortlist_decision_pack_migrated")
+                    .replace("{from}", String(result.from_version || ""));
+            }
+            _setDecisionPackPreviewStatus(msg);
+        } else if (result.error === "empty") {
+            _setDecisionPackPreviewStatus(t("shortlist_decision_pack_preview_empty"));
+        } else if (result.error === "invalid") {
+            _setDecisionPackPreviewStatus(
+                t("shortlist_decision_pack_import_invalid").replace("{reason}", result.reason),
+            );
+        }
+    };
+    reader.onerror = () => {
+        _setDecisionPackPreviewStatus(t("shortlist_decision_pack_import_read_fail"));
+    };
+    reader.readAsText(file);
+}
+
+function _wireDecisionPackPreviewButton() {
+    const btn = document.getElementById("scout-preview-decision-pack");
+    const fileInput = document.getElementById("scout-decision-pack-preview-file");
+    if (!btn || !fileInput) return;
+    if (btn.dataset.round96Wired === "1") return;
+    btn.dataset.round96Wired = "1";
+    btn.title = t("shortlist_decision_pack_preview_title");
+    btn.addEventListener("click", () => {
+        fileInput.click();
+    });
+    fileInput.addEventListener("change", _handleDecisionPackPreviewFileLoad);
 }

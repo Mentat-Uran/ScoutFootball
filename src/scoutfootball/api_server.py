@@ -19,6 +19,15 @@ from scoutfootball.api import (
     apply_wc_tournament_result,
     clear_wc_knockout_result,
     clear_wc_tournament_result,
+    create_decision_dossier,
+    create_opposition_briefing,
+    create_post_match_review,
+    create_recruitment_brief,
+    diff_decision_dossier_versions,
+    diff_opposition_briefing_versions,
+    diff_post_match_review_versions,
+    diff_recruitment_brief_versions,
+    export_local_pack,
     export_wc_tournament_state,
     generate_wc_knockout_bracket,
     get_action_based_position_similarity,
@@ -27,6 +36,8 @@ from scoutfootball.api import (
     get_action_value_player_context,
     get_action_value_rating_links,
     get_action_value_summary,
+    get_adapter_compatibility_matrix,
+    get_adapter_registry,
     get_artifacts_summary,
     get_backtest_comparison,
     get_backtest_report_card,
@@ -42,9 +53,13 @@ from scoutfootball.api import (
     get_confidence_interval_plot,
     get_cross_league_action_comparison,
     get_cross_league_position_comparison,
+    get_cross_league_team_depth,
     get_cumulative_trajectory,
     get_data_drift,
     get_decay_tuning,
+    get_decision_dossier,
+    get_decision_dossiers,
+    get_detailed_health,
     get_difficulty_stratification,
     get_ensemble_attribution,
     get_ensemble_attribution_ci,
@@ -53,6 +68,7 @@ from scoutfootball.api import (
     get_error_analysis,
     get_error_clustering,
     get_feature_importance,
+    get_fixture_difficulty,
     get_fold_comparison,
     get_form_weighted_prediction,
     get_h2h_bias_correction,
@@ -61,18 +77,24 @@ from scoutfootball.api import (
     get_league_action_evolution,
     get_league_action_percentiles,
     get_league_error_analysis,
+    get_league_form_table,
     get_league_style_evolution,
     get_league_style_percentiles,
+    get_market_value_summary,
     get_match_momentum,
     get_match_prediction,
     get_match_prediction_dc,
     get_model_comparison,
     get_model_run_detail,
     get_model_runs,
+    get_opposition_briefing,
+    get_opposition_briefings,
+    get_opposition_contracts,
     get_outcome_distribution,
     get_player_career_trajectory,
     get_player_comparison,
     get_player_comparison_multi,
+    get_player_market_value_history,
     get_player_peer_benchmark,
     get_player_profile,
     get_player_ratings,
@@ -85,6 +107,8 @@ from scoutfootball.api import (
     get_position_style_drift_neighbors,
     get_position_style_evolution,
     get_position_trend_overlay,
+    get_post_match_review,
+    get_post_match_reviews,
     get_prediction_anomalies,
     get_prediction_attribution,
     get_prediction_attribution_ci,
@@ -97,11 +121,19 @@ from scoutfootball.api import (
     get_probability_heatmap,
     get_profit_loss_simulation,
     get_ratings_meta,
+    get_recruitment_brief,
+    get_recruitment_briefs,
+    get_recruitment_contracts,
     get_reliability_diagram,
+    get_research_health,
     get_review_queue,
     get_riser_decliner_watchlist,
     get_scenario_stress_test,
     get_scoreline_calibration,
+    get_scouting_dashboard,
+    get_scouting_target_style_match,
+    get_scouting_targets,
+    get_season_projection,
     get_shortlist,
     get_style_atlas,
     get_style_drift_neighbors,
@@ -122,6 +154,7 @@ from scoutfootball.api import (
     get_value_bet_analysis,
     get_value_summary,
     get_watchlist,
+    get_wc_contracts,
     get_wc_group_stage_simulation,
     get_wc_group_tiebreak_diagnostics,
     get_wc_groups,
@@ -132,26 +165,52 @@ from scoutfootball.api import (
     get_wc_knockout_probabilities,
     get_wc_knockout_review_ledger,
     get_wc_knockout_scenarios,
+    get_wc_match_player_spotlight,
     get_wc_predictions,
     get_wc_qualification_impact,
     get_wc_schedule,
     get_wc_squad,
     get_wc_squad_balance_comparison,
+    get_wc_squad_scouting_needs,
+    get_wc_team_form_trend,
     get_wc_team_outlook,
     get_wc_teams,
+    get_wc_tournament_knockout_match_impact,
+    get_wc_tournament_match_impact,
+    get_wc_tournament_match_predictions,
     get_wc_tournament_matches,
+    get_wc_tournament_overall_leaderboard,
     get_wc_tournament_scenarios,
     get_wc_tournament_standings,
+    get_wc_tournament_standings_probabilities,
     get_wc_tournament_summary,
+    get_wc_tournament_top_matches,
     get_world_cup_match_briefing,
     get_world_cup_match_prediction,
     health_check,
+    import_local_pack,
     import_wc_tournament_state,
+    list_decision_dossier_backups,
+    list_market_value_players,
+    list_opposition_briefing_backups,
     list_players,
+    list_post_match_review_backups,
+    list_recruitment_brief_backups,
     list_teams,
+    load_decision_dossier_backup,
+    load_opposition_briefing_backup,
+    load_post_match_review_backup,
+    load_recruitment_brief_backup,
     preview_wc_tournament_import,
     reset_wc_tournament,
+    restore_decision_dossier_from_backup,
+    restore_opposition_briefing_from_backup,
+    restore_post_match_review_from_backup,
+    restore_recruitment_brief_from_backup,
     search_players_and_teams,
+    update_decision_dossier,
+    update_opposition_briefing,
+    update_post_match_review,
 )
 from scoutfootball.storage.scouting_workspace import (
     MAX_WORKSPACE_BYTES,
@@ -292,6 +351,20 @@ def create_app() -> FastAPI:
     def health():
         return health_check()
 
+    @app.get("/health/detailed")
+    def health_detailed(force_refresh: bool = Query(False)):
+        return get_detailed_health(force_refresh=force_refresh)
+
+    @app.get("/health/research")
+    def health_research():
+        """Five-layer research health for the rating system (PRS-0 R-003/R-004).
+
+        Fail-closed verdict: a stale, unreviewable, synthetic or
+        non-independent-label rating system is reported as ``not_ready``,
+        never hidden behind a top-level ``ok``. Read-only and local.
+        """
+        return get_research_health()
+
     @app.get("/license")
     def license_info():
         artifacts = get_artifacts_summary()
@@ -302,6 +375,25 @@ def create_app() -> FastAPI:
             "data_source_label": artifacts.get("data_source_label", ""),
             "updated_at": updated,
         }
+
+    @app.get("/adapters")
+    def adapters():
+        """Provider adapter manifest registry (I1: open interop baseline).
+
+        Returns capabilities, schema mappings and conversion-loss notes
+        for every registered source adapter. Read-only metadata only.
+        """
+        return get_adapter_registry()
+
+    @app.get("/adapters/compatibility")
+    def adapter_compatibility():
+        """Project-local adapter admission and input-contract coverage.
+
+        This does not validate an upstream license or make a publication
+        decision; it only prevents experimental or uncontracted adapters from
+        being mistaken for admitted local workflow inputs.
+        """
+        return get_adapter_compatibility_matrix()
 
     @app.get("/players")
     def players():
@@ -745,6 +837,57 @@ def create_app() -> FastAPI:
     def value_summary():
         return get_value_summary()
 
+    # ── Market value (身价) endpoints ──────────────────────────────
+    # Read-only Transfermarkt market value access. All responses carry
+    # source attribution and the Transfermarkt ToS license boundary so
+    # consumers cannot mistake subjective valuations for market prices.
+    @app.get("/market-value/summary")
+    def market_value_summary():
+        """Aggregate market value stats with source attribution.
+
+        Returns total_players, total_snapshots, value distribution by
+        EUR band, and top-10 players by latest market value. Reads
+        local raw Transfermarkt data only; never scrapes.
+        """
+        return get_market_value_summary()
+
+    @app.get("/market-value/players")
+    def market_value_players(
+        limit: int = Query(100, ge=1, le=1000),
+        offset: int = Query(0, ge=0),
+        min_value_eur: float | None = Query(None, ge=0.0),
+        max_value_eur: float | None = Query(None, ge=0.0),
+        team: str | None = Query(None, max_length=128),
+        position: str | None = Query(None, max_length=64),
+        sort_by: str = Query("market_value_eur", max_length=32),
+        sort_order: str = Query("desc", max_length=4),
+    ):
+        """List players with their latest market value (paginated).
+
+        Returns one row per player (the latest snapshot). Filters by
+        value range, team name (substring), and position (substring).
+        """
+        return list_market_value_players(
+            limit=limit,
+            offset=offset,
+            min_value_eur=min_value_eur,
+            max_value_eur=max_value_eur,
+            team=team,
+            position=position,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+
+    @app.get("/market-value/players/{player_name}")
+    def market_value_player_history(player_name: str):
+        """Full market value history for a single player.
+
+        Case-insensitive exact match first, then substring fallback.
+        Returns all matching histories grouped by player_id so the
+        caller can disambiguate common names.
+        """
+        return get_player_market_value_history(player_name)
+
     @app.get("/action-values")
     def action_values(limit: int = 20, offset: int = 0):
         return get_action_value_summary(limit=limit, offset=offset)
@@ -807,7 +950,7 @@ def create_app() -> FastAPI:
         names: str,
         season: str | None = None,
     ):
-        """Compare 2-5 players side-by-side.
+        """Compare 2-6 players side-by-side.
 
         ``names`` is a comma-separated list (e.g. ``?names=Alice,Bob,Carol``).
         Whitespace around each name is trimmed. The endpoint resolves each
@@ -1187,6 +1330,53 @@ def create_app() -> FastAPI:
             min_player_minutes=min_player_minutes,
         )
 
+    # ── League season projection & form analysis ──
+    # Static routes registered before any /teams/{team} parameterized routes
+    # to avoid path conflicts.
+    @app.get("/league/form-table")
+    def league_form_table(
+        league: str | None = None,
+        season: str | None = None,
+        last_n: int = Query(6, ge=1, le=30),
+    ):
+        return get_league_form_table(
+            league=league,
+            season=season,
+            last_n=last_n,
+        )
+
+    @app.get("/league/fixture-difficulty")
+    def league_fixture_difficulty(
+        league: str | None = None,
+        season: str | None = None,
+        team: str | None = None,
+        upcoming_n: int = Query(10, ge=1, le=30),
+    ):
+        return get_fixture_difficulty(
+            league=league,
+            season=season,
+            team=team,
+            upcoming_n=upcoming_n,
+        )
+
+    @app.get("/league/season-projection")
+    def league_season_projection(
+        league: str | None = None,
+        season: str | None = None,
+        num_simulations: int = Query(1000, ge=100, le=10000),
+        random_seed: int = Query(42, ge=0, le=2_000_000_000),
+        top_n: int = Query(4, ge=1, le=20),
+        relegation_slots: int = Query(3, ge=0, le=10),
+    ):
+        return get_season_projection(
+            league=league,
+            season=season,
+            num_simulations=num_simulations,
+            random_seed=random_seed,
+            top_n=top_n,
+            relegation_slots=relegation_slots,
+        )
+
     @app.get("/teams/cross-league-action")
     def team_cross_league_action(
         season: str | None = None,
@@ -1195,6 +1385,76 @@ def create_app() -> FastAPI:
         return get_cross_league_action_comparison(
             season=season,
             min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/cross-league-depth")
+    def team_cross_league_depth(
+        team_a: str = Query(..., min_length=1),
+        team_b: str = Query(..., min_length=1),
+        season: str | None = None,
+        min_player_minutes: float = Query(500.0, ge=0.0),
+    ):
+        return get_cross_league_team_depth(
+            team_a,
+            team_b,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
+    @app.get("/teams/{team}/scouting-targets")
+    def team_scouting_targets(
+        team: str,
+        season: str | None = None,
+        min_player_minutes: float = Query(500.0, ge=0.0),
+        top_n: int = Query(10, ge=1, le=50),
+        exclude_same_league: bool = True,
+    ):
+        return get_scouting_targets(
+            team,
+            season=season,
+            min_player_minutes=min_player_minutes,
+            top_n=top_n,
+            exclude_same_league=exclude_same_league,
+        )
+
+    @app.get("/teams/{team}/scouting-style-match/{position_group}")
+    def team_scouting_style_match(
+        team: str,
+        position_group: str,
+        season: str | None = None,
+        min_player_minutes: float = Query(500.0, ge=0.0),
+        top_n: int = Query(10, ge=1, le=50),
+        exclude_same_league: bool = True,
+        use_position_weights: bool = False,
+    ):
+        return get_scouting_target_style_match(
+            team,
+            position_group,
+            season=season,
+            min_player_minutes=min_player_minutes,
+            top_n=top_n,
+            exclude_same_league=exclude_same_league,
+            use_position_weights=use_position_weights,
+        )
+
+    @app.get("/teams/{team}/scouting-dashboard")
+    def team_scouting_dashboard(
+        team: str,
+        season: str | None = None,
+        min_player_minutes: float = Query(500.0, ge=0.0),
+        top_n: int = Query(10, ge=1, le=50),
+        exclude_same_league: bool = True,
+        max_positions: int = Query(3, ge=1, le=8),
+        use_position_weights: bool = False,
+    ):
+        return get_scouting_dashboard(
+            team,
+            season=season,
+            min_player_minutes=min_player_minutes,
+            top_n=top_n,
+            exclude_same_league=exclude_same_league,
+            max_positions=max_positions,
+            use_position_weights=use_position_weights,
         )
 
     @app.get("/teams/{team}/action-percentiles")
@@ -1383,6 +1643,18 @@ def create_app() -> FastAPI:
     def wc_squad(team: str):
         return get_wc_squad(team)
 
+    @app.get("/world-cup/squads/{team}/scouting-needs")
+    def wc_squad_scouting_needs(
+        team: str,
+        season: str | None = None,
+        min_player_minutes: float = 500.0,
+    ):
+        return get_wc_squad_scouting_needs(
+            team,
+            season=season,
+            min_player_minutes=min_player_minutes,
+        )
+
     @app.get("/world-cup/squad-balance-comparison/{team_a}/{team_b}")
     def wc_squad_balance_comparison(team_a: str, team_b: str):
         return get_wc_squad_balance_comparison(team_a, team_b)
@@ -1416,9 +1688,31 @@ def create_app() -> FastAPI:
     def wc_tournament_summary():
         return get_wc_tournament_summary()
 
+    @app.get("/world-cup/contracts")
+    def wc_contracts():
+        return get_wc_contracts()
+
     @app.get("/world-cup/tournament/standings")
     def wc_tournament_standings(group: str | None = None):
         return get_wc_tournament_standings(group=group)
+
+    @app.get("/world-cup/tournament/standings-probabilities")
+    def wc_tournament_standings_probabilities(
+        group: str | None = None,
+        num_simulations: int = 2000,
+    ):
+        return get_wc_tournament_standings_probabilities(
+            group=group, num_simulations=num_simulations
+        )
+
+    @app.get("/world-cup/tournament/overall-leaderboard")
+    def wc_tournament_overall_leaderboard(
+        num_simulations: int = 2000,
+        sort_by: str = "advance_prob",
+    ):
+        return get_wc_tournament_overall_leaderboard(
+            num_simulations=num_simulations, sort_by=sort_by
+        )
 
     @app.get("/world-cup/tournament/qualification-impact")
     def wc_tournament_qualification_impact(group: str):
@@ -1434,6 +1728,51 @@ def create_app() -> FastAPI:
         pending: bool = False,
     ):
         return get_wc_tournament_matches(group=group, pending=pending)
+
+    @app.get("/world-cup/tournament/match-predictions")
+    def wc_tournament_match_predictions(group: str | None = None):
+        return get_wc_tournament_match_predictions(group=group)
+
+    @app.get("/world-cup/tournament/match-impact")
+    def wc_tournament_match_impact(
+        group: str | None = None,
+        num_simulations: int = Query(1000, ge=100, le=10000),
+        top_n: int = Query(10, ge=1, le=50),
+    ):
+        return get_wc_tournament_match_impact(
+            group=group, num_simulations=num_simulations, top_n=top_n
+        )
+
+    @app.get("/world-cup/tournament/knockout/match-impact")
+    def wc_tournament_knockout_match_impact(
+        num_simulations: int = Query(5000, ge=100, le=20000),
+        top_n: int = Query(10, ge=1, le=50),
+    ):
+        return get_wc_tournament_knockout_match_impact(
+            num_simulations=num_simulations, top_n=top_n
+        )
+
+    @app.get("/world-cup/tournament/top-matches")
+    def wc_tournament_top_matches(
+        group_top_n: int = Query(5, ge=1, le=20),
+        knockout_top_n: int = Query(5, ge=1, le=20),
+        num_simulations: int = Query(1000, ge=100, le=10000),
+    ):
+        return get_wc_tournament_top_matches(
+            group_top_n=group_top_n,
+            knockout_top_n=knockout_top_n,
+            num_simulations=num_simulations,
+        )
+
+    @app.get("/world-cup/match-briefings/{home}/{away}/spotlight")
+    def wc_match_player_spotlight(
+        home: str, away: str, top_n: int = Query(5, ge=1, le=10)
+    ):
+        return get_wc_match_player_spotlight(home, away, top_n=top_n)
+
+    @app.get("/world-cup/teams/{team}/form-trend")
+    def wc_team_form_trend(team: str, last_n: int = Query(6, ge=1, le=20)):
+        return get_wc_team_form_trend(team, last_n=last_n)
 
     @app.get("/world-cup/tournament/scenarios/{team}")
     def wc_tournament_scenarios(team: str, max_scenarios: int = Query(30, ge=1, le=200)):
@@ -1537,6 +1876,673 @@ def create_app() -> FastAPI:
         if not encoded:
             raise HTTPException(status_code=400, detail={"code": "missing_encoded"})
         return preview_wc_tournament_import(encoded)
+
+    # ── Recruitment Pack endpoints ──────────────────────────────────
+    @app.get("/recruitment/contracts")
+    def recruitment_contracts():
+        return get_recruitment_contracts()
+
+    @app.get("/recruitment/briefs")
+    def recruitment_briefs(limit: int = Query(100, ge=1, le=100)):
+        return get_recruitment_briefs(limit=limit)
+
+    @app.get("/recruitment/briefs/{brief_id}")
+    def recruitment_brief(brief_id: str):
+        return get_recruitment_brief(brief_id)
+
+    @app.post("/recruitment/briefs")
+    async def recruitment_create_brief(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+        result = create_recruitment_brief(payload)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/recruitment/briefs/{brief_id}/backups")
+    def recruitment_brief_backups(brief_id: str):
+        result = list_recruitment_brief_backups(brief_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/recruitment/briefs/{brief_id}/backups/{backup_filename}")
+    def recruitment_brief_backup(brief_id: str, backup_filename: str):
+        result = load_recruitment_brief_backup(brief_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/recruitment/briefs/{brief_id}/diff")
+    def recruitment_brief_diff(
+        brief_id: str,
+        backup_filename: str = Query(..., description="backup filename to diff against current"),
+    ):
+        result = diff_recruitment_brief_versions(brief_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/recruitment/briefs/{brief_id}/restore")
+    async def recruitment_brief_restore(brief_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        payload: dict = {}
+        if raw:
+            try:
+                payload = _json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_json", "message": str(exc)},
+                ) from exc
+        backup_filename = payload.get("backup_filename")
+        if not isinstance(backup_filename, str) or not backup_filename:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_backup_filename"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is not None:
+            try:
+                expected_revision = int(expected_revision)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_expected_revision"},
+                ) from exc
+        result = restore_recruitment_brief_from_backup(
+            brief_id,
+            backup_filename,
+            expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    # ── Opposition & Match briefings ──────────────────────────────
+    @app.get("/opposition/contracts")
+    def opposition_contracts():
+        return get_opposition_contracts()
+
+    @app.get("/opposition/briefs")
+    def opposition_briefs(limit: int = Query(100, ge=1, le=100)):
+        return get_opposition_briefings(limit=limit)
+
+    @app.get("/opposition/briefs/{briefing_id}")
+    def opposition_brief(briefing_id: str):
+        result = get_opposition_briefing(briefing_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/opposition/briefs")
+    async def opposition_create_brief(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+        result = create_opposition_briefing(payload)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.put("/opposition/briefs/{briefing_id}")
+    async def opposition_update_briefing(briefing_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+
+        # Body shape: {"fields": {...}, "expected_revision": <int>}
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_payload", "message": "body must be a JSON object"},
+            )
+        fields = payload.get("fields")
+        if not isinstance(fields, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_fields", "message": "fields must be a JSON object"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_expected_revision"},
+            )
+        try:
+            expected_revision = int(expected_revision)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_expected_revision"},
+            ) from exc
+
+        result = update_opposition_briefing(
+            briefing_id, fields, expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    @app.get("/opposition/briefs/{briefing_id}/backups")
+    def opposition_briefing_backups(briefing_id: str):
+        result = list_opposition_briefing_backups(briefing_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/opposition/briefs/{briefing_id}/backups/{backup_filename}")
+    def opposition_briefing_backup(briefing_id: str, backup_filename: str):
+        result = load_opposition_briefing_backup(briefing_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/opposition/briefs/{briefing_id}/diff")
+    def opposition_briefing_diff(
+        briefing_id: str,
+        backup_filename: str = Query(..., description="backup filename to diff against current"),
+    ):
+        result = diff_opposition_briefing_versions(briefing_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/opposition/briefs/{briefing_id}/restore")
+    async def opposition_briefing_restore(briefing_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        payload: dict = {}
+        if raw:
+            try:
+                payload = _json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_json", "message": str(exc)},
+                ) from exc
+        backup_filename = payload.get("backup_filename")
+        if not isinstance(backup_filename, str) or not backup_filename:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_backup_filename"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is not None:
+            try:
+                expected_revision = int(expected_revision)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_expected_revision"},
+                ) from exc
+        result = restore_opposition_briefing_from_backup(
+            briefing_id,
+            backup_filename,
+            expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    # ── Recruitment decision dossiers ────────────────────────────
+    @app.get("/recruitment/dossiers")
+    def recruitment_dossiers(limit: int = Query(100, ge=1, le=100)):
+        return get_decision_dossiers(limit=limit)
+
+    @app.get("/recruitment/dossiers/{dossier_id}")
+    def recruitment_dossier(dossier_id: str):
+        result = get_decision_dossier(dossier_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/recruitment/dossiers")
+    async def recruitment_create_dossier(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+        result = create_decision_dossier(payload)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    @app.put("/recruitment/dossiers/{dossier_id}")
+    async def recruitment_update_dossier(dossier_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+
+        # Body shape: {"fields": {...}, "expected_revision": <int>}
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_payload", "message": "body must be a JSON object"},
+            )
+        fields = payload.get("fields")
+        if not isinstance(fields, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_fields", "message": "fields must be a JSON object"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_expected_revision"},
+            )
+        try:
+            expected_revision = int(expected_revision)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_expected_revision"},
+            ) from exc
+
+        result = update_decision_dossier(
+            dossier_id, fields, expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    @app.get("/recruitment/dossiers/{dossier_id}/backups")
+    def recruitment_dossier_backups(dossier_id: str):
+        result = list_decision_dossier_backups(dossier_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/recruitment/dossiers/{dossier_id}/backups/{backup_filename}")
+    def recruitment_dossier_backup(dossier_id: str, backup_filename: str):
+        result = load_decision_dossier_backup(dossier_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/recruitment/dossiers/{dossier_id}/diff")
+    def recruitment_dossier_diff(
+        dossier_id: str,
+        backup_filename: str = Query(..., description="backup filename to diff against current"),
+    ):
+        result = diff_decision_dossier_versions(dossier_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/recruitment/dossiers/{dossier_id}/restore")
+    async def recruitment_dossier_restore(dossier_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        payload: dict = {}
+        if raw:
+            try:
+                payload = _json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_json", "message": str(exc)},
+                ) from exc
+        backup_filename = payload.get("backup_filename")
+        if not isinstance(backup_filename, str) or not backup_filename:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_backup_filename"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is not None:
+            try:
+                expected_revision = int(expected_revision)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_expected_revision"},
+                ) from exc
+        result = restore_decision_dossier_from_backup(
+            dossier_id,
+            backup_filename,
+            expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    # ── Opposition post-match reviews ────────────────────────────
+    @app.get("/opposition/reviews")
+    def opposition_reviews(limit: int = Query(100, ge=1, le=100)):
+        return get_post_match_reviews(limit=limit)
+
+    @app.get("/opposition/reviews/{review_id}")
+    def opposition_review(review_id: str):
+        result = get_post_match_review(review_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/opposition/reviews")
+    async def opposition_create_review(request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+        result = create_post_match_review(payload)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    @app.put("/opposition/reviews/{review_id}")
+    async def opposition_update_review(review_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(
+                status_code=400, detail={"code": "missing_payload"}
+            )
+        try:
+            payload = _json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_json", "message": str(exc)},
+            ) from exc
+
+        # Body shape: {"fields": {...}, "expected_revision": <int>}
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_payload", "message": "body must be a JSON object"},
+            )
+        fields = payload.get("fields")
+        if not isinstance(fields, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_fields", "message": "fields must be a JSON object"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_expected_revision"},
+            )
+        try:
+            expected_revision = int(expected_revision)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_expected_revision"},
+            ) from exc
+
+        result = update_post_match_review(
+            review_id, fields, expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    @app.get("/opposition/reviews/{review_id}/backups")
+    def opposition_review_backups(review_id: str):
+        result = list_post_match_review_backups(review_id)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/opposition/reviews/{review_id}/backups/{backup_filename}")
+    def opposition_review_backup(review_id: str, backup_filename: str):
+        result = load_post_match_review_backup(review_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 404)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.get("/opposition/reviews/{review_id}/diff")
+    def opposition_review_diff(
+        review_id: str,
+        backup_filename: str = Query(..., description="backup filename to diff against current"),
+    ):
+        result = diff_post_match_review_versions(review_id, backup_filename)
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 400)),
+                detail={"code": result.get("code"), "message": result.get("message")},
+            )
+        return result
+
+    @app.post("/opposition/reviews/{review_id}/restore")
+    async def opposition_review_restore(review_id: str, request: Request):
+        import json as _json
+
+        raw = await request.body()
+        payload: dict = {}
+        if raw:
+            try:
+                payload = _json.loads(raw.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_json", "message": str(exc)},
+                ) from exc
+        backup_filename = payload.get("backup_filename")
+        if not isinstance(backup_filename, str) or not backup_filename:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "missing_backup_filename"},
+            )
+        expected_revision = payload.get("expected_revision")
+        if expected_revision is not None:
+            try:
+                expected_revision = int(expected_revision)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_expected_revision"},
+                ) from exc
+        result = restore_post_match_review_from_backup(
+            review_id,
+            backup_filename,
+            expected_revision=expected_revision,
+        )
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=int(result.get("http_status", 409)),
+                detail={
+                    "code": result.get("code"),
+                    "message": result.get("message"),
+                    **result.get("metadata", {}),
+                },
+            )
+        return result
+
+    # ── Portable offline pack ─────────────────────────────────────
+    @app.get("/local-pack/export")
+    def local_pack_export():
+        """Export all local personal artifacts as a portable offline pack."""
+        return export_local_pack()
+
+    @app.post("/local-pack/import")
+    def local_pack_import(payload: dict, overwrite: bool = Query(False)):
+        """Import a portable pack into the local stores.
+
+        The request body is the inner ``pack`` object from an export
+        response (``response["pack"]``). ``overwrite`` controls conflict
+        handling: ``False`` (default) skips records whose ID already
+        exists locally; ``True`` replaces them via revision bump.
+        """
+        pack = payload.get("pack", payload) if isinstance(payload, dict) else payload
+        return import_local_pack(pack, overwrite=overwrite)
 
     # ── Tactical board export helpers ─────────────────────────────
     @app.get("/tactical-board/capabilities")

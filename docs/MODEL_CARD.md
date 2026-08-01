@@ -1,5 +1,7 @@
 # ScoutFootball 球员评分模型卡
 
+> 当前文档包含 2026-06 历史模型描述，尚未由 PRS-0 的生成式事实区替代。2026-07-29 本地审计确认：当前 active rating 早于现行特征矩阵，本地 41 个模型运行中没有可复核运行，29,723 条标签全部为 `expert_tier` 且独立合格监督标签为 0。因此下文版本和指标不能作为当前模型已准入或球员能力已验证的证明。当前边界见 [`CAPABILITIES.md`](CAPABILITIES.md)，专项修复与新版模型卡要求见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)。
+
 ## 模型概述
 
 ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，覆盖 Big 5 联赛（英超、西甲、德甲、意甲、法甲）2016/17–2025/26 赛季。模型将球员能力拆解为出勤可靠性、进攻贡献、防守贡献、控球推进、效率质量等维度，按位置组分配不同权重，经联赛强度和球队环境修正后输出最终评分。
@@ -104,6 +106,31 @@ Test Spearman: mean=0.716, std=0.001
   independently.
 - The current tracked label artifact has zero eligible rows, so no NN or
   truth-anchor holdout number may be presented as player-level validation.
+
+### Local optimizer admission evidence（updated 2026-07-20）
+
+- `scoutfootball model-admission` only marks a future optimizer run
+  `reviewable` when its own metadata has recorded lineage, a time split,
+  structured baseline/candidate holdout metrics, and same-run error cases.
+- **Chain-of-custody hard validation (2026-07-20):** when `settings` is
+  provided (the default in CLI, API, and `promote-model-run` call paths),
+  the `recorded_lineage` check additionally verifies that the training-time
+  `feature_manifest.hash` recorded in `meta.json` still matches the sha256[:16]
+  of the current on-disk `rating_feature_matrix_manifest.json`. If the
+  feature_store was rebuilt after training, the run flips from `reviewable`
+  to `not_reviewable` with a note explaining the hash drift; this prevents a
+  stale candidate from being reviewed or promoted against current data.
+  Legacy callers passing `settings=None` fall back to the prior behavior
+  (hash only needs to be non-empty).
+- `promote-model-run --confirm` enforces the same chain-of-custody check
+  before swapping active artifacts; a stale candidate cannot be promoted
+  even if its own metadata is otherwise complete.
+- The command remains a read-only evidence screen at the admission layer —
+  it does not switch the rating artifact used by the workbench or turn a
+  proxy team-points result into player-ability validation. Promotion and
+  rollback are separate confirmed metadata actions.
+- Historical run folders missing these records remain `not_reviewable`; their
+  historical prose metrics are not reconstructed as machine-readable evidence.
 
 ### v1.3.1-dev（2026-06-09）
 

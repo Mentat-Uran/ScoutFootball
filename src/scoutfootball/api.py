@@ -8,11 +8,27 @@ import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from scoutfootball.config import PlatformSettings
 
 import numpy as np
 import pandas as pd
 
+# Preload the recruitment and opposition packs so their parent-package
+# ``__init__.py`` runs single-threaded at module load time.  The store
+# helpers below (``_brief_store``, ``_dossier_store``, ``_briefing_store``,
+# ``_review_store``) still use local ``from ... import ...`` statements
+# for symmetry, but those become no-ops once the parent package is in
+# ``sys.modules``.  Without this preload, two concurrent FastAPI request
+# threads can trigger the parent package's first import simultaneously
+# and deadlock on the module lock (one thread holds
+# ``scoutfootball.opposition`` and waits for ``scoutfootball.opposition.store``;
+# the other holds ``scoutfootball.opposition.store`` and waits for
+# ``scoutfootball.opposition``).
+import scoutfootball.opposition  # noqa: E402,F401
+import scoutfootball.recruitment  # noqa: E402,F401
 from scoutfootball.action_value.evidence import (
     get_action_value_evidence as _get_action_value_evidence,
 )
@@ -23,6 +39,7 @@ from scoutfootball.app.data_loader import (
     _MISSING,
     _TTLCache,
     data_source_label,
+    frame_is_synthetic,
     load_league_metrics,
     load_model_meta,
     load_oof_predictions,
@@ -35,6 +52,8 @@ from scoutfootball.app.data_loader import (
 )
 from scoutfootball.evaluation.scouting_queue import build_scouting_queues
 from scoutfootball.head_to_head import get_head_to_head as _compute_head_to_head
+from scoutfootball.head_to_head import load_match_results as _load_match_results
+from scoutfootball.storage.csv_safety import sanitize_csv_row
 from scoutfootball.worldcup.data import (
     BIG5_LEAGUES,
     GROUPS,
@@ -62,6 +81,21 @@ _STATSBOMB_ATTRIBUTION = (
 )
 
 
+def _make_error_response(error: str, *, message: str | None = None) -> dict[str, Any]:
+    """Build a uniform error response dict.
+
+    All API-level error responses use this shape so callers can check
+    ``response.get("status") == "error"`` uniformly and read either
+    ``response["error"]`` (short code or exception message) or
+    ``response["message"]`` (human-readable description) without
+    shape-specific branching. ``error`` and ``message`` carry the same
+    string by default; pass an explicit ``message`` when ``error`` is
+    an enum-like code (e.g. ``"no_data"``) and a friendlier description
+    should be displayed to the user.
+    """
+    return {"status": "error", "error": error, "message": message or error}
+
+
 def _read_parquet(path: Path):
     """Read a Parquet file via DuckDB (avoids pyarrow dependency)."""
     import duckdb
@@ -71,6 +105,42 @@ def _read_parquet(path: Path):
         return con.execute("SELECT * FROM read_parquet(?)", [str(path)]).fetchdf()
     finally:
         con.close()
+
+
+def _infer_evidence_grain(df: pd.DataFrame | None) -> str:
+    """Infer the evidence grain of a ratings or value frame (PRS-1 R-006).
+
+    Returns the grain string used by the PRS-1 grain audit:
+    - ``"match"`` if the frame carries per-match rows
+      (``data_granularity == "match"``).
+    - ``"season_proxy"`` if the frame carries season-aggregated rows.
+    - ``"unknown"`` if the grain cannot be determined.
+
+    The legacy ``player_ratings_optimized.parquet`` does not carry a
+    ``data_granularity`` column, but it is built from season-proxy
+    inputs (one row per player-season), so we infer ``"season_proxy"``
+    when the column is missing but the frame looks like a
+    season-aggregated ratings table (has ``player`` + ``season``
+    columns). This keeps the legacy artifact honest in API responses
+    until PRS-2 baselines replace it with a grain-stamped successor.
+    """
+    if df is None or df.empty:
+        return "unknown"
+    if "data_granularity" in df.columns:
+        grains = df["data_granularity"].dropna().unique().tolist()
+        if not grains:
+            return "unknown"
+        if len(grains) == 1:
+            return str(grains[0])
+        # Mixed grain — return the set joined by | for transparency,
+        # matching the data_granularity_set convention in rating_matrix.
+        return "|".join(sorted(str(g) for g in grains))
+    # Legacy ratings table without data_granularity column.
+    # player_ratings_optimized is built from season-proxy inputs
+    # (one row per player-season), so we infer "season_proxy".
+    if "player" in df.columns and "season" in df.columns:
+        return "season_proxy"
+    return "unknown"
 
 
 # ── World Cup data cache ──────────────────────────────────────────
@@ -208,6 +278,377 @@ def health_check() -> HealthResponse:
     )
 
 
+# ── Detailed health ────────────────────────────────────────────────────
+# L1 退出门槛第 6 项要求"本地健康页显示数据质量、模型失效、存储、任务失败
+# 和适配器状态，不向项目维护者上传遥测"。``/health/detailed`` 端点是这一项
+# 的后端入口：组合 validate / model-admission / contract-quality /
+# source-health / artifacts 五类信号，让维护者在前端 overview 视图一眼看
+# 到本地真实状态，而不是硬编码值。
+#
+# 设计原则：
+# 1. 不替换 ``/health`` liveness probe（``HealthResponse`` 保持精简）。
+# 2. 不向外部上传任何数据——所有 builder 都在本地读取，无网络请求。
+# 3. 昂贵操作（validation re-hashes lineage、model-admission sha256s
+#    candidate parquets、contract-quality 调用 source-health）通过 TTL
+#    cache 缓存，默认 300s 与 data_loader 的 cache 一致。
+# 4. 任何子 builder 失败时记录日志并返回 ``status="unavailable"`` 而非
+#    抛出，让健康页仍能渲染其他可用部分（fail-soft 而非 fail-closed，
+#    因为这是只读诊断端点，不是发布门禁）。
+# 5. 所有 builder 都是已有的只读函数，``get_detailed_health`` 只是组合层。
+
+_detailed_health_cache = _TTLCache()
+
+
+def _safe_call(builder_name: str, fn):
+    """Call a health sub-builder; log and return None on any exception.
+
+    Health sub-builders read local files and may fail for many reasons
+    (missing data root, corrupt parquet, racy file deletion). A failed
+    sub-builder must not break the whole ``/health/detailed`` response—
+    the health page should still render the other available sections.
+    """
+    try:
+        return fn()
+    except Exception as exc:
+        logger.warning(
+            "get_detailed_health: %s builder failed: %s", builder_name, exc,
+            exc_info=True,
+        )
+        return None
+
+
+def _build_validation_section(settings) -> dict[str, Any]:
+    from scoutfootball.evaluation.validation import run_pre_training_validation
+
+    report = run_pre_training_validation(settings)
+    checks_payload = [
+        {
+            "check_name": c.check_name,
+            "passed": c.passed,
+            "message": c.message,
+        }
+        for c in report.checks
+    ]
+    return {
+        "status": "pass" if report.passed else "fail",
+        "total_checks": len(report.checks),
+        "passed_count": sum(1 for c in report.checks if c.passed),
+        "failed_count": len(report.failures),
+        "failures": [
+            {"check_name": c.check_name, "message": c.message}
+            for c in report.failures
+        ],
+        "checks": checks_payload,
+        "summary": report.summary(),
+    }
+
+
+def _build_model_admission_section(settings) -> dict[str, Any]:
+    from scoutfootball.evaluation.model_admission import build_model_admission_report
+
+    report = build_model_admission_report(settings=settings)
+    runs = report.get("runs", [])
+    not_reviewable_count = sum(
+        1 for r in runs if r.get("status") == "not_reviewable"
+    )
+    not_available_count = sum(
+        1 for r in runs if r.get("status") == "not_available"
+    )
+    return {
+        "status": "ok",
+        "report_version": report.get("report_version"),
+        "run_count": report.get("run_count", 0),
+        "reviewable_run_count": report.get("reviewable_run_count", 0),
+        "not_reviewable_run_count": not_reviewable_count,
+        "not_available_run_count": not_available_count,
+        "limitations": report.get("limitations", []),
+        # 不返回完整 runs 列表——可能很长，且每个 run 含完整 8 项检查 +
+        # comparison 数据。前端 overview 视图只需要计数摘要。维护者需要
+        # 详情时走 ``model-admission --json`` CLI 或 ``/model-runs`` API。
+        "runs_summary_omitted": True,
+    }
+
+
+def _build_contract_quality_section(settings) -> dict[str, Any]:
+    from scoutfootball.evaluation.contract_quality import (
+        build_contract_quality_report,
+    )
+
+    report = build_contract_quality_report(settings=settings)
+    return {
+        "status": report.get("overall_status", "unknown"),
+        "report_version": report.get("report_version"),
+        "failed_checks": report.get("failed_checks", []),
+        "incomplete_checks": report.get("incomplete_checks", []),
+        "checks_count": len(report.get("checks", [])),
+        "limitations": report.get("limitations", []),
+    }
+
+
+def _build_source_health_section(settings) -> dict[str, Any]:
+    from scoutfootball.evaluation.source_health import build_source_health_report
+
+    report = build_source_health_report(settings=settings)
+    sources = report.get("registered_sources", [])
+    with_snapshot = sum(
+        1 for s in sources
+        if s.get("snapshot", {}).get("status") == "recorded"
+    )
+    without_snapshot = len(sources) - with_snapshot
+    return {
+        "status": "ok",
+        "report_version": report.get("report_version"),
+        "registered_source_count": report.get("registered_source_count", 0),
+        "sources_with_snapshot": with_snapshot,
+        "sources_without_snapshot": without_snapshot,
+        "unregistered_raw_directories": report.get(
+            "unregistered_raw_directories", []
+        ),
+        # 简短摘要：source_id + snapshot status，让前端能显示一行表
+        "sources": [
+            {
+                "source_id": s.get("source_id"),
+                "snapshot_status": s.get("snapshot", {}).get("status"),
+                "local_status": s.get("local_observation", {}).get("status"),
+                "license_status": s.get("license", {}).get("status"),
+            }
+            for s in sources
+        ],
+    }
+
+
+def _build_research_health_section(settings) -> dict[str, Any]:
+    """PRS-0 R-003/R-004: five-layer fail-closed research health summary.
+
+    Returns a compact summary (verdict + per-layer status + blocking reasons)
+    suitable for the overview page. The full five-layer report with evidence
+    is available via ``scoutfootball research-health`` CLI or
+    ``GET /health/research``.
+    """
+    from scoutfootball.evaluation.research_health import (
+        build_research_health_report,
+    )
+
+    report = build_research_health_report(settings=settings)
+    return {
+        "verdict": report.get("verdict"),
+        "blocking_reasons": report.get("blocking_reasons", []),
+        "layers": {
+            "storage_health": report.get("storage_health", {}).get("status"),
+            "lineage_health": report.get("lineage_health", {}).get("status"),
+            "model_reviewability": report.get("model_reviewability", {}).get(
+                "status"
+            ),
+            "active_rating_freshness": report.get(
+                "active_rating_freshness", {}
+            ).get("status"),
+            "research_readiness": report.get("research_readiness", {}).get(
+                "status"
+            ),
+        },
+    }
+
+
+def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
+    """Compose a comprehensive local health snapshot for the overview page.
+
+    Combines:
+    - ``health_check()`` (status / data_source / version)
+    - ``get_artifacts_summary()`` (row counts, artifact files, license)
+    - ``run_pre_training_validation()`` (31 checks)
+    - ``build_model_admission_report()`` (reviewable / not_reviewable)
+    - ``build_contract_quality_report()`` (8 checks, overall_status)
+    - ``build_source_health_report()`` (source snapshot coverage)
+
+    All sub-builders are read-only and local. Expensive builders are
+    cached via ``_detailed_health_cache`` with a TTL matching the
+    data_loader cache (default 300s). Pass ``force_refresh=True`` to
+    bypass the cache (e.g. after a model retrain or build-features run).
+
+    Sub-builder failures are logged and returned as
+    ``status="unavailable"`` sections rather than raising—the health
+    page should render available sections even when one source fails.
+    """
+    from scoutfootball import __version__
+
+    cache_key = "get_detailed_health"
+    if not force_refresh:
+        cached = _detailed_health_cache.get(cache_key)
+        if cached is not _MISSING:
+            return cached
+
+    settings = _settings()
+    generated_at = datetime.now(UTC).isoformat()
+
+    # Cheap sub-builders run every call (already cached at data_loader
+    # level for parquet reads; health_check + artifacts_summary are fast).
+    base_health = {
+        "status": "ok",
+        "data_source": data_source_label(),
+        "version": __version__,
+    }
+    artifacts = _safe_call(
+        "artifacts_summary", lambda: get_artifacts_summary()
+    )
+
+    # Expensive sub-builders run inside _safe_call so a failure in one
+    # doesn't break the whole response.
+    validation = _safe_call(
+        "validation", lambda: _build_validation_section(settings)
+    )
+    model_admission = _safe_call(
+        "model_admission", lambda: _build_model_admission_section(settings)
+    )
+    contract_quality = _safe_call(
+        "contract_quality",
+        lambda: _build_contract_quality_section(settings),
+    )
+    source_health = _safe_call(
+        "source_health", lambda: _build_source_health_section(settings)
+    )
+    # PRS-0 R-003/R-004: research_health is the fail-closed layered verdict
+    # for the rating system. It reuses model_admission and truth_labels
+    # evidence so a 0-reviewable-run or stale-lineage state can no longer be
+    # hidden by a top-level ok. Computed in its own _safe_call so a failure
+    # here degrades this section without breaking the rest of the report.
+    research_health = _safe_call(
+        "research_health", lambda: _build_research_health_section(settings)
+    )
+
+    # Compute top-level status: "ok" if all sub-builders succeeded and
+    # validation + contract_quality both pass; "degraded" if any sub-builder
+    # failed or any critical check failed; "error" only if base_health
+    # itself failed (should not happen since data_source_label is cheap).
+    sub_builders = {
+        "artifacts": artifacts,
+        "validation": validation,
+        "model_admission": model_admission,
+        "contract_quality": contract_quality,
+        "source_health": source_health,
+        "research_health": research_health,
+    }
+    unavailable = [k for k, v in sub_builders.items() if v is None]
+    failed_checks = []
+    if validation and validation.get("status") == "fail":
+        failed_checks.append("validation")
+    if (
+        contract_quality
+        and contract_quality.get("status") in ("fail", "incomplete")
+    ):
+        failed_checks.append(f"contract_quality:{contract_quality.get('status')}")
+    # R-004: a not_ready/unavailable research verdict is a failed check at
+    # the top level. Before this, model_admission's reviewable_run_count=0
+    # was invisible to top_status because model_admission's own status was
+    # hardcoded "ok".
+    if research_health and research_health.get("verdict") in (
+        "not_ready",
+        "unavailable",
+    ):
+        failed_checks.append(f"research_health:{research_health.get('verdict')}")
+
+    if unavailable:
+        top_status = "degraded"
+    elif failed_checks:
+        top_status = "degraded"
+    else:
+        top_status = "ok"
+
+    result = _clean_json_value({
+        "schema": "scoutfootball.detailed-health",
+        "schema_version": "1.0.0",
+        "generated_at": generated_at,
+        "status": top_status,
+        "base": base_health,
+        "artifacts": artifacts if artifacts is not None else {"status": "unavailable"},
+        "validation": validation if validation is not None else {"status": "unavailable"},
+        "model_admission": (
+            model_admission if model_admission is not None
+            else {"status": "unavailable"}
+        ),
+        "contract_quality": (
+            contract_quality if contract_quality is not None
+            else {"status": "unavailable"}
+        ),
+        "source_health": (
+            source_health if source_health is not None
+            else {"status": "unavailable"}
+        ),
+        "research_health": (
+            research_health if research_health is not None
+            else {"verdict": "unavailable"}
+        ),
+        "unavailable_sections": unavailable,
+        "failed_sections": failed_checks,
+        "limitations": [
+            "Local-only diagnostic; no telemetry is uploaded to any external service.",
+            (
+                "Sub-builders are read-only; failures degrade individual "
+                "sections rather than the whole response."
+            ),
+            (
+                "Expensive builders (validation, model-admission, "
+                "contract-quality, source-health, research-health) are TTL-cached "
+                "(default 300s); pass force_refresh=True to bypass."
+            ),
+            (
+                "model_admission runs_summary_omitted=True—use CLI "
+                "model-admission --json or /model-runs API for per-run "
+                "details."
+            ),
+            (
+                "research_health is a fail-closed layered verdict (PRS-0 "
+                "R-003/R-004); use CLI research-health or /health/research "
+                "for the full five-layer report."
+            ),
+        ],
+    })
+
+    _detailed_health_cache.set(cache_key, result)
+    return result
+
+
+def get_research_health() -> dict[str, Any]:
+    """Return the five-layer research health snapshot for the rating system.
+
+    Thin wrapper around ``research_health.build_research_health_report`` so
+    the API layer stays consistent with the CLI (``scoutfootball
+    research-health``). PRS-0 R-003/R-004: the verdict is fail-closed — a
+    stale, unreviewable, synthetic or non-independent-label rating system is
+    reported as ``not_ready`` and can no longer be hidden behind a top-level
+    ``ok``. Read-only and local; no synthetic fallback.
+    """
+    from scoutfootball.evaluation.research_health import (
+        build_research_health_report,
+    )
+
+    return build_research_health_report()
+
+
+def get_adapter_registry() -> dict[str, Any]:
+    """Return the provider adapter manifest registry (I1 baseline).
+
+    The registry is a machine-readable catalog of every source adapter
+    the project knows about, including its capabilities, schema
+    mappings and conversion-loss notes. It is read-only metadata: no
+    ingester runs here and no source data is uploaded.
+    """
+    from scoutfootball.adapters.registry import build_adapter_registry
+
+    registry = build_adapter_registry()
+    return registry.model_dump(mode="json")
+
+
+def get_adapter_compatibility_matrix() -> dict[str, Any]:
+    """Return project-local adapter admission derived from contracts.
+
+    The matrix is read-only metadata.  It does not start an ingester, validate
+    an upstream license, or authorize publication of source or derived data.
+    """
+    from scoutfootball.adapters.compatibility import build_adapter_compatibility_matrix
+
+    return build_adapter_compatibility_matrix().model_dump(mode="json")
+
+
 def list_players() -> PlayerListResponse:
     """Return all unique player names from the ratings dataset."""
     df = load_player_ratings()
@@ -238,6 +679,7 @@ def list_teams() -> list[str]:
         try:
             frame = _read_parquet(path)
         except Exception:
+            logger.warning("list_teams: parquet read failed", exc_info=True)
             continue
         if "team_id" not in frame.columns:
             continue
@@ -434,6 +876,7 @@ def _prediction_calibration() -> dict[str, Any]:
                 calibration["rps"] = _clean_json_value(row.get("rps_1x2"))
                 calibration["log_loss"] = _clean_json_value(row.get("log_loss_exact"))
         except Exception:
+            logger.warning("prediction calibration: poisson read failed", exc_info=True)
             pass
 
     # DC calibration (overrides if available)
@@ -450,6 +893,7 @@ def _prediction_calibration() -> dict[str, Any]:
                     dc_row.get("rps_1x2", calibration.get("rps"))
                 )
         except Exception:
+            logger.warning("prediction calibration: dixon_coles read failed", exc_info=True)
             pass
 
     # Full calibration detail is produced by the training backtest. Prefer
@@ -465,6 +909,7 @@ def _prediction_calibration() -> dict[str, Any]:
             calibration["rps"] = detail_metrics.get("rps_1x2")
             calibration["log_loss"] = detail_metrics.get("log_loss_exact")
     except Exception:
+        logger.warning("prediction calibration: detail metrics failed", exc_info=True)
         pass
 
     return calibration
@@ -515,15 +960,71 @@ def _world_cup_market_summary(score_matrix: list[list[float]]) -> dict[str, floa
     }
 
 
+def _most_likely_wc_scoreline(score_matrix: list[list[float]]) -> dict[str, Any]:
+    """Return the (home_goals, away_goals, probability) with highest probability."""
+    best_h, best_a, best_p = 0, 0, 0.0
+    for i, row in enumerate(score_matrix):
+        for j, prob in enumerate(row):
+            if prob > best_p:
+                best_h, best_a, best_p = i, j, prob
+    return {
+        "home_goals": best_h,
+        "away_goals": best_a,
+        "probability": round(best_p, 4),
+    }
+
+
+def _classify_prediction_delta(
+    home_win_prob: float,
+    draw_prob: float,
+    away_win_prob: float,
+    home_goals: int,
+    away_goals: int,
+) -> dict[str, Any]:
+    """Classify an actual result vs the pre-match prediction.
+
+    Returns one of three classifications:
+    - ``as_expected``: actual outcome matches the argmax prediction.
+    - ``upset``: actual outcome's pre-match probability was < 0.30 (and not as_expected).
+    - ``hold``: middle-probability outcome happened (neither as_expected nor upset).
+    """
+    probs = {
+        "home_win": float(home_win_prob),
+        "draw": float(draw_prob),
+        "away_win": float(away_win_prob),
+    }
+    if home_goals > away_goals:
+        actual = "home_win"
+    elif home_goals == away_goals:
+        actual = "draw"
+    else:
+        actual = "away_win"
+    predicted = max(probs, key=probs.get)
+    actual_prob = probs[actual]
+    if actual == predicted:
+        classification = "as_expected"
+    elif actual_prob < 0.30:
+        classification = "upset"
+    else:
+        classification = "hold"
+    return {
+        "classification": classification,
+        "actual_outcome": actual,
+        "predicted_outcome": predicted,
+        "actual_prob": round(actual_prob, 4),
+        "predicted_prob": round(probs[predicted], 4),
+    }
+
+
 def get_world_cup_match_prediction(home_team: str, away_team: str) -> dict[str, Any]:
     enriched_squads, strengths = _get_wc_enriched_squads()
     valid_teams = set(enriched_squads)
     if home_team not in valid_teams:
-        return {"error": f"World Cup home team '{home_team}' not found"}
+        return _make_error_response(f"World Cup home team '{home_team}' not found")
     if away_team not in valid_teams:
-        return {"error": f"World Cup away team '{away_team}' not found"}
+        return _make_error_response(f"World Cup away team '{away_team}' not found")
     if home_team == away_team:
-        return {"error": "Home and away World Cup teams must be different"}
+        return _make_error_response("Home and away World Cup teams must be different")
 
     home_strength = float(strengths.get(home_team, 0.2))
     away_strength = float(strengths.get(away_team, 0.2))
@@ -615,7 +1116,7 @@ def _world_cup_briefing_input_snapshot() -> dict[str, Any]:
         "status": "recorded" if input_hash else "not_recorded",
         "rating_model_run_id": latest_run.get("run_id", "") if isinstance(latest_run, dict) else "",
         "rating_input_hash": input_hash,
-        "feature_manifest_hash": manifest.get("sha256", ""),
+        "feature_manifest_hash": manifest.get("hash") or "",
         "strength_model": {
             "type": "world_cup_strength_ratio_poisson",
             "version": "wc-1.0",
@@ -670,6 +1171,459 @@ def get_world_cup_match_briefing(home_team: str, away_team: str) -> dict[str, An
     })
 
 
+# ── Player spotlight position weights ────────────────────────────────────
+# Higher weight = more likely to be flagged as "player to watch".
+# Attackers and creative mids rank higher than defensive roles for
+# spotlight purposes; this is a presentation heuristic, not a rating.
+_WC_SPOTLIGHT_POSITION_WEIGHTS: dict[str, float] = {
+    "ST": 1.20,
+    "W": 1.15,
+    "AM": 1.10,
+    "CM": 1.00,
+    "DM": 0.85,
+    "FB": 0.80,
+    "CB": 0.80,
+    "GK": 0.60,
+}
+
+_WC_SPOTLIGHT_CONFIDENCE_MULTIPLIER: dict[str, float] = {
+    "high": 1.00,
+    "medium": 0.85,
+    "low": 0.65,
+    "none": 0.40,
+}
+
+
+def _wc_spotlight_opponent_weakness(
+    squad: list[Any], opponent_squad: list[Any]
+) -> dict[str, float]:
+    """Score how weak each opponent defensive role is.
+
+    Returns a dict mapping opponent role -> weakness_score (0..1), where
+    higher means the opponent is weaker at that role (lower average
+    rating among their players in that role, scaled to 0..1).
+
+    Used to boost attacking player weights when they line up against
+    a weak opposing defensive role.
+    """
+    role_ratings: dict[str, list[float]] = {"CB": [], "FB": [], "DM": [], "GK": []}
+    for player in opponent_squad:
+        if not player.has_rating or player.rating is None:
+            continue
+        if player.position in role_ratings:
+            role_ratings[player.position].append(float(player.rating))
+
+    weakness: dict[str, float] = {}
+    for role, ratings in role_ratings.items():
+        if not ratings:
+            # No rated player at this role = unknown, treat as neutral 0.5
+            weakness[role] = 0.5
+            continue
+        avg = sum(ratings) / len(ratings)
+        # WC ratings observed range ~30..85; map [30, 85] -> [1.0, 0.0]
+        # so a low-rated defender (avg ~30) yields weakness ~1.0 (very weak)
+        # and a top defender (avg ~85) yields weakness ~0.0 (very strong).
+        scaled = max(0.0, min(1.0, (85.0 - avg) / 55.0))
+        weakness[role] = scaled
+    return weakness
+
+
+def _wc_spotlight_player_score(
+    player: Any,
+    team_rated: list[Any],
+    opponent_weakness: dict[str, float],
+    team_avg_rating: float,
+) -> tuple[float, str]:
+    """Compute a single player's spotlight score and the reason text.
+
+    The score blends absolute rating, rating confidence, the player's
+    role's general "watchability" weight, and a position-vs-opponent
+    matchup bonus (e.g. an ST facing a weak CB line gets a boost).
+    """
+    if not player.has_rating or player.rating is None:
+        return 0.0, ""
+    rating = float(player.rating)
+    confidence = _WC_SPOTLIGHT_CONFIDENCE_MULTIPLIER.get(
+        player.rating_confidence, 0.40
+    )
+    position_weight = _WC_SPOTLIGHT_POSITION_WEIGHTS.get(player.position, 1.0)
+
+    # Normalize rating above team average (above-average players get a boost).
+    rating_delta = max(0.0, rating - team_avg_rating) if team_avg_rating else 0.0
+
+    # Position-vs-opponent matchup bonus.
+    matchup_bonus = 0.0
+    matchup_reason = ""
+    pos = player.position
+    if pos == "ST":
+        cb_weak = opponent_weakness.get("CB", 0.5)
+        gk_weak = opponent_weakness.get("GK", 0.5)
+        matchup_bonus = 0.10 * cb_weak + 0.05 * gk_weak
+        if cb_weak >= 0.6:
+            matchup_reason = "faces a weak CB line"
+        elif gk_weak >= 0.6:
+            matchup_reason = "faces a weak GK"
+    elif pos == "W":
+        fb_weak = opponent_weakness.get("FB", 0.5)
+        matchup_bonus = 0.10 * fb_weak
+        if fb_weak >= 0.6:
+            matchup_reason = "vs weak fullbacks"
+    elif pos == "AM":
+        dm_weak = opponent_weakness.get("DM", 0.5)
+        matchup_bonus = 0.08 * dm_weak
+        if dm_weak >= 0.6:
+            matchup_reason = "vs weak defensive mid"
+    elif pos in ("CM", "DM"):
+        # Central mids benefit from opponent having a weak midfield generally.
+        matchup_bonus = 0.05 * opponent_weakness.get("DM", 0.5)
+
+    base_score = (
+        0.55 * (rating / 100.0)
+        + 0.20 * confidence
+        + 0.15 * position_weight
+        + 0.10 * (rating_delta / 30.0 if rating_delta else 0.0)
+        + matchup_bonus
+    )
+    return base_score, matchup_reason
+
+
+def get_wc_match_player_spotlight(
+    home_team: str, away_team: str, *, top_n: int = 5
+) -> dict[str, Any]:
+    """Return ranked 'players to watch' for a World Cup fixture.
+
+    Each team contributes up to ``max(2, top_n // 2)`` candidates. Players
+    are scored by absolute rating, rating confidence, role watchability,
+    team-relative rating delta, and a position-vs-opponent matchup bonus.
+
+    The output is *illustrative* — based on placeholder squads and local
+    ratings, not a confirmed lineup, injury report, or tactical forecast.
+    """
+    if home_team == away_team:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_fixture",
+            "message": "Home and away World Cup teams must be different.",
+        })
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    valid_teams = set(enriched_squads)
+    if home_team not in valid_teams:
+        return _clean_json_value({
+            "status": "error",
+            "code": "unknown_team",
+            "message": f"World Cup home team '{home_team}' not found.",
+        })
+    if away_team not in valid_teams:
+        return _clean_json_value({
+            "status": "error",
+            "code": "unknown_team",
+            "message": f"World Cup away team '{away_team}' not found.",
+        })
+
+    home_squad = enriched_squads.get(home_team, [])
+    away_squad = enriched_squads.get(away_team, [])
+
+    home_rated = [
+        p for p in home_squad if p.has_rating and p.rating is not None
+    ]
+    away_rated = [
+        p for p in away_squad if p.has_rating and p.rating is not None
+    ]
+
+    if not home_rated and not away_rated:
+        return _clean_json_value({
+            "schema": "scoutfootball.world-cup-match-player-spotlight",
+            "version": "1.0.0",
+            "status": "no_rated_players",
+            "fixture": {"home_team": home_team, "away_team": away_team},
+            "players": [],
+            "limitations": [
+                "No rated players available for either side; spotlight "
+                "cannot be computed.",
+            ],
+        })
+
+    home_avg = (
+        sum(float(p.rating) for p in home_rated) / len(home_rated)
+        if home_rated else 0.0
+    )
+    away_avg = (
+        sum(float(p.rating) for p in away_rated) / len(away_rated)
+        if away_rated else 0.0
+    )
+
+    home_weakness = _wc_spotlight_opponent_weakness(home_squad, away_squad)
+    away_weakness = _wc_spotlight_opponent_weakness(away_squad, home_squad)
+
+    # Each side contributes up to ceil(top_n/2) + 1 candidates, then we merge.
+    per_side_cap = max(2, (top_n + 1) // 2 + 1)
+
+    def _rank_side(
+        team: str,
+        squad: list[Any],
+        rated: list[Any],
+        opponent_weakness: dict[str, float],
+        team_avg: float,
+    ) -> list[dict[str, Any]]:
+        scored: list[tuple[float, dict[str, Any]]] = []
+        for player in rated:
+            score, matchup_reason = _wc_spotlight_player_score(
+                player, rated, opponent_weakness, team_avg
+            )
+            reason_parts = []
+            if player.rating is not None and team_avg:
+                delta = float(player.rating) - team_avg
+                if delta >= 5.0:
+                    reason_parts.append(
+                        f"top-rated in squad (+{delta:.1f})"
+                    )
+                elif delta <= -5.0:
+                    reason_parts.append(
+                        f"role depth (rating {float(player.rating):.1f})"
+                    )
+            if matchup_reason:
+                reason_parts.append(matchup_reason)
+            pos_label = _WC_SPOTLIGHT_POSITION_WEIGHTS.get(
+                player.position, 1.0
+            )
+            if pos_label >= 1.10 and not reason_parts:
+                reason_parts.append("attacking threat role")
+            scored.append((
+                score,
+                {
+                    "name": player.name,
+                    "team": team,
+                    "position": player.position,
+                    "club": player.club,
+                    "club_league": player.club_league,
+                    "rating": round(float(player.rating), 2) if player.rating else None,
+                    "rating_confidence": player.rating_confidence,
+                    "spotlight_score": round(score, 4),
+                    "reason": "; ".join(reason_parts) if reason_parts else "rated contributor",
+                },
+            ))
+        scored.sort(key=lambda x: -x[0])
+        return [entry for _, entry in scored[:per_side_cap]]
+
+    home_candidates = _rank_side(
+        home_team, home_squad, home_rated, away_weakness, home_avg
+    )
+    away_candidates = _rank_side(
+        away_team, away_squad, away_rated, home_weakness, away_avg
+    )
+
+    all_candidates = home_candidates + away_candidates
+    all_candidates.sort(key=lambda p: -p["spotlight_score"])
+    top = all_candidates[:top_n]
+
+    return _clean_json_value({
+        "schema": "scoutfootball.world-cup-match-player-spotlight",
+        "version": "1.0.0",
+        "status": "ok",
+        "fixture": {"home_team": home_team, "away_team": away_team},
+        "prediction_summary": {
+            "home_strength": round(float(strengths.get(home_team, 0.0)), 4),
+            "away_strength": round(float(strengths.get(away_team, 0.0)), 4),
+            "home_advantage_flag": home_team in HOSTS,
+        },
+        "players": top,
+        "total_candidates": len(all_candidates),
+        "source_attribution": (
+            "Spotlight scores blend ScoutFootball local ratings, rating "
+            "confidence, role watchability, and opponent-position weakness. "
+            "Squads are placeholder callup snapshots, not confirmed lineups."
+        ),
+        "limitations": [
+            "Spotlight is an illustrative presentation heuristic, not a "
+            "performance forecast or lineup prediction.",
+            "Rating coverage gaps for non-Big5 leagues reduce the reliability "
+            "of position-vs-opponent matchup bonuses.",
+            "The matchup bonus assumes position-vs-position confrontation; "
+            "actual tactical matchups depend on the manager's setup.",
+        ],
+    })
+
+
+def get_wc_team_form_trend(team: str, *, last_n: int = 6) -> dict[str, Any]:
+    """Return a team's recent form trend for the World Cup view.
+
+    Combines two signal sources:
+    1. Recorded group-stage results from local tournament state (if any).
+    2. Pre-tournament expected-results trajectory derived from the
+       team's strength and the group-stage schedule order.
+
+    The trend is illustrative only — pre-tournament matches are
+    strength-derived expectations, not actual fixtures.
+    """
+    from scoutfootball.worldcup.data import get_team_group
+    from scoutfootball.worldcup.tournament import _match_completed
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if team not in enriched_squads:
+        return _clean_json_value({
+            "status": "error",
+            "code": "unknown_team",
+            "message": f"World Cup team '{team}' not found.",
+        })
+
+    team_strength = float(strengths.get(team, 0.2))
+    state = _wc_tournament_state()
+
+    # 1) Pull recorded WC results (group stage + knockout if any).
+    recorded: list[dict[str, Any]] = []
+    for m in state.matches:
+        if team not in (m.get("home"), m.get("away")):
+            continue
+        result = state.results.get(m["match_id"])
+        if not _match_completed(result):
+            continue
+        hg = int(result.get("home_goals", 0))
+        ag = int(result.get("away_goals", 0))
+        is_home = m.get("home") == team
+        team_goals = hg if is_home else ag
+        opp_goals = ag if is_home else hg
+        opp = m.get("away") if is_home else m.get("home")
+        if team_goals > opp_goals:
+            outcome = "W"
+            points = 3
+        elif team_goals == opp_goals:
+            outcome = "D"
+            points = 1
+        else:
+            outcome = "L"
+            points = 0
+        recorded.append({
+            "kind": "recorded",
+            "date": m.get("date", ""),
+            "opponent": opp,
+            "venue": "home" if is_home else "away",
+            "team_goals": team_goals,
+            "opponent_goals": opp_goals,
+            "outcome": outcome,
+            "points": points,
+            "group": m.get("group"),
+        })
+
+    # 2) Project expected group-stage results from strength for unrecorded
+    #    matches in this team's group (pre-tournament form proxy).
+    group = get_team_group(team)
+    projected: list[dict[str, Any]] = []
+    if group:
+        for m in state.matches:
+            if m.get("group") != group:
+                continue
+            if team not in (m.get("home"), m.get("away")):
+                continue
+            if _match_completed(state.results.get(m["match_id"])):
+                continue  # already in `recorded`
+            opp = m.get("away") if m.get("home") == team else m.get("home")
+            opp_strength = float(strengths.get(opp, 0.2))
+            # Simple expected score: stronger team wins more often, ~2.3 goals.
+            strength_diff = team_strength - opp_strength
+            expected_team_goals = max(0.3, min(4.0, 1.55 + 1.2 * strength_diff))
+            expected_opp_goals = max(0.3, min(4.0, 1.55 - 1.2 * strength_diff))
+            if expected_team_goals > expected_opp_goals + 0.25:
+                outcome = "W"
+                points = 3
+            elif expected_team_goals < expected_opp_goals - 0.25:
+                outcome = "L"
+                points = 0
+            else:
+                outcome = "D"
+                points = 1
+            is_home = m.get("home") == team
+            projected.append({
+                "kind": "projected",
+                "date": m.get("date", ""),
+                "opponent": opp,
+                "venue": "home" if is_home else "away",
+                "team_goals": round(expected_team_goals, 2),
+                "opponent_goals": round(expected_opp_goals, 2),
+                "outcome": outcome,
+                "points": points,
+                "group": m.get("group"),
+            })
+
+    # Recorded matches take priority; fill the rest with projected up to last_n.
+    recorded_sorted = sorted(recorded, key=lambda r: r["date"], reverse=True)
+    projected_sorted = sorted(projected, key=lambda r: r["date"])
+
+    # Combine: show projected (chronological) then recorded (most recent first)
+    # so the user sees the projected trajectory then live results on top.
+    combined = projected_sorted + recorded_sorted
+
+    # Trim to last_n entries for the trend chart.
+    if len(combined) > last_n:
+        combined = combined[-last_n:]
+
+    # Compute a simple form score: weighted recent points (decay 0.8 per match).
+    form_score = 0.0
+    decay = 1.0
+    total_decay = 0.0
+    # iterate from most recent to oldest
+    for entry in reversed(combined):
+        form_score += entry["points"] * decay
+        total_decay += decay
+        decay *= 0.8
+    form_score = form_score / total_decay if total_decay else 0.0
+    # Normalize to 0..1 (3 points = 1.0)
+    form_score_normalized = form_score / 3.0
+
+    # Build a simple trajectory of cumulative points.
+    cumulative = 0
+    trajectory = []
+    for entry in combined:
+        cumulative += entry["points"]
+        trajectory.append({
+            "date": entry["date"],
+            "opponent": entry["opponent"],
+            "outcome": entry["outcome"],
+            "team_goals": entry["team_goals"],
+            "opponent_goals": entry["opponent_goals"],
+            "points": entry["points"],
+            "cumulative_points": cumulative,
+            "kind": entry["kind"],
+            "venue": entry["venue"],
+        })
+
+    wins = sum(1 for e in combined if e["outcome"] == "W")
+    draws = sum(1 for e in combined if e["outcome"] == "D")
+    losses = sum(1 for e in combined if e["outcome"] == "L")
+
+    return _clean_json_value({
+        "schema": "scoutfootball.world-cup-team-form-trend",
+        "version": "1.0.0",
+        "status": "ok",
+        "team": team,
+        "group": group,
+        "strength": round(team_strength, 4),
+        "matches": trajectory,
+        "summary": {
+            "recorded_count": len(recorded),
+            "projected_count": len(projected),
+            "wins": wins,
+            "draws": draws,
+            "losses": losses,
+            "form_score": round(form_score, 3),
+            "form_score_normalized": round(form_score_normalized, 3),
+        },
+        "source_attribution": (
+            "Recorded results come from local tournament state; projected "
+            "matches use strength-derived expected scorelines. Pre-tournament "
+            "form is illustrative only."
+        ),
+        "limitations": [
+            "Projected outcomes are strength-based expectations, not actual "
+            "match results or forecasts.",
+            "Form score uses exponential decay (0.8) weighting of recent "
+            "points; it is a presentation summary, not a model probability.",
+            "Recorded and projected matches may interleave; the trajectory "
+            "shows projected (chronological) then recorded (most recent first).",
+        ],
+    })
+
+
 def _match_model_comparison(home_team: str, away_team: str) -> dict[str, Any] | None:
     """Return 1x2 probabilities from both Poisson and Dixon-Coles for a match.
 
@@ -687,6 +1641,7 @@ def _match_model_comparison(home_team: str, away_team: str) -> dict[str, Any] | 
                 "away": round(float(prediction.summary.away_win), 4),
             }
     except Exception:
+        logger.warning("match model comparison: poisson failed", exc_info=True)
         pass
     try:
         prediction = load_score_prediction_dc(home_team, away_team)
@@ -697,6 +1652,7 @@ def _match_model_comparison(home_team: str, away_team: str) -> dict[str, Any] | 
                 "away": round(float(prediction.summary.away_win), 4),
             }
     except Exception:
+        logger.warning("match model comparison: dixon_coles failed", exc_info=True)
         pass
     return comparison if len(comparison) >= 2 else None
 
@@ -705,7 +1661,8 @@ def get_match_prediction(home_team: str, away_team: str) -> dict:
     try:
         prediction = load_score_prediction(home_team, away_team)
     except Exception as exc:
-        return {"error": str(exc)}
+        logger.warning("get_match_prediction failed", exc_info=True)
+        return _make_error_response(str(exc))
     if isinstance(prediction, dict):
         return prediction
     result = {
@@ -739,7 +1696,8 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
     try:
         prediction = load_score_prediction_dc(home_team, away_team)
     except Exception as exc:
-        return {"error": str(exc)}
+        logger.warning("get_match_prediction_dc failed", exc_info=True)
+        return _make_error_response(str(exc))
     if isinstance(prediction, dict):
         prediction["model_type"] = prediction.get("model_type", "dixon_coles")
         return prediction
@@ -774,6 +1732,7 @@ def get_match_prediction_dc(home_team: str, away_team: str) -> dict:
                 if "home_advantage" in dc_row:
                     result["home_advantage"] = _clean_json_value(dc_row["home_advantage"])
     except Exception:
+        logger.warning("get_match_prediction_dc: enrichment failed", exc_info=True)
         pass  # enrichment is optional
     model_cmp = _match_model_comparison(home_team, away_team)
     if model_cmp:
@@ -804,6 +1763,7 @@ def _resolve_tuned_decay() -> float | None:
             if isinstance(best, (int, float)) and best >= 0:
                 return float(best)
     except Exception:
+        logger.warning("resolve tuned decay failed", exc_info=True)
         pass
     return None
 
@@ -866,6 +1826,7 @@ def _get_prediction_confidence(
         _PREDICTION_CI_CACHE[cache_key] = {"data": result, "timestamp": now}
         return result
     except Exception:
+        logger.warning("get prediction confidence failed", exc_info=True)
         return None
 
 
@@ -884,7 +1845,7 @@ def get_form_weighted_prediction(home_team: str, away_team: str) -> dict:
 
         team_match = load_team_match()
         if team_match is None or len(team_match) < 50:
-            return {"error": "Insufficient team_match data for form-weighted prediction"}
+            return _make_error_response("Insufficient team_match data for form-weighted prediction")
 
         decay = _resolve_tuned_decay()
         model = fit_dixon_coles_with_form(
@@ -922,7 +1883,8 @@ def get_form_weighted_prediction(home_team: str, away_team: str) -> dict:
             result["confidence_intervals"] = ci
         return _clean_json_value(result)
     except Exception as exc:
-        return {"error": str(exc)}
+        logger.warning("get_form_weighted_prediction failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_ensemble_prediction(home_team: str, away_team: str, *, recalibrate: bool = False) -> dict:
@@ -946,7 +1908,7 @@ def get_ensemble_prediction(home_team: str, away_team: str, *, recalibrate: bool
 
         team_match = load_team_match()
         if team_match is None or len(team_match) < 50:
-            return {"error": "Insufficient team_match data for ensemble prediction"}
+            return _make_error_response("Insufficient team_match data for ensemble prediction")
 
         decay = _resolve_tuned_decay()
 
@@ -1031,7 +1993,8 @@ def get_ensemble_prediction(home_team: str, away_team: str, *, recalibrate: bool
             result["confidence_intervals"] = ci
         return _clean_json_value(result)
     except Exception as exc:
-        return {"error": str(exc)}
+        logger.warning("get_ensemble_prediction failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_match_momentum(
@@ -1090,7 +2053,8 @@ def get_match_momentum(
             ],
         })
     except Exception as exc:
-        return {"error": str(exc)}
+        logger.warning("get_match_momentum failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_calibration_drift() -> dict:
@@ -1166,7 +2130,8 @@ def get_calibration_drift() -> dict:
         _BACKTEST_CACHE["drift_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_calibration_drift failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_calibration_drift_timeline() -> dict:
@@ -1205,7 +2170,8 @@ def get_calibration_drift_timeline() -> dict:
             "overall_metrics": report.get("overall_metrics", {}),
         })
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_calibration_drift_timeline failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 # --- Isotonic calibrator cache ---
@@ -1277,6 +2243,7 @@ def _get_isotonic_calibrator(*, force_refresh: bool = False) -> object | None:
         _CALIBRATOR_CACHE["timestamp"] = now
         return calibrator
     except Exception:
+        logger.warning("get isotonic calibrator failed", exc_info=True)
         return None
 
 
@@ -1320,7 +2287,8 @@ def get_ensemble_weights() -> dict:
             "path": str(weights_path),
         })
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_ensemble_weights failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_calibration_comparison() -> dict:
@@ -1409,7 +2377,8 @@ def get_calibration_comparison() -> dict:
         _BACKTEST_CACHE["calibration_comparison_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_calibration_comparison failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_prediction_attribution(home_team: str, away_team: str) -> dict:
@@ -1451,7 +2420,8 @@ def get_prediction_attribution(home_team: str, away_team: str) -> dict:
             "n_factors": len(attribution.factors),
         })
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_prediction_attribution failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_prediction_attribution_ci(
@@ -1494,7 +2464,8 @@ def get_prediction_attribution_ci(
             "factor_cis": ci.factor_cis,
         })
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_prediction_attribution_ci failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_ensemble_attribution(home_team: str, away_team: str) -> dict:
@@ -1536,6 +2507,7 @@ def get_ensemble_attribution(home_team: str, away_team: str) -> dict:
                     "dixon_coles_form": w.get("dixon_coles_form", 0.5),
                 }
         except Exception:
+            logger.warning("get_ensemble_attribution: load_ensemble_weights failed", exc_info=True)
             pass
 
         ensemble_attr = compute_ensemble_attribution(
@@ -1565,7 +2537,8 @@ def get_ensemble_attribution(home_team: str, away_team: str) -> dict:
             },
         })
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_ensemble_attribution failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_ensemble_attribution_ci(
@@ -1603,6 +2576,9 @@ def get_ensemble_attribution_ci(
                     "dixon_coles_form": w.get("dixon_coles_form", 0.5),
                 }
         except Exception:
+            logger.warning(
+                "get_ensemble_attribution_ci: load_ensemble_weights failed", exc_info=True
+            )
             pass
 
         ci = bootstrap_ensemble_attribution_confidence(
@@ -1626,7 +2602,8 @@ def get_ensemble_attribution_ci(
             "factor_cis": ci.factor_cis,
         })
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_ensemble_attribution_ci failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_value_bet_analysis(
@@ -1644,11 +2621,11 @@ def get_value_bet_analysis(
     """
     try:
         if home_odds < 1.0 or draw_odds < 1.0 or away_odds < 1.0:
-            return {"status": "error", "message": "All odds must be >= 1.0"}
+            return _make_error_response("All odds must be >= 1.0")
 
         prediction = get_match_prediction_dc(home_team, away_team)
         if "error" in prediction:
-            return {"status": "error", "message": prediction["error"]}
+            return _make_error_response(prediction["error"])
 
         model_probs = {
             "home_win": float(prediction.get("home_win", 0.0)),
@@ -1702,9 +2679,10 @@ def get_value_bet_analysis(
             ),
         })
     except ValueError as exc:
-        return {"status": "error", "message": str(exc)}
+        return _make_error_response(str(exc))
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_value_bet_analysis failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_reliability_diagram(*, n_bins: int = 10) -> dict:
@@ -1792,7 +2770,8 @@ def get_reliability_diagram(*, n_bins: int = 10) -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_reliability_diagram failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_team_accuracy(team_id: str, *, min_predictions: int = 3) -> dict:
@@ -1886,7 +2865,8 @@ def get_team_accuracy(team_id: str, *, min_predictions: int = 3) -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_team_accuracy failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_model_comparison() -> dict:
@@ -1977,7 +2957,8 @@ def get_model_comparison() -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_model_comparison failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_scoreline_calibration(*, max_scoreline: int = 5, min_samples: int = 3) -> dict:
@@ -2069,7 +3050,8 @@ def get_scoreline_calibration(*, max_scoreline: int = 5, min_samples: int = 3) -
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_scoreline_calibration failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_confidence_distribution(*, n_bins: int = 10, min_samples_per_bucket: int = 5) -> dict:
@@ -2160,7 +3142,8 @@ def get_confidence_distribution(*, n_bins: int = 10, min_samples_per_bucket: int
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_confidence_distribution failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_h2h_bias_correction(
@@ -2223,7 +3206,8 @@ def get_h2h_bias_correction(
             "disclaimer": report.disclaimer,
         })
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_h2h_bias_correction failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_error_analysis(
@@ -2357,7 +3341,8 @@ def get_error_analysis(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_error_analysis failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_outcome_distribution() -> dict:
@@ -2444,7 +3429,8 @@ def get_outcome_distribution() -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_outcome_distribution failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_temporal_validation(
@@ -2543,7 +3529,8 @@ def get_temporal_validation(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_temporal_validation failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_probability_heatmap(
@@ -2639,7 +3626,8 @@ def get_probability_heatmap(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_probability_heatmap failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_prediction_staleness() -> dict:
@@ -2709,7 +3697,8 @@ def get_prediction_staleness() -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_prediction_staleness failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_confidence_interval_plot(
@@ -2822,7 +3811,8 @@ def get_confidence_interval_plot(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_confidence_interval_plot failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_fold_comparison(*, min_samples_per_fold: int = 5) -> dict:
@@ -2927,7 +3917,8 @@ def get_fold_comparison(*, min_samples_per_fold: int = 5) -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_fold_comparison failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_league_error_analysis(
@@ -3049,7 +4040,8 @@ def get_league_error_analysis(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_league_error_analysis failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_feature_importance(
@@ -3154,7 +4146,8 @@ def get_feature_importance(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_feature_importance failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_ci_coverage(
@@ -3269,7 +4262,8 @@ def get_ci_coverage(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_ci_coverage failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_calibration_drift_heatmap(
@@ -3385,7 +4379,8 @@ def get_calibration_drift_heatmap(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_calibration_drift_heatmap failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_error_clustering(
@@ -3496,7 +4491,8 @@ def get_error_clustering(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_error_clustering failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_data_drift(
@@ -3599,7 +4595,8 @@ def get_data_drift(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_data_drift failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_ci_width_analysis(
@@ -3705,7 +4702,8 @@ def get_ci_width_analysis(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_ci_width_analysis failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_scenario_stress_test(
@@ -3816,7 +4814,8 @@ def get_scenario_stress_test(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_scenario_stress_test failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_team_calibration_drift(
@@ -3942,7 +4941,8 @@ def get_team_calibration_drift(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_team_calibration_drift failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_prediction_uncertainty(
@@ -4047,7 +5047,8 @@ def get_prediction_uncertainty(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_prediction_uncertainty failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_profit_loss_simulation(
@@ -4159,7 +5160,8 @@ def get_profit_loss_simulation(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_profit_loss_simulation failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_cumulative_trajectory(
@@ -4263,7 +5265,8 @@ def get_cumulative_trajectory(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_cumulative_trajectory failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_difficulty_stratification(
@@ -4366,7 +5369,8 @@ def get_difficulty_stratification(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_difficulty_stratification failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_prediction_streaks(
@@ -4486,7 +5490,8 @@ def get_prediction_streaks(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_prediction_streaks failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
@@ -4551,6 +5556,7 @@ def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
                     "age_seconds": int(__import__("time").time() - cached.get("timestamp", 0)),
                 }
         except Exception:
+            logger.warning("get_prediction_diagnostics: ci cache check failed", exc_info=True)
             pass
 
         return _clean_json_value({
@@ -4563,7 +5569,8 @@ def get_prediction_diagnostics(home_team: str, away_team: str) -> dict:
             "ci_cache": ci_status,
         })
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_prediction_diagnostics failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_head_to_head(
@@ -4613,6 +5620,7 @@ def get_head_to_head(
         )
         return _clean_json_value(result)
     except Exception:
+        logger.warning("get_head_to_head failed, returning fallback", exc_info=True)
         return _clean_json_value(fallback)
 
 
@@ -4656,6 +5664,7 @@ def get_value_summary() -> dict:
             if not results_df.empty:
                 metrics = _clean_json_value(results_df.iloc[0].to_dict())
         except Exception:
+            logger.warning("get_value_summary: results parquet read failed", exc_info=True)
             pass
 
     mean_residual = None
@@ -4664,11 +5673,15 @@ def get_value_summary() -> dict:
             raw = oof["residual_log"].mean()
             mean_residual = float(raw) if raw == raw else None
         except Exception:
+            logger.warning("get_value_summary: residual_log mean failed", exc_info=True)
             mean_residual = None
 
     return _clean_json_value({
         "status": "demo" if is_synthetic else "ok",
         "data_mode": "synthetic" if is_synthetic else "artifact",
+        # PRS-1 R-006: stamp the evidence grain so season-proxy OOF data
+        # cannot be mistaken for match-level evidence in the UI/exports.
+        "evidence_grain": _infer_evidence_grain(oof),
         "sample_count": len(oof),
         "fairness_distribution": oof["fairness_label"].value_counts().to_dict()
         if "fairness_label" in oof.columns
@@ -4677,6 +5690,596 @@ def get_value_summary() -> dict:
         "metrics": metrics,
         "players": player_data,
     })
+
+
+# ── Market value (身价) service ────────────────────────────────────────
+#
+# 切片目标：把 Transfermarkt 身价数据接入 API，让维护者能在前端/CLI
+# 直接查询球员的最新身价、历史身价序列，以及全库聚合统计。
+#
+# 数据源优先级（fail-closed，绝不编造数据）：
+# 1. ``data/raw/transfermarkt_datasets/player_valuations.parquet``
+#    — 通过 ``adapters.transfermarkt_datasets.export_table`` 或
+#      ``load_csv_table`` 从 dcaribou/transfermarkt-datasets DuckDB 或
+#      Kaggle CSV 导出的官方表（schema 见
+#      ``adapters/transfermarkt_datasets.py``）。
+# 2. ``data/raw/transfermarkt_manual/player_latest_market_value.csv``
+#    + ``player_profiles.csv`` — 维护者手动放置的快照 CSV，schema
+#    见 ``adapters/transfermarkt_manual.py``。这是当前磁盘上唯一真实
+#    存在的数据路径。
+#
+# 所有响应必须携带：
+# - ``source_name``：``"transfermarkt_datasets"`` 或 ``"transfermarkt_manual"``
+# - ``source_uri``：实际读取的文件相对路径
+# - ``license_boundary``：Transfermarkt ToS 边界（个人本地使用，不可再分发）
+# - ``currency``：``"EUR"``（Transfermarkt 原始货币）
+#
+# 当两个数据源都不存在时返回 ``status="no_data"``，并附 ``evidence``
+# 字段说明检查了哪些路径，让前端能诚实渲染空状态而非假装有数据。
+
+_MARKET_VALUE_LICENSE_BOUNDARY = (
+    "Personal local use only. Transfermarkt ToS prohibit scraping, "
+    "redistribution, and commercial reuse without written permission. "
+    "See docs/DATA_RIGHTS.md §2.1. Market values are subjective "
+    "Transfermarkt estimates, not market prices."
+)
+
+
+def _load_market_value_frame() -> tuple[pd.DataFrame | None, dict[str, Any]]:
+    """Load and normalize the market value frame from local raw data.
+
+    Returns ``(frame, source_meta)`` where ``frame`` is None when no
+    data source is available, and ``source_meta`` always carries
+    ``source_name``, ``source_uri``, ``license_boundary``, ``currency``,
+    and ``checked_paths`` so the API can render an honest empty state.
+
+    Normalized columns:
+        - ``player_id`` (str): source-native Transfermarkt numeric ID
+        - ``player_name`` (str): from profiles join
+        - ``team_name`` (str): current club name (may be empty)
+        - ``position`` (str): source position label (may be empty)
+        - ``snapshot_date`` (pd.Timestamp): valuation date
+        - ``market_value_eur`` (float): market value in EUR
+    """
+    settings = _settings()
+    checked: list[str] = []
+
+    # Path 1: transfermarkt_datasets bulk export (player_valuations.parquet)
+    tm_datasets_dir = settings.raw_root / "transfermarkt_datasets"
+    valuations_path = tm_datasets_dir / "player_valuations.parquet"
+    checked.append(str(valuations_path.relative_to(settings.data_root)))
+    if valuations_path.exists():
+        try:
+            df = _read_parquet(valuations_path)
+        except Exception:
+            logger.warning(
+                "market_value: player_valuations.parquet read failed",
+                exc_info=True,
+            )
+            df = None
+        if df is not None and not df.empty:
+            normalized = _normalize_tm_datasets_valuations(df, tm_datasets_dir)
+            if normalized is not None and not normalized.empty:
+                return normalized, {
+                    "source_name": "transfermarkt_datasets",
+                    "source_uri": str(valuations_path.relative_to(settings.data_root)),
+                    "license_boundary": _MARKET_VALUE_LICENSE_BOUNDARY,
+                    "currency": "EUR",
+                    "checked_paths": checked,
+                }
+
+    # Path 2: transfermarkt_manual raw CSVs (player_latest_market_value.csv
+    # or player_market_value.csv) + player_profiles.csv
+    tm_manual_dir = settings.raw_root / "transfermarkt_manual"
+    profiles_path = tm_manual_dir / "player_profiles.csv"
+    latest_path = tm_manual_dir / "player_latest_market_value.csv"
+    history_path = tm_manual_dir / "player_market_value.csv"
+
+    checked.append(str(latest_path.relative_to(settings.data_root)))
+    checked.append(str(history_path.relative_to(settings.data_root)))
+    checked.append(str(profiles_path.relative_to(settings.data_root)))
+
+    mv_path = latest_path if latest_path.exists() else history_path
+    if not mv_path.exists() or not profiles_path.exists():
+        return None, {
+            "source_name": "none",
+            "source_uri": None,
+            "license_boundary": _MARKET_VALUE_LICENSE_BOUNDARY,
+            "currency": "EUR",
+            "checked_paths": checked,
+        }
+
+    try:
+        mv_df = pd.read_csv(mv_path)
+        profiles_df = pd.read_csv(
+            profiles_path,
+            usecols=lambda c: c in {
+                "player_id",
+                "player_name",
+                "current_club_name",
+                "position",
+                "main_position",
+            },
+        )
+    except Exception:
+        logger.warning(
+            "market_value: transfermarkt_manual CSV read failed",
+            exc_info=True,
+        )
+        return None, {
+            "source_name": "none",
+            "source_uri": None,
+            "license_boundary": _MARKET_VALUE_LICENSE_BOUNDARY,
+            "currency": "EUR",
+            "checked_paths": checked,
+        }
+
+    merged = mv_df.merge(profiles_df, on="player_id", how="left")
+    # Transfermarkt profiles append the numeric player_id to the display
+    # name to disambiguate duplicates (e.g. "Lamine Yamal (937958)"). Strip
+    # the trailing "(<id>)" suffix so API responses carry the bare name;
+    # the canonical player_id remains in the dedicated ``player_id`` field.
+    raw_names = merged["player_name"].astype("string").str.strip()
+    raw_names = raw_names.str.replace(
+        r"\s*\(\d+\)\s*$", "", regex=True
+    ).str.strip()
+    normalized = pd.DataFrame(
+        {
+            "player_id": merged["player_id"].astype("string"),
+            "player_name": raw_names,
+            "team_name": merged.get(
+                "current_club_name", pd.Series(index=merged.index, dtype="object")
+            ).astype("string").str.strip(),
+            "position": merged.get(
+                "position", pd.Series(index=merged.index, dtype="object")
+            ).astype("string").str.strip(),
+            "snapshot_date": pd.to_datetime(
+                merged["date_unix"], errors="coerce"
+            ),
+            "market_value_eur": pd.to_numeric(
+                merged["value"], errors="coerce"
+            ).astype("float64"),
+        }
+    )
+    # Drop rows with missing critical fields (player_name or market_value_eur).
+    # A missing snapshot_date is kept (some latest-snapshot rows omit it) but
+    # surfaced as NaT in the response.
+    normalized = normalized.dropna(
+        subset=["player_name", "market_value_eur"]
+    ).reset_index(drop=True)
+
+    return normalized, {
+        "source_name": "transfermarkt_manual",
+        "source_uri": str(mv_path.relative_to(settings.data_root)),
+        "license_boundary": _MARKET_VALUE_LICENSE_BOUNDARY,
+        "currency": "EUR",
+        "checked_paths": checked,
+    }
+
+
+def _normalize_tm_datasets_valuations(
+    df: pd.DataFrame, tm_datasets_dir: Path
+) -> pd.DataFrame | None:
+    """Normalize the player_valuations table from transfermarkt-datasets.
+
+    The upstream schema (dcaribou/transfermarkt-datasets) columns:
+        - ``player_id`` (int)
+        - ``date`` (datetime)
+        - ``market_value_in_eur`` (float)
+        - ``player_club_id`` (int)
+        - ``last_update`` (datetime)
+
+    Player name / team name live in the sibling ``players`` / ``clubs``
+    tables. When those parquet files are present we join them; otherwise
+    we return the valuations with empty name columns rather than
+    blocking the endpoint.
+    """
+    required = {"player_id", "date", "market_value_in_eur"}
+    if not required.issubset(df.columns):
+        return None
+
+    players_path = tm_datasets_dir / "players.parquet"
+    clubs_path = tm_datasets_dir / "clubs.parquet"
+
+    out = pd.DataFrame(
+        {
+            "player_id": df["player_id"].astype("string"),
+            "player_name": pd.Series(index=df.index, dtype="object"),
+            "team_name": pd.Series(index=df.index, dtype="object"),
+            "position": pd.Series(index=df.index, dtype="object"),
+            "snapshot_date": pd.to_datetime(df["date"], errors="coerce"),
+            "market_value_eur": pd.to_numeric(
+                df["market_value_in_eur"], errors="coerce"
+            ).astype("float64"),
+        }
+    )
+
+    # Best-effort name/team enrichment. Failures here do not block the
+    # endpoint — the valuations are still valid, just less readable.
+    if players_path.exists():
+        try:
+            players_df = _read_parquet(players_path)
+            if "player_id" in players_df.columns:
+                name_cols = [
+                    c
+                    for c in ("name", "pretty_name", "player_name")
+                    if c in players_df.columns
+                ]
+                pos_cols = [
+                    c
+                    for c in ("position", "main_position", "sub_type")
+                    if c in players_df.columns
+                ]
+                cols = ["player_id"] + name_cols[:1] + pos_cols[:1]
+                players_df = players_df[cols].copy()
+                players_df["player_id"] = players_df["player_id"].astype("string")
+                if name_cols:
+                    players_df = players_df.rename(
+                        columns={name_cols[0]: "player_name"}
+                    )
+                if pos_cols:
+                    players_df = players_df.rename(
+                        columns={pos_cols[0]: "position"}
+                    )
+                out = out.merge(
+                    players_df, on="player_id", how="left", suffixes=("", "_p")
+                )
+                if "player_name_p" in out.columns:
+                    out["player_name"] = out["player_name"].fillna(
+                        out["player_name_p"]
+                    )
+                    out = out.drop(columns=["player_name_p"])
+                if "position_p" in out.columns:
+                    out["position"] = out["position"].fillna(out["position_p"])
+                    out = out.drop(columns=["position_p"])
+        except Exception:
+            logger.warning(
+                "market_value: players.parquet enrichment failed",
+                exc_info=True,
+            )
+
+    if clubs_path.exists() and "player_club_id" in df.columns:
+        try:
+            clubs_df = _read_parquet(clubs_path)
+            name_cols = [
+                c
+                for c in ("name", "pretty_name", "club_name")
+                if c in clubs_df.columns
+            ]
+            if "club_id" in clubs_df.columns and name_cols:
+                clubs_df = clubs_df[["club_id", name_cols[0]]].copy()
+                clubs_df = clubs_df.rename(
+                    columns={name_cols[0]: "team_name", "club_id": "player_club_id"}
+                )
+                clubs_df["player_club_id"] = clubs_df[
+                    "player_club_id"
+                ].astype("string")
+                df_join = df.copy()
+                df_join["player_club_id"] = df_join[
+                    "player_club_id"
+                ].astype("string")
+                out["team_name"] = df_join.merge(
+                    clubs_df, on="player_club_id", how="left"
+                )["team_name"].astype("string").str.strip().values
+        except Exception:
+            logger.warning(
+                "market_value: clubs.parquet enrichment failed",
+                exc_info=True,
+            )
+
+    out["player_name"] = out["player_name"].astype("string").str.strip()
+    out["team_name"] = out["team_name"].astype("string").str.strip()
+    out["position"] = out["position"].astype("string").str.strip()
+
+    # Drop rows with no usable identity or value.
+    out = out.dropna(subset=["market_value_eur"])
+    out = out[out["market_value_eur"] > 0].reset_index(drop=True)
+    return out
+
+
+def get_market_value_summary() -> dict:
+    """Return aggregate market value stats with source attribution.
+
+    Reads the local raw Transfermarkt data and reports:
+    - ``total_players``: distinct players with at least one valuation
+    - ``total_snapshots``: total valuation rows
+    - ``latest_snapshot_date``: most recent valuation date across all players
+    - ``value_distribution``: count of players in each EUR band
+    - ``top_players``: top 10 players by latest market value
+    - ``source``: source_name, source_uri, license_boundary, currency
+
+    Fail-closed: when no data is available, returns ``status="no_data"``
+    with the checked paths so the maintainer can see what's missing
+    rather than guessing.
+    """
+    df, source_meta = _load_market_value_frame()
+    if df is None or df.empty:
+        return {
+            "status": "no_data",
+            "source": source_meta,
+            "evidence": {
+                "reason": (
+                    "No Transfermarkt market value data found locally. "
+                    "Run `python scripts/download_transfermarkt_kaggle.py` "
+                    "or place CSVs in data/raw/transfermarkt_manual/."
+                ),
+            },
+        }
+
+    df = df.dropna(subset=["market_value_eur"])
+    df = df[df["market_value_eur"] > 0]
+
+    if df.empty:
+        return {
+            "status": "no_data",
+            "source": source_meta,
+            "evidence": {"reason": "All rows have non-positive market_value_eur"},
+        }
+
+    # Latest snapshot per player for distribution + top players.
+    latest_per_player = df.sort_values("snapshot_date").drop_duplicates(
+        subset=["player_id"], keep="last"
+    )
+
+    bands = [
+        (0, 1_000_000, "<1m"),
+        (1_000_000, 5_000_000, "1m-5m"),
+        (5_000_000, 20_000_000, "5m-20m"),
+        (20_000_000, 50_000_000, "20m-50m"),
+        (50_000_000, float("inf"), ">=50m"),
+    ]
+    distribution: dict[str, int] = {}
+    for low, high, label in bands:
+        mask = (latest_per_player["market_value_eur"] >= low) & (
+            latest_per_player["market_value_eur"] < high
+        )
+        distribution[label] = int(mask.sum())
+
+    top = latest_per_player.nlargest(10, "market_value_eur")
+    top_records = []
+    for _, row in top.iterrows():
+        top_records.append(
+            {
+                "player_name": row.get("player_name") or None,
+                "player_id": row.get("player_id"),
+                "team_name": row.get("team_name") or None,
+                "position": row.get("position") or None,
+                "market_value_eur": float(row["market_value_eur"]),
+                "snapshot_date": (
+                    row["snapshot_date"].strftime("%Y-%m-%d")
+                    if pd.notna(row["snapshot_date"])
+                    else None
+                ),
+            }
+        )
+
+    latest_date = df["snapshot_date"].max()
+    earliest_date = df["snapshot_date"].min()
+
+    return _clean_json_value(
+        {
+            "status": "ok",
+            "source": source_meta,
+            "total_players": int(latest_per_player["player_id"].nunique()),
+            "total_snapshots": int(len(df)),
+            "latest_snapshot_date": (
+                latest_date.strftime("%Y-%m-%d") if pd.notna(latest_date) else None
+            ),
+            "earliest_snapshot_date": (
+                earliest_date.strftime("%Y-%m-%d") if pd.notna(earliest_date) else None
+            ),
+            "value_distribution_eur": distribution,
+            "top_players": top_records,
+        }
+    )
+
+
+def list_market_value_players(
+    *,
+    limit: int = 100,
+    offset: int = 0,
+    min_value_eur: float | None = None,
+    max_value_eur: float | None = None,
+    team: str | None = None,
+    position: str | None = None,
+    sort_by: str = "market_value_eur",
+    sort_order: str = "desc",
+) -> dict:
+    """List players with their latest market value (paginated).
+
+    Returns one row per player (the latest snapshot). Filters:
+    - ``min_value_eur`` / ``max_value_eur``: inclusive range
+    - ``team``: case-insensitive substring match on team_name
+    - ``position``: case-insensitive substring match on position
+    - ``sort_by``: ``"market_value_eur"`` (default) or ``"player_name"`` or
+      ``"snapshot_date"``
+    - ``sort_order``: ``"desc"`` (default) or ``"asc"``
+
+    ``limit`` is capped at 1000 to protect against unbounded payloads.
+    """
+    if limit < 1 or limit > 1000:
+        limit = max(1, min(1000, limit))
+    if offset < 0:
+        offset = 0
+
+    df, source_meta = _load_market_value_frame()
+    if df is None or df.empty:
+        return {
+            "status": "no_data",
+            "source": source_meta,
+            "count": 0,
+            "players": [],
+            "evidence": {"reason": "No Transfermarkt market value data found locally"},
+        }
+
+    df = df.dropna(subset=["market_value_eur"])
+    df = df[df["market_value_eur"] > 0]
+
+    if min_value_eur is not None:
+        df = df[df["market_value_eur"] >= float(min_value_eur)]
+    if max_value_eur is not None:
+        df = df[df["market_value_eur"] <= float(max_value_eur)]
+    if team:
+        team_lower = team.lower()
+        df = df[df["team_name"].fillna("").str.lower().str.contains(team_lower)]
+    if position:
+        pos_lower = position.lower()
+        df = df[df["position"].fillna("").str.lower().str.contains(pos_lower)]
+
+    if df.empty:
+        return _clean_json_value(
+            {
+                "status": "ok",
+                "source": source_meta,
+                "count": 0,
+                "players": [],
+                "filters_applied": {
+                    "min_value_eur": min_value_eur,
+                    "max_value_eur": max_value_eur,
+                    "team": team,
+                    "position": position,
+                },
+            }
+        )
+
+    # Latest snapshot per player.
+    latest = df.sort_values("snapshot_date").drop_duplicates(
+        subset=["player_id"], keep="last"
+    )
+
+    valid_sort_by = {"market_value_eur", "player_name", "snapshot_date"}
+    if sort_by not in valid_sort_by:
+        sort_by = "market_value_eur"
+    ascending = sort_order.lower() != "desc"
+    latest = latest.sort_values(by=sort_by, ascending=ascending, na_position="last")
+
+    total = len(latest)
+    page = latest.iloc[offset : offset + limit]
+
+    players = []
+    for _, row in page.iterrows():
+        players.append(
+            {
+                "player_id": row.get("player_id"),
+                "player_name": row.get("player_name") or None,
+                "team_name": row.get("team_name") or None,
+                "position": row.get("position") or None,
+                "market_value_eur": float(row["market_value_eur"]),
+                "snapshot_date": (
+                    row["snapshot_date"].strftime("%Y-%m-%d")
+                    if pd.notna(row["snapshot_date"])
+                    else None
+                ),
+            }
+        )
+
+    return _clean_json_value(
+        {
+            "status": "ok",
+            "source": source_meta,
+            "count": total,
+            "returned": len(players),
+            "offset": offset,
+            "limit": limit,
+            "players": players,
+            "filters_applied": {
+                "min_value_eur": min_value_eur,
+                "max_value_eur": max_value_eur,
+                "team": team,
+                "position": position,
+            },
+            "sort": {"by": sort_by, "order": sort_order},
+        }
+    )
+
+
+def get_player_market_value_history(player_name: str) -> dict:
+    """Return the full market value history for a single player.
+
+    ``player_name`` is matched case-insensitively against the
+    ``player_name`` column. When multiple players match (e.g. common
+    names), all matching histories are returned grouped by player_id so
+    the caller can disambiguate.
+    """
+    if not player_name or not player_name.strip():
+        return _make_error_response(
+            "invalid_player_name",
+            message="player_name must be a non-empty string",
+        )
+
+    df, source_meta = _load_market_value_frame()
+    if df is None or df.empty:
+        return {
+            "status": "no_data",
+            "source": source_meta,
+            "player_name": player_name,
+            "histories": [],
+            "evidence": {"reason": "No Transfermarkt market value data found locally"},
+        }
+
+    target = player_name.strip().lower()
+    matches = df[df["player_name"].fillna("").str.lower() == target]
+    if matches.empty:
+        # Fall back to substring match for friendlier UX.
+        matches = df[df["player_name"].fillna("").str.lower().str.contains(target)]
+
+    if matches.empty:
+        return _clean_json_value(
+            {
+                "status": "not_found",
+                "source": source_meta,
+                "player_name": player_name,
+                "histories": [],
+                "evidence": {
+                    "reason": (
+                        f"No market value records found for player '{player_name}'"
+                    ),
+                },
+            }
+        )
+
+    histories: list[dict[str, Any]] = []
+    for player_id, group in matches.groupby("player_id", sort=False):
+        group = group.sort_values("snapshot_date")
+        snapshots = []
+        for _, row in group.iterrows():
+            snapshots.append(
+                {
+                    "snapshot_date": (
+                        row["snapshot_date"].strftime("%Y-%m-%d")
+                        if pd.notna(row["snapshot_date"])
+                        else None
+                    ),
+                    "market_value_eur": float(row["market_value_eur"]),
+                    "team_name": row.get("team_name") or None,
+                }
+            )
+        first_row = group.iloc[0]
+        histories.append(
+            {
+                "player_id": player_id,
+                "player_name": first_row.get("player_name") or None,
+                "position": first_row.get("position") or None,
+                "team_name": first_row.get("team_name") or None,
+                "snapshot_count": int(len(snapshots)),
+                "first_snapshot_date": snapshots[0]["snapshot_date"] if snapshots else None,
+                "latest_snapshot_date": snapshots[-1]["snapshot_date"] if snapshots else None,
+                "latest_market_value_eur": (
+                    snapshots[-1]["market_value_eur"] if snapshots else None
+                ),
+                "snapshots": snapshots,
+            }
+        )
+
+    return _clean_json_value(
+        {
+            "status": "ok",
+            "source": source_meta,
+            "player_name": player_name,
+            "matched_players": len(histories),
+            "histories": histories,
+        }
+    )
 
 
 def get_player_ratings(
@@ -4689,7 +6292,12 @@ def get_player_ratings(
     """Return player ratings from DuckDB, sorted by optimized_score DESC."""
     df = load_player_ratings(position=position, league=league, team=team, season=season)
     if df.empty:
-        return {"count": 0, "players": []}
+        return {"count": 0, "players": [], "data_mode": "empty"}
+
+    # PRS-0 R-003: stamp synthetic fallback in the response so consumers
+    # cannot mistake demo data for a real rating artifact. The data is still
+    # served (so the UI does not break) but is clearly labeled.
+    synthetic = frame_is_synthetic(df)
 
     # Normalize confidence_level to uppercase for frontend
     if "confidence_level" in df.columns:
@@ -4704,7 +6312,14 @@ def get_player_ratings(
 
     players = df.to_dict(orient="records")
     # Convert NaN to None for JSON serialization
-    return _clean_json_value({"count": len(players), "players": players})
+    return _clean_json_value({
+        "count": len(players),
+        "players": players,
+        "data_mode": "synthetic" if synthetic else "artifact",
+        # PRS-1 R-006: stamp the evidence grain so season-proxy ratings
+        # cannot be mistaken for match-level evidence in the UI/exports.
+        "evidence_grain": _infer_evidence_grain(df),
+    })
 
 
 def get_ratings_meta() -> dict:
@@ -4750,7 +6365,11 @@ def get_team_strength(
     """
     df = load_player_ratings(league=league, season=season)
     if df.empty:
-        return {"count": 0, "teams": []}
+        return {"count": 0, "teams": [], "data_mode": "empty"}
+
+    # PRS-0 R-003: stamp synthetic fallback so consumers cannot mistake demo
+    # data for a real team-strength artifact.
+    synthetic = frame_is_synthetic(df)
 
     # Resolve column aliases
     team_col = "team" if "team" in df.columns else (
@@ -4862,7 +6481,11 @@ def get_team_strength(
     # Apply limit
     teams = teams[:limit]
 
-    return _clean_json_value({"count": len(teams), "teams": teams})
+    return _clean_json_value({
+        "count": len(teams),
+        "teams": teams,
+        "data_mode": "synthetic" if synthetic else "artifact",
+    })
 
 
 def get_team_comparison(team_a: str, team_b: str) -> dict:
@@ -4889,9 +6512,9 @@ def get_team_comparison(team_a: str, team_b: str) -> dict:
     b = _find(team_b)
 
     if not a:
-        return {"error": f"Team '{team_a}' not found"}
+        return _make_error_response(f"Team '{team_a}' not found")
     if not b:
-        return {"error": f"Team '{team_b}' not found"}
+        return _make_error_response(f"Team '{team_b}' not found")
 
     # Position group comparison
     pos_groups = ["GK", "DEF", "MID", "ATT"]
@@ -5000,6 +6623,7 @@ def get_prediction_summary() -> dict[str, Any]:
                 poisson_info = frame.iloc[0].to_dict()
                 poisson_info["status"] = "ok"
         except Exception:
+            logger.warning("get_prediction_summary: poisson read failed", exc_info=True)
             pass
 
     # Dixon-Coles artifact info
@@ -5019,6 +6643,7 @@ def get_prediction_summary() -> dict[str, Any]:
                 dc_info = dc_frame.iloc[0].to_dict()
                 dc_info["status"] = "ok"
         except Exception:
+            logger.warning("get_prediction_summary: DC read failed", exc_info=True)
             dc_info["status"] = "error"
 
     poisson_ready = poisson_info.get("status") == "ok"
@@ -5179,6 +6804,7 @@ def get_prediction_calibration(force_refresh: bool = False) -> dict[str, Any]:
                         })
 
         except Exception:
+            logger.warning("get_prediction_calibration: DC detail failed", exc_info=True)
             dc_metrics = {"status": "error"}
 
     # --- Poisson calibration (from existing results parquet) ---
@@ -5199,6 +6825,7 @@ def get_prediction_calibration(force_refresh: bool = False) -> dict[str, Any]:
                     "n_matches": _clean_json_value(row.get("n_matches")),
                 }
         except Exception:
+            logger.warning("get_prediction_calibration: poisson results failed", exc_info=True)
             poisson_metrics = {"status": "error"}
 
     result = _clean_json_value({
@@ -5256,6 +6883,7 @@ def get_backtest_comparison(force_refresh: bool = False) -> dict[str, Any]:
         try:
             data = _read_json(path)
         except Exception:
+            logger.warning("get_backtest_comparison: metric file read failed", exc_info=True)
             continue
         available = True
         overall = data.get("overall", {}) or {}
@@ -5305,6 +6933,7 @@ def get_backtest_comparison(force_refresh: bool = False) -> dict[str, Any]:
                 "n_matches": cal_data.get("n_matches"),
             }
         except Exception:
+            logger.warning("get_backtest_comparison: calibration data read failed", exc_info=True)
             pass
 
     if not available:
@@ -5418,9 +7047,9 @@ def get_decay_tuning(force_refresh: bool = False) -> dict[str, Any]:
                 "candidates": data.get("candidates", []),
             })
         except Exception as exc:
+            logger.warning("get_decay_tuning failed", exc_info=True)
             result = {
-                "status": "error",
-                "error": str(exc),
+                **_make_error_response(str(exc)),
                 "tuning_path": str(tuning_path).replace("\\", "/"),
             }
 
@@ -5466,6 +7095,7 @@ def get_action_value_summary(
         try:
             xt_df = _read_parquet(xt_path)
         except Exception:
+            logger.warning("get_action_value_summary: xT load failed", exc_info=True)
             pass
 
     # Load VAEP data
@@ -5474,6 +7104,7 @@ def get_action_value_summary(
         try:
             vaep_df = _read_parquet(vaep_path)
         except Exception:
+            logger.warning("get_action_value_summary: VAEP load failed", exc_info=True)
             pass
 
     matches_df = pd.DataFrame()
@@ -5481,6 +7112,7 @@ def get_action_value_summary(
         try:
             matches_df = _read_parquet(matches_path)
         except Exception:
+            logger.warning("get_action_value_summary: matches load failed", exc_info=True)
             pass
 
     if xt_df.empty and vaep_df.empty:
@@ -5592,6 +7224,7 @@ def get_action_value_player_context(player_id: str) -> dict[str, Any]:
         try:
             return _read_parquet(path)
         except Exception:
+            logger.warning("get_action_value_player_context: read failed", exc_info=True)
             return pd.DataFrame()
 
     xt = read("player_action_value.parquet")
@@ -5601,6 +7234,7 @@ def get_action_value_player_context(player_id: str) -> dict[str, Any]:
     try:
         matches = _read_parquet(matches_path) if matches_path.exists() else pd.DataFrame()
     except Exception:
+        logger.warning("get_action_value_player_context: matches load failed", exc_info=True)
         matches = pd.DataFrame()
     return _clean_json_value(
         build_player_action_value_context(
@@ -5625,14 +7259,17 @@ def get_action_value_rating_links(player_id: str) -> dict[str, Any]:
     try:
         xt = pd.read_parquet(xt_path) if xt_path.exists() else pd.DataFrame()
     except Exception:
+        logger.warning("get_action_value_rating_links: xT load failed", exc_info=True)
         xt = pd.DataFrame()
     try:
         matches = pd.read_parquet(matches_path) if matches_path.exists() else pd.DataFrame()
     except Exception:
+        logger.warning("get_action_value_rating_links: matches load failed", exc_info=True)
         matches = pd.DataFrame()
     try:
         ratings = load_player_ratings()
     except Exception:
+        logger.warning("get_action_value_rating_links: ratings load failed", exc_info=True)
         ratings = pd.DataFrame()
     return _clean_json_value(
         build_action_value_rating_links(player_id, attach_team_names(xt, matches), ratings)
@@ -5666,6 +7303,7 @@ def get_player_match_action_values(limit: int = 100, offset: int = 0) -> dict[st
         frame = _read_parquet(path)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except Exception as exc:
+        logger.warning("get_player_match_action_values failed", exc_info=True)
         return _clean_json_value(
             {"status": "error", "rows": [], "count": 0, "error": str(exc)}
         )
@@ -5704,6 +7342,7 @@ def get_artifacts_summary() -> dict:
 
             events_count = len(_read_parquet(events_path))
         except Exception:
+            logger.warning("get_artifacts_summary: events count failed", exc_info=True)
             events_count = 0
 
     # Data health flags. Demo fallback rows keep the UI usable, but must never
@@ -5725,6 +7364,7 @@ def get_artifacts_summary() -> dict:
             has_truth = len(truth_df) > 0
             truth_rows = len(truth_df)
         except Exception:
+            logger.warning("get_artifacts_summary: truth labels read failed", exc_info=True)
             pass
 
     # Player match coverage
@@ -5802,6 +7442,7 @@ def get_artifacts_summary() -> dict:
             "fbref": "FBref via soccerdata — personal research use only",
             "football_data": "Football-Data.co.uk — free for non-commercial use",
             "understat": "Understat — public data, attribution appreciated",
+            "clubelo": "ClubElo — public data, attribution appreciated",
             "transfermarkt": "Transfermarkt — manual import only, no automated scraping",
         },
     })
@@ -5827,7 +7468,7 @@ def get_truth_label_supervision() -> dict:
     try:
         labels = _read_parquet(path)
     except Exception as exc:
-        logger.warning("Unable to read truth labels for supervision report: %s", exc)
+        logger.warning("Unable to read truth labels for supervision report: %s", exc, exc_info=True)
         return {
             "schema": "scoutfootball.truth-label-supervision",
             "version": "1.0.0",
@@ -6049,6 +7690,29 @@ def _model_run_lineage(meta: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _model_run_admission(
+    run_dir: Path, settings: PlatformSettings | None = None
+) -> dict[str, Any]:
+    """Expose a compact, read-only admission summary for one local run.
+
+    Forwards *settings* to evaluate_optimizer_run so the recorded_lineage
+    chain-of-custody check compares meta.json.lineage.feature_manifest.hash
+    against the current on-disk rating_feature_matrix_manifest.json. When
+    *settings* is None the function falls back to PlatformSettings.from_root
+    so the API endpoints behave consistently with the CLI model-admission.
+    """
+    from scoutfootball.evaluation.model_admission import evaluate_optimizer_run
+
+    resolved = settings if settings is not None else _settings()
+    report = evaluate_optimizer_run(run_dir, settings=resolved)
+    return {
+        "status": report["status"],
+        "failed_checks": report.get("failed_checks", []),
+        "comparison": report.get("comparison"),
+        "limitations": report.get("limitations", []),
+    }
+
+
 def get_model_runs() -> dict:
     """Return model run registry from local artifacts."""
     settings = _settings()
@@ -6066,6 +7730,7 @@ def get_model_runs() -> dict:
                 meta["updated_at"] = meta_path.stat().st_mtime
                 meta["data_source"] = ds_label
                 meta["lineage"] = _model_run_lineage(meta)
+                meta["admission"] = _model_run_admission(run_dir, settings=settings)
                 # Build reproduce command from stored args
                 run_args = meta.get("args", {})
                 meta["reproduce_command"] = _build_reproduce_command(
@@ -6084,6 +7749,14 @@ def get_model_runs() -> dict:
             meta["updated_at"] = meta_path.stat().st_mtime
             meta["data_source"] = ds_label
             meta["lineage"] = _model_run_lineage(meta)
+            meta["admission"] = {
+                "status": "not_available",
+                "failed_checks": ["run_directory"],
+                "comparison": None,
+                "limitations": [
+                    "The fallback parameter metadata has no model-run directory to review."
+                ],
+            }
             run_args = meta.get("args", {})
             meta["reproduce_command"] = _build_reproduce_command("latest", run_args)
             _enrich_holdout_summary(meta)
@@ -6121,6 +7794,7 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
             meta["updated_at"] = meta_path.stat().st_mtime
             meta["data_source"] = ds_label
             meta["lineage"] = _model_run_lineage(meta)
+            meta["admission"] = _model_run_admission(run_dir, settings=settings)
 
             # Build reproduce command from stored args
             run_args = meta.get("args", {})
@@ -6139,6 +7813,9 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
                         fi_df.to_dict(orient="records"),
                     )
                 except Exception:
+                    logger.warning(
+                        "get_model_run_detail: feature importance read failed", exc_info=True
+                    )
                     meta["feature_importance"] = []
 
             # Load optimized params info
@@ -6155,6 +7832,9 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
                         "max": round(float(params.max()), 6),
                     }
                 except Exception:
+                    logger.warning(
+                        "get_model_run_detail: optimized params load failed", exc_info=True
+                    )
                     pass
 
             # Data source attribution
@@ -6192,11 +7872,15 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
         }
         return _clean_json_value(meta)
 
-    return {"error": f"Run '{run_id}' not found", "available_runs": _get_run_ids()}
+    return {**_make_error_response(f"Run '{run_id}' not found"), "available_runs": _get_run_ids()}
 
 
 def _player_list_to_csv(player_list: list[dict]) -> str:
-    """Convert a list of player dicts to CSV text."""
+    """Convert a list of player dicts to CSV text.
+
+    All cells are sanitized through :func:`sanitize_csv_row` to guard
+    against spreadsheet formula injection (AGENTS.md requirement).
+    """
     import csv
     import io
 
@@ -6204,10 +7888,10 @@ def _player_list_to_csv(player_list: list[dict]) -> str:
         return ""
     buf = io.StringIO()
     fieldnames = list(player_list[0].keys())
-    writer = csv.DictWriter(buf, fieldnames=fieldnames)
-    writer.writeheader()
+    writer = csv.writer(buf)
+    writer.writerow(sanitize_csv_row(fieldnames))
     for row in player_list:
-        writer.writerow(row)
+        writer.writerow(sanitize_csv_row(row.get(f, "") for f in fieldnames))
     return buf.getvalue()
 
 
@@ -6433,6 +8117,21 @@ def get_player_profile(
 
     df = load_player_ratings()
 
+    # PRS-0 R-003: refuse to export synthetic fallback as real research CSV.
+    # Check at the top so the maintainer gets an immediate, clear error
+    # instead of waiting for the full profile build to fail or — worse —
+    # silently exporting demo data as a real artifact. The JSON path still
+    # serves synthetic data (clearly labeled) so the UI does not break.
+    if fmt == "csv" and frame_is_synthetic(df):
+        return _make_error_response(
+            "synthetic_data_refused",
+            message=(
+                "Cannot export CSV: player ratings are synthetic fallback, "
+                "not a real artifact. Run `scoutfootball build-features` "
+                "and `scoutfootball train` to produce real ratings."
+            ),
+        )
+
     # Alias sub_position → position_group for frontend compatibility
     if "sub_position" in df.columns and "position_group" not in df.columns:
         df["position_group"] = df["sub_position"]
@@ -6480,6 +8179,10 @@ def get_player_profile(
             "offset": offset,
             "limit": limit,
             "players": player_list,
+            "data_mode": "synthetic" if frame_is_synthetic(df) else "artifact",
+            # PRS-1 R-006: stamp the evidence grain so season-proxy ratings
+            # cannot be mistaken for match-level evidence in the UI/exports.
+            "evidence_grain": _infer_evidence_grain(df),
         })
 
     if rows.empty:
@@ -6568,6 +8271,7 @@ def get_player_profile(
                     "coverage_note": "StatsBomb Open Data sample only",
                 }
     except Exception:
+        logger.warning("get_player_profile: xT integration failed", exc_info=True)
         xt_summary = {"available": False, "reason": "xT data not available for this player"}
 
     # Confidence reason explanation
@@ -6620,6 +8324,10 @@ def get_player_profile(
         "position_percentiles": _compute_position_percentiles(row, pos_pool),
         "low_confidence_reasons": _compute_low_confidence_reasons(row),
         "trend_3seasons": _compute_3season_trend(rows),
+        "data_mode": "synthetic" if frame_is_synthetic(df) else "artifact",
+        # PRS-1 R-006: stamp the evidence grain so season-proxy ratings
+        # cannot be mistaken for match-level evidence in the UI/exports.
+        "evidence_grain": _infer_evidence_grain(df),
     })
 
     # Embed career intelligence blocks. Each block is wrapped in a
@@ -6631,6 +8339,7 @@ def get_player_profile(
             compute_career_trajectory(rows)
         )
     except Exception as exc:  # noqa: BLE001
+        logger.warning("get_player_profile: career_trajectory failed", exc_info=True)
         result["career_trajectory"] = {
             "available": False,
             "error": str(exc),
@@ -6642,6 +8351,7 @@ def get_player_profile(
             compute_role_fit_scores(row, df)
         )
     except Exception as exc:  # noqa: BLE001
+        logger.warning("get_player_profile: role_fit failed", exc_info=True)
         result["role_fit"] = {"available": False, "error": str(exc)}
 
     try:
@@ -6650,6 +8360,7 @@ def get_player_profile(
             compute_peer_benchmark(row, df)
         )
     except Exception as exc:  # noqa: BLE001
+        logger.warning("get_player_profile: peer_benchmark failed", exc_info=True)
         result["peer_benchmark"] = {"available": False, "error": str(exc)}
 
     # CSV export
@@ -6673,9 +8384,9 @@ def get_player_comparison(player_a: str, player_b: str) -> dict:
     profile_b = get_player_profile(player_b)
 
     if not profile_a.get("found"):
-        return {"error": f"Player '{player_a}' not found", "found_a": False}
+        return {**_make_error_response(f"Player '{player_a}' not found"), "found_a": False}
     if not profile_b.get("found"):
-        return {"error": f"Player '{player_b}' not found", "found_b": False}
+        return {**_make_error_response(f"Player '{player_b}' not found"), "found_b": False}
 
     # Build radar comparison
     radar_a = profile_a.get("radar", [0, 0, 0, 0, 0])
@@ -6778,6 +8489,14 @@ def get_player_comparison(player_a: str, player_b: str) -> dict:
         "stats_comparison": stats_comparison,
         "same_position": (
             profile_a.get("position_group", "") == profile_b.get("position_group", "")
+        ),
+        # PRS-0 R-003: propagate synthetic flag from underlying profiles so
+        # consumers cannot mistake a demo-data comparison for a real one.
+        "data_mode": (
+            "synthetic"
+            if profile_a.get("data_mode") == "synthetic"
+            or profile_b.get("data_mode") == "synthetic"
+            else "artifact"
         ),
     })
 
@@ -7159,7 +8878,7 @@ def get_player_comparison_multi(
     player_names: list[str],
     season: str | None = None,
 ) -> dict:
-    """Compare 2–5 players side-by-side with a percentile matrix.
+    """Compare 2–6 players side-by-side with a percentile matrix.
 
     Wraps :func:`scoutfootball.player_intel.compute_multi_player_comparison`.
     Each player is resolved to its best season row (highest score), or to
@@ -7169,22 +8888,26 @@ def get_player_comparison_multi(
 
     if not isinstance(player_names, list) or len(player_names) < 2:
         return {
-            "error": "need_at_least_two_players",
+            **_make_error_response("need_at_least_two_players"),
             "n_players": len(player_names) if isinstance(player_names, list) else 0,
             "min_required": 2,
         }
-    if len(player_names) > 5:
+    if len(player_names) > 6:
         return {
-            "error": "too_many_players",
+            **_make_error_response("too_many_players"),
             "n_players": len(player_names),
-            "max_allowed": 5,
+            "max_allowed": 6,
         }
 
     df = load_player_ratings()
     if df.empty:
-        return {"error": "no_data"}
+        return _make_error_response("no_data", message="No data available")
     if "sub_position" in df.columns and "position_group" not in df.columns:
         df["position_group"] = df["sub_position"]
+
+    # PRS-0 R-003: stamp synthetic fallback so consumers cannot mistake
+    # demo data for a real multi-player comparison.
+    synthetic = frame_is_synthetic(df)
 
     rows_by_name: dict[str, Any] = {}
     missing: list[str] = []
@@ -7209,12 +8932,13 @@ def get_player_comparison_multi(
 
     if missing:
         return {
-            "error": "player_not_found",
+            **_make_error_response("player_not_found"),
             "missing": missing,
             "resolved": list(rows_by_name.keys()),
         }
 
     result = compute_multi_player_comparison(rows_by_name, df)
+    result["data_mode"] = "synthetic" if synthetic else "artifact"
     return _clean_json_value(result)
 
 
@@ -8052,6 +9776,342 @@ def get_cross_league_action_comparison(
     return _clean_json_value(result)
 
 
+def get_cross_league_team_depth(
+    team_a: str,
+    team_b: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Compare two teams' per-position depth profiles side-by-side.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_cross_league_team_depth`.
+    Descriptive overlay — does not predict match outcomes or recommend
+    transfers. The advantage flag uses a 0.5-point mean-score threshold.
+    """
+    from scoutfootball.features.team_style import (
+        compute_cross_league_team_depth,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "team_a": team_a,
+            "team_b": team_b,
+            "season": season,
+        }
+    result = compute_cross_league_team_depth(
+        df,
+        team_a,
+        team_b,
+        season=season,
+        min_player_minutes=min_player_minutes,
+    )
+    return _clean_json_value(result)
+
+
+def get_scouting_targets(
+    team: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+    top_n: int = 10,
+    exclude_same_league: bool = True,
+) -> dict:
+    """Find players from other leagues who could fill a team's position gaps.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_scouting_targets`.
+    Descriptive overlay — NOT a transfer recommendation. Candidates are
+    filtered by minutes, score threshold, and top-quartile (p75) rank in
+    their own league at the gap position.
+    """
+    from scoutfootball.features.team_style import (
+        compute_scouting_targets,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {"status": "no_data", "team": team, "season": season}
+    result = compute_scouting_targets(
+        df,
+        team,
+        season=season,
+        min_player_minutes=min_player_minutes,
+        top_n=top_n,
+        exclude_same_league=exclude_same_league,
+    )
+    return _clean_json_value(result)
+
+
+def get_scouting_target_style_match(
+    team: str,
+    position_group: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+    top_n: int = 10,
+    exclude_same_league: bool = True,
+    use_position_weights: bool = False,
+) -> dict:
+    """Find players from other leagues with similar style to a team's top player.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_scouting_target_style_match`.
+    Builds a 4-dim style vector for the team's highest-scored player at
+    ``position_group`` and finds the most similar players in other leagues
+    by cosine similarity. Descriptive overlay — NOT a transfer recommendation.
+
+    When ``use_position_weights=True``, the 4 style dimensions are weighted
+    per position (e.g. defense_composite emphasized for CB, npg_p90 for ST)
+    before cosine similarity is computed. Weights are sourced from
+    ``_POSITION_STYLE_WEIGHTS`` in ``features/team_style.py``.
+    """
+    from scoutfootball.features.team_style import (
+        compute_scouting_target_style_match,
+    )
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "team": team,
+            "position_group": position_group,
+            "season": season,
+        }
+    result = compute_scouting_target_style_match(
+        df,
+        team,
+        position_group,
+        season=season,
+        min_player_minutes=min_player_minutes,
+        top_n=top_n,
+        exclude_same_league=exclude_same_league,
+        use_position_weights=use_position_weights,
+    )
+    return _clean_json_value(result)
+
+
+def get_scouting_dashboard(
+    team: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+    top_n: int = 10,
+    exclude_same_league: bool = True,
+    max_positions: int = 3,
+    use_position_weights: bool = False,
+) -> dict:
+    """Aggregate scouting dashboard: gap targets + multi-position style match.
+
+    Wraps :func:`scoutfootball.features.team_style.compute_scouting_dashboard`.
+    Returns a single report card combining:
+
+    * ``gap_targets`` — top N position gaps for ``team`` (reuses
+      :func:`compute_scouting_targets`), each with cross-league candidates.
+    * ``position_style_matches`` — for each of the top ``max_positions`` gap
+      positions, a style-match list of cross-league players similar to the
+      team's current starter at that position.
+
+    When ``use_position_weights=True``, the per-position weights from
+    ``_POSITION_STYLE_WEIGHTS`` are applied to both target and candidate
+    style vectors before cosine similarity.
+
+    Descriptive overlay — NOT a transfer recommendation.
+    """
+    from scoutfootball.features.team_style import compute_scouting_dashboard
+
+    df = load_player_ratings()
+    if df.empty:
+        return {
+            "status": "no_data",
+            "team": team,
+            "season": season,
+        }
+    result = compute_scouting_dashboard(
+        df,
+        team,
+        season=season,
+        min_player_minutes=min_player_minutes,
+        top_n=top_n,
+        exclude_same_league=exclude_same_league,
+        max_positions=max_positions,
+        use_position_weights=use_position_weights,
+    )
+    return _clean_json_value(result)
+
+
+# ── League season projection & form analysis ──────────────────────────────
+
+
+def get_league_form_table(
+    league: str | None = None,
+    season: str | None = None,
+    last_n: int = 6,
+) -> dict:
+    """Last-N form table for every team in a league-season.
+
+    Wraps :func:`scoutfootball.features.season_projection.compute_league_form_table`
+    using Football-Data ``combined_results.parquet``. Descriptive overlay —
+    does not use the Dixon-Coles model or rating matrix.
+    """
+    from scoutfootball.features.season_projection import (
+        compute_league_form_table,
+    )
+
+    if not season:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "last_n": last_n,
+            "teams": [],
+            "disclaimer": "Season parameter is required.",
+        }
+    try:
+        df = _load_match_results()
+        if df.empty:
+            return {
+                "status": "no_data",
+                "league": league,
+                "season": season,
+                "last_n": last_n,
+                "teams": [],
+                "disclaimer": "Match results data unavailable.",
+            }
+        result = compute_league_form_table(
+            df, league=league, season=season, last_n=last_n
+        )
+        return _clean_json_value(result)
+    except Exception as exc:
+        logger.warning("get_league_form_table failed: %s", exc, exc_info=True)
+        return {
+            **_make_error_response(str(exc)),
+            "league": league,
+            "season": season,
+            "last_n": last_n,
+            "teams": [],
+        }
+
+
+def get_fixture_difficulty(
+    league: str | None = None,
+    season: str | None = None,
+    team: str | None = None,
+    upcoming_n: int = 10,
+) -> dict:
+    """Fixture difficulty rating for each team's most recent N matches.
+
+    Wraps :func:`scoutfootball.features.season_projection.compute_fixture_difficulty`
+    using Football-Data ``combined_results.parquet``. Descriptive overlay —
+    uses a Bradley-Terry strength estimate from in-season PPG, not the
+    Dixon-Coles model.
+    """
+    from scoutfootball.features.season_projection import (
+        compute_fixture_difficulty,
+    )
+
+    if not season:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "team": team,
+            "upcoming_n": upcoming_n,
+            "teams": [],
+            "disclaimer": "Season parameter is required.",
+        }
+    try:
+        df = _load_match_results()
+        if df.empty:
+            return {
+                "status": "no_data",
+                "league": league,
+                "season": season,
+                "team": team,
+                "upcoming_n": upcoming_n,
+                "teams": [],
+                "disclaimer": "Match results data unavailable.",
+            }
+        result = compute_fixture_difficulty(
+            df,
+            league=league,
+            season=season,
+            team=team,
+            upcoming_n=upcoming_n,
+        )
+        return _clean_json_value(result)
+    except Exception as exc:
+        logger.warning("get_fixture_difficulty failed: %s", exc, exc_info=True)
+        return {
+            **_make_error_response(str(exc)),
+            "league": league,
+            "season": season,
+            "team": team,
+            "upcoming_n": upcoming_n,
+            "teams": [],
+        }
+
+
+def get_season_projection(
+    league: str | None = None,
+    season: str | None = None,
+    num_simulations: int = 1000,
+    random_seed: int = 42,
+    top_n: int = 4,
+    relegation_slots: int = 3,
+) -> dict:
+    """Monte Carlo projection of final league standings.
+
+    Wraps :func:`scoutfootball.features.season_projection.compute_season_projection`
+    using Football-Data ``combined_results.parquet``. Descriptive overlay —
+    uses a Bradley-Terry strength estimate from in-season PPG and a
+    reproducible random seed, not the Dixon-Coles model.
+    """
+    from scoutfootball.features.season_projection import (
+        compute_season_projection,
+    )
+
+    if not season:
+        return {
+            "status": "no_data",
+            "league": league,
+            "season": season,
+            "num_simulations": num_simulations,
+            "teams": [],
+            "disclaimer": "Season parameter is required.",
+        }
+    try:
+        df = _load_match_results()
+        if df.empty:
+            return {
+                "status": "no_data",
+                "league": league,
+                "season": season,
+                "num_simulations": num_simulations,
+                "teams": [],
+                "disclaimer": "Match results data unavailable.",
+            }
+        result = compute_season_projection(
+            df,
+            league=league,
+            season=season,
+            num_simulations=num_simulations,
+            random_seed=random_seed,
+            top_n=top_n,
+            relegation_slots=relegation_slots,
+        )
+        return _clean_json_value(result)
+    except Exception as exc:
+        logger.warning("get_season_projection failed: %s", exc, exc_info=True)
+        return {
+            **_make_error_response(str(exc)),
+            "league": league,
+            "season": season,
+            "num_simulations": num_simulations,
+            "teams": [],
+        }
+
+
 # ── World Cup endpoints ──────────────────────────────────────────────────
 
 
@@ -8084,6 +10144,27 @@ def get_wc_groups() -> dict:
             "teams": group_teams,
         })
 
+    # Core DataContracts: groups combine expected_callup (squad lists) +
+    # rating_coverage (per-player rating join) + model_probability (strength).
+    from scoutfootball.worldcup.contracts import (
+        build_expected_callups_contract,
+        build_model_probability_contract,
+        build_rating_coverage_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+    from scoutfootball.worldcup.data import count_expected_callups
+
+    expected_contract = build_expected_callups_contract(
+        record_count=count_expected_callups()
+    )
+    total_rated = sum(
+        1 for s in enriched.values() for p in s if p.has_rating
+    )
+    rating_contract = build_rating_coverage_contract(record_count=total_rated)
+    model_contract = build_model_probability_contract(
+        record_count=len(strengths)
+    )
     return _clean_json_value({
         "status": "ok",
         "source_attribution": (
@@ -8095,6 +10176,16 @@ def get_wc_groups() -> dict:
             "not national team matches. Non-Big5 league players "
             "may lack rating data."
         ),
+        "contracts": [
+            contract_to_dict(expected_contract),
+            contract_to_dict(rating_contract),
+            contract_to_dict(model_contract),
+        ],
+        "fact_types": [
+            fact_type_for_artifact(expected_contract.artifact_id).value,
+            fact_type_for_artifact(rating_contract.artifact_id).value,
+            fact_type_for_artifact(model_contract.artifact_id).value,
+        ],
         "groups": groups_data,
     })
 
@@ -8124,6 +10215,16 @@ def get_wc_schedule(
             "stage": m.stage,
         })
 
+    # Core DataContract: the full 72-match schedule is the artifact; group
+    # and matchday filters are view-level, so the contract always reports
+    # the full-schedule record count.
+    from scoutfootball.worldcup.contracts import (
+        build_schedule_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+
+    schedule_contract = build_schedule_contract(record_count=len(matches))
     return _clean_json_value({
         "status": "ok",
         "count": len(match_dicts),
@@ -8131,6 +10232,8 @@ def get_wc_schedule(
             "Schedule generated from official FIFA fixture pattern; "
             "dates/venues are approximate"
         ),
+        "contracts": [contract_to_dict(schedule_contract)],
+        "fact_types": [fact_type_for_artifact(schedule_contract.artifact_id).value],
         "matches": match_dicts,
     })
 
@@ -8163,6 +10266,29 @@ def get_wc_squad(team: str) -> dict:
     # Sort: rated players first, then by rating desc
     players.sort(key=lambda p: (not p["has_rating"], -(p["rating"] or 0)))
 
+    # Core DataContracts: the squad payload combines expected_callup
+    # (static SQUADS table) with rating_coverage (per-player rating join).
+    # The contract record counts cover all 48 teams so consumers can
+    # verify the artifact identity regardless of which team they inspect.
+    from scoutfootball.worldcup.contracts import (
+        build_expected_callups_contract,
+        build_rating_coverage_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+    from scoutfootball.worldcup.data import count_expected_callups
+
+    expected_contract = build_expected_callups_contract(
+        record_count=count_expected_callups()
+    )
+    # rating_coverage record_count uses the global rated-player count
+    # across all 48 teams, not just this team, so the artifact identity
+    # is stable across per-team views.
+    all_enriched = enriched
+    total_rated = sum(
+        1 for s in all_enriched.values() for p in s if p.has_rating
+    )
+    rating_contract = build_rating_coverage_contract(record_count=total_rated)
     return _clean_json_value({
         "status": "ok",
         "team": team,
@@ -8182,7 +10308,127 @@ def get_wc_squad(team: str) -> dict:
             "squads not yet announced. Ratings from domestic league "
             "performance only."
         ),
+        "contracts": [
+            contract_to_dict(expected_contract),
+            contract_to_dict(rating_contract),
+        ],
+        "fact_types": [
+            fact_type_for_artifact(expected_contract.artifact_id).value,
+            fact_type_for_artifact(rating_contract.artifact_id).value,
+        ],
         "players": players,
+    })
+
+
+def get_wc_squad_scouting_needs(
+    team: str,
+    season: str | None = None,
+    *,
+    min_player_minutes: float = 500.0,
+) -> dict:
+    """Per-player scouting-need overlay for a World Cup squad.
+
+    For each unique club team appearing in the squad, runs
+    :func:`compute_position_gap_report` and aggregates the gaps by
+    ``position_group``. Each squad player is then annotated with a
+    ``scouting_need`` object describing the gap (if any) at their position
+    within their club team's roster, plus a link target for the scouting
+    dashboard.
+
+    Descriptive overlay — does not recommend transfers. Players whose club
+    team is not present in the rating matrix get ``scouting_need: null`` and
+    ``club_gap_status: "team_not_found"`` rather than a fabricated gap.
+    """
+    from scoutfootball.features.team_style import (
+        compute_position_gap_report,
+    )
+
+    enriched, _ = _get_wc_enriched_squads()
+    squad = enriched.get(team, get_squad(team))
+
+    df = load_player_ratings()
+    if df.empty:
+        return _clean_json_value({
+            "status": "no_data",
+            "team": team,
+            "club_gaps": {},
+            "players": [],
+            "disclaimer": (
+                "Rating matrix unavailable; scouting-need overlay cannot "
+                "be computed."
+            ),
+        })
+
+    # Build a map of club_team -> {position_group -> gap dict} so each
+    # player can be annotated in O(1) without re-running the report.
+    club_gaps: dict[str, dict] = {}
+    for p in squad:
+        club = p.club
+        if not club or club in club_gaps:
+            continue
+        try:
+            result = compute_position_gap_report(
+                df,
+                club,
+                season=season,
+                min_player_minutes=min_player_minutes,
+            )
+        except Exception:  # noqa: BLE001 — defensive on user-facing path
+            logger.warning(
+                "compute_position_gap_report failed for club %r", club, exc_info=True
+            )
+            result = {"status": "error", "gaps": []}
+        gaps_by_pos: dict[str, dict] = {}
+        if result.get("status") == "ok":
+            for g in result.get("gaps", []) or []:
+                pos = g.get("position_group")
+                if pos:
+                    gaps_by_pos[pos] = g
+        club_gaps[club] = {
+            "status": result.get("status", "error"),
+            "league": result.get("league"),
+            "n_gaps": result.get("n_gaps", 0),
+            "gaps_by_position": gaps_by_pos,
+        }
+
+    players = []
+    for p in squad:
+        club = p.club
+        club_entry = club_gaps.get(club) if club else None
+        gap = None
+        if club_entry and club_entry.get("status") == "ok":
+            gap = club_entry.get("gaps_by_position", {}).get(p.position)
+        players.append({
+            "name": p.name,
+            "position": p.position,
+            "club": p.club,
+            "club_league": p.club_league,
+            "has_rating": p.has_rating,
+            "rating": round(p.rating, 2) if p.rating is not None else None,
+            "rating_confidence": p.rating_confidence,
+            "club_gap_status": club_entry.get("status") if club_entry else "team_not_found",
+            "scouting_need": gap,
+        })
+
+    return _clean_json_value({
+        "status": "ok",
+        "team": team,
+        "group": get_team_group(team),
+        "is_host": team in HOSTS,
+        "season": season,
+        "club_gaps": club_gaps,
+        "players": players,
+        "source_attribution": (
+            "Gap reports derived from FBref/Understat rating matrix via "
+            "ScoutFootball optimizer; club names matched against the "
+            "rating matrix's `team` column."
+        ),
+        "disclaimer": (
+            "Scouting-need pills reflect the player's club team depth at "
+            "their listed position; they are descriptive overlays and do "
+            "not constitute transfer recommendations. Players at non-Big5 "
+            "clubs may have no rating-matrix coverage and show no pill."
+        ),
     })
 
 
@@ -8191,10 +10437,9 @@ def get_wc_squad_balance_comparison(team_a: str, team_b: str) -> dict:
     enriched_squads, _ = _get_wc_enriched_squads()
     missing = [team for team in (team_a, team_b) if team not in enriched_squads]
     if missing:
-        return {
-            "status": "error",
-            "error": f"Team(s) not found in World Cup data: {', '.join(missing)}",
-        }
+        return _make_error_response(
+            f"Team(s) not found in World Cup data: {', '.join(missing)}"
+        )
 
     team_a_balance = compute_squad_balance(enriched_squads[team_a])
     team_b_balance = compute_squad_balance(enriched_squads[team_b])
@@ -8266,6 +10511,16 @@ def get_wc_predictions() -> dict:
             third_place.append(third)
     third_place.sort(key=lambda x: x["strength"], reverse=True)
 
+    # Core DataContract: model_probability (Bradley-Terry + Opta priors).
+    from scoutfootball.worldcup.contracts import (
+        build_model_probability_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+
+    model_contract = build_model_probability_contract(
+        record_count=len(strengths)
+    )
     return _clean_json_value({
         "status": "ok",
         "source_attribution": (
@@ -8277,6 +10532,8 @@ def get_wc_predictions() -> dict:
             "strength-ratio model. Non-Big5 league team strengths "
             "may be underestimated. Not a real match prediction."
         ),
+        "contracts": [contract_to_dict(model_contract)],
+        "fact_types": [fact_type_for_artifact(model_contract.artifact_id).value],
         "groups": group_preds,
         "ranking": ranking,
         "best_third_place": third_place[:8],
@@ -8292,10 +10549,26 @@ def get_wc_knockout() -> dict:
     """
     enriched_squads, strengths = _get_wc_enriched_squads()
     if not enriched_squads:
-        return {"status": "error", "error": "World Cup squad data not available"}
+        return _make_error_response("World Cup squad data not available")
 
     group_preds = compute_group_predictions(strengths)
     bracket = _simulate_knockout(strengths, group_preds, num_simulations=10000)
+
+    # Core DataContract: model_probability (Monte Carlo knockout sim).
+    from scoutfootball.worldcup.contracts import (
+        build_model_probability_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+
+    model_contract = build_model_probability_contract(
+        record_count=len(strengths)
+    )
+    if isinstance(bracket, dict):
+        bracket["contracts"] = [contract_to_dict(model_contract)]
+        bracket["fact_types"] = [
+            fact_type_for_artifact(model_contract.artifact_id).value
+        ]
     return _clean_json_value(bracket)
 
 
@@ -8307,9 +10580,9 @@ def get_wc_team_outlook(team: str) -> dict:
     """
     enriched_squads, strengths = _get_wc_enriched_squads()
     if not enriched_squads:
-        return {"status": "error", "error": "World Cup squad data not available"}
+        return _make_error_response("World Cup squad data not available")
     if team not in strengths:
-        return {"status": "error", "error": f"Team '{team}' not found in World Cup data"}
+        return _make_error_response(f"Team '{team}' not found in World Cup data")
 
     strength_details = _get_wc_strength_details()
     group_preds = compute_group_predictions(strengths)
@@ -8361,6 +10634,27 @@ def get_wc_teams() -> dict:
                 "big5_score": details.get("big5_score"),
             })
 
+    # Core DataContracts: teams payload combines expected_callup +
+    # rating_coverage + model_probability (strength).
+    from scoutfootball.worldcup.contracts import (
+        build_expected_callups_contract,
+        build_model_probability_contract,
+        build_rating_coverage_contract,
+        contract_to_dict,
+        fact_type_for_artifact,
+    )
+    from scoutfootball.worldcup.data import count_expected_callups
+
+    expected_contract = build_expected_callups_contract(
+        record_count=count_expected_callups()
+    )
+    total_rated = sum(
+        1 for s in enriched.values() for p in s if p.has_rating
+    )
+    rating_contract = build_rating_coverage_contract(record_count=total_rated)
+    model_contract = build_model_probability_contract(
+        record_count=len(strengths)
+    )
     return _clean_json_value({
         "status": "ok",
         "count": len(teams_data),
@@ -8373,6 +10667,16 @@ def get_wc_teams() -> dict:
             "not national team matches. Non-Big5 league players "
             "may lack rating data."
         ),
+        "contracts": [
+            contract_to_dict(expected_contract),
+            contract_to_dict(rating_contract),
+            contract_to_dict(model_contract),
+        ],
+        "fact_types": [
+            fact_type_for_artifact(expected_contract.artifact_id).value,
+            fact_type_for_artifact(rating_contract.artifact_id).value,
+            fact_type_for_artifact(model_contract.artifact_id).value,
+        ],
         "teams": teams_data,
     })
 
@@ -8390,12 +10694,2229 @@ def _wc_tournament_state():
 
 def get_wc_tournament_summary() -> dict:
     """Return a comprehensive summary of the current tournament state."""
-    from scoutfootball.worldcup.tournament import tournament_summary
+    from scoutfootball.worldcup.tournament import (
+        get_tournament_state_contract,
+        tournament_summary,
+    )
 
     state = _wc_tournament_state()
     summary = tournament_summary(state)
     summary["status"] = "ok"
+    # Core DataContract: tournament_state (maintainer-recorded results).
+    summary["contracts"] = [get_tournament_state_contract(state)]
+    summary["fact_types"] = ["expected_callup"]
     return _clean_json_value(summary)
+
+
+def get_wc_contracts() -> dict:
+    """Return the full Core DataContract registry for the World Cup pack.
+
+    Enumerates every World Cup artifact (schedule, expected_callups,
+    rating_coverage, model_probability, tournament_state, plus the
+    official_roster and injury_report stubs) so consumers can audit
+    the full provenance graph in one request.  Counts are derived from
+    live state so the registry is reproducible at any time.
+    """
+    from scoutfootball.worldcup.contracts import (
+        build_worldcup_contract_registry,
+        contracts_to_dict,
+        fact_type_for_artifact,
+    )
+    from scoutfootball.worldcup.data import count_expected_callups
+
+    enriched, strengths = _get_wc_enriched_squads()
+    total_rated = sum(
+        1 for s in enriched.values() for p in s if p.has_rating
+    )
+    state = _wc_tournament_state()
+    knockout_matches = state.knockout.get("matches", []) if state.knockout else []
+    completed_knockout = sum(
+        1 for m in knockout_matches if m.get("status") == "completed"
+    )
+    tournament_state_result_count = len(state.results) + completed_knockout
+
+    registry = build_worldcup_contract_registry(
+        schedule_match_count=72,
+        expected_callups_player_count=count_expected_callups(),
+        rating_coverage_player_count=total_rated,
+        model_probability_team_count=len(strengths),
+        tournament_state_result_count=tournament_state_result_count,
+        include_stubs=True,
+    )
+    contracts = contracts_to_dict(registry)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.world-cup-contract-registry",
+        "version": "1.0.0",
+        "count": len(contracts),
+        "contracts": contracts,
+        "fact_types": [
+            fact_type_for_artifact(c["artifact_id"]).value for c in contracts
+        ],
+        "disclaimer": (
+            "Registry enumerates all World Cup artifacts reusing the Core "
+            "DataContract type.  Stubs (official_roster, injury_report) are "
+            "included so consumers can see what is intentionally absent."
+        ),
+    })
+
+
+# ── Recruitment Pack API ─────────────────────────────────────────────────
+
+
+def _brief_store():
+    """Build a BriefStore rooted at the platform report_root/recruitment/briefs."""
+    from scoutfootball.recruitment.store import BriefStore
+
+    return BriefStore(_settings().report_root / "recruitment" / "briefs")
+
+
+def get_recruitment_contracts() -> dict:
+    """Return the Core DataContract registry for the Recruitment pack.
+
+    Enumerates recruitment artifacts (briefs, role profiles, decision
+    dossiers) that currently have at least one stored record.  Counts
+    are derived from live store state so the registry is reproducible.
+    """
+    from scoutfootball.recruitment.contracts import (
+        build_recruitment_contract_registry,
+        contracts_to_dict,
+        fact_type_for_artifact,
+    )
+
+    store = _brief_store()
+    brief_count = store.count()
+
+    dossier_store = _dossier_store()
+    dossier_count = dossier_store.count()
+
+    registry = build_recruitment_contract_registry(
+        brief_count=brief_count,
+        role_profile_count=0,
+        decision_dossier_count=dossier_count,
+    )
+    contracts = contracts_to_dict(registry)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-contract-registry",
+        "version": "1.0.0",
+        "count": len(contracts),
+        "contracts": contracts,
+        "fact_types": [
+            fact_type_for_artifact(c["artifact_id"]).value for c in contracts
+        ],
+        "disclaimer": (
+            "Registry enumerates recruitment artifacts reusing the Core "
+            "DataContract type.  Only artifacts with at least one stored "
+            "record are included; absent artifacts are omitted, not stubbed, "
+            "because recruitment data is maintainer-authored on demand."
+        ),
+    })
+
+
+def get_recruitment_briefs(limit: int = 100) -> dict:
+    """List stored recruitment briefs (most recent first)."""
+    store = _brief_store()
+    records = store.list_records(limit=limit)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-list",
+        "version": "1.0.0",
+        "count": len(records),
+        "briefs": records,
+    })
+
+
+def get_recruitment_brief(brief_id: str) -> dict:
+    """Load one stored recruitment brief by ID."""
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    store = _brief_store()
+    try:
+        record = store.load(brief_id)
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def create_recruitment_brief(payload: dict) -> dict:
+    """Create a new recruitment brief from a JSON payload.
+
+    The payload must be a valid ``scoutfootball.recruitment-brief`` v1.0.0
+    object.  Returns the stored record envelope on success.
+    """
+    from scoutfootball.recruitment.brief import BriefValidationError
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    if not isinstance(payload, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "payload must be a JSON object",
+            "http_status": 400,
+        })
+
+    brief_id = payload.get("brief_id")
+    if not isinstance(brief_id, str) or not brief_id:
+        return _clean_json_value({
+            "status": "error",
+            "code": "missing_brief_id",
+            "message": "brief_id is required",
+            "http_status": 400,
+        })
+
+    store = _brief_store()
+    try:
+        record = store.save(brief_id, payload, expected_revision=0)
+    except BriefValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def list_recruitment_brief_backups(brief_id: str) -> dict:
+    """List on-disk backups for one recruitment brief."""
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    store = _brief_store()
+    try:
+        backups = store.list_backups(brief_id)
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-backup-list",
+        "version": "1.0.0",
+        "brief_id": brief_id,
+        "count": len(backups),
+        "backups": backups,
+    })
+
+
+def load_recruitment_brief_backup(brief_id: str, backup_filename: str) -> dict:
+    """Load one backup record for a recruitment brief."""
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    store = _brief_store()
+    try:
+        record = store.load_backup(brief_id, backup_filename)
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def diff_recruitment_brief_versions(
+    brief_id: str,
+    backup_filename: str | None = None,
+) -> dict:
+    """Diff the current brief against a backup (or two backups).
+
+    If ``backup_filename`` is provided, the backup is diffed against the
+    current on-disk record.  If the current record is missing (e.g. the
+    brief was deleted and only a deletion backup remains), the diff is
+    ``added`` from None to the backup payload.
+    """
+    from scoutfootball.recruitment.store import BriefStoreError
+    from scoutfootball.storage.record_diff import diff_records
+
+    store = _brief_store()
+    try:
+        backup_record = store.load_backup(brief_id, backup_filename) if backup_filename else None
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_record: dict | None
+    try:
+        current_record = store.load(brief_id)
+    except BriefStoreError as exc:
+        if exc.code != "brief_not_found":
+            return _clean_json_value({
+                "status": "error",
+                "code": exc.code,
+                "message": exc.code,
+                "http_status": exc.http_status,
+            })
+        current_record = None
+
+    if backup_record is None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "backup_filename_required",
+            "message": "backup_filename query parameter is required",
+            "http_status": 400,
+        })
+
+    changes = diff_records(current_record, backup_record)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-diff",
+        "version": "1.0.0",
+        "brief_id": brief_id,
+        "current_revision": current_record.get("server_revision") if current_record else None,
+        "backup_revision": backup_record.get("server_revision"),
+        "change_count": len(changes),
+        "changes": changes,
+    })
+
+
+def restore_recruitment_brief_from_backup(
+    brief_id: str,
+    backup_filename: str,
+    *,
+    expected_revision: int | None = None,
+) -> dict:
+    """Restore a recruitment brief from a backup, creating a new revision."""
+    from scoutfootball.recruitment.store import BriefStoreError
+
+    store = _brief_store()
+    try:
+        record = store.restore_from_backup(
+            brief_id, backup_filename, expected_revision=expected_revision,
+        )
+    except BriefStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-brief-record",
+        "version": "1.0.0",
+        "restored_from": backup_filename,
+        "record": record,
+    })
+
+
+# ── Recruitment decision dossier API ─────────────────────────────────────
+
+
+def _dossier_store():
+    """Build a DossierStore rooted at report_root/recruitment/dossiers."""
+    from scoutfootball.recruitment.dossier_store import DossierStore
+
+    return DossierStore(_settings().report_root / "recruitment" / "dossiers")
+
+
+def get_decision_dossiers(limit: int = 100) -> dict:
+    """List stored decision dossiers (most recent first)."""
+    store = _dossier_store()
+    records = store.list_records(limit=limit)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-list",
+        "version": "1.0.0",
+        "count": len(records),
+        "dossiers": records,
+    })
+
+
+def get_decision_dossier(dossier_id: str) -> dict:
+    """Load one stored decision dossier by ID."""
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    store = _dossier_store()
+    try:
+        record = store.load(dossier_id)
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def create_decision_dossier(payload: dict) -> dict:
+    """Create a new decision dossier from a JSON payload.
+
+    The payload must be a valid ``scoutfootball.recruitment-decision-dossier``
+    v1.0.0 object.  Returns the stored record envelope on success.
+    """
+    from scoutfootball.recruitment.dossier import DossierValidationError
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    if not isinstance(payload, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "payload must be a JSON object",
+            "http_status": 400,
+        })
+
+    dossier_id = payload.get("dossier_id")
+    if not isinstance(dossier_id, str) or not dossier_id:
+        return _clean_json_value({
+            "status": "error",
+            "code": "missing_dossier_id",
+            "message": "dossier_id is required",
+            "http_status": 400,
+        })
+
+    store = _dossier_store()
+    try:
+        record = store.save(dossier_id, payload, expected_revision=0)
+    except DossierValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def list_decision_dossier_backups(dossier_id: str) -> dict:
+    """List on-disk backups for one decision dossier."""
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    store = _dossier_store()
+    try:
+        backups = store.list_backups(dossier_id)
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-backup-list",
+        "version": "1.0.0",
+        "dossier_id": dossier_id,
+        "count": len(backups),
+        "backups": backups,
+    })
+
+
+def load_decision_dossier_backup(dossier_id: str, backup_filename: str) -> dict:
+    """Load one backup record for a decision dossier."""
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    store = _dossier_store()
+    try:
+        record = store.load_backup(dossier_id, backup_filename)
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def diff_decision_dossier_versions(
+    dossier_id: str,
+    backup_filename: str | None = None,
+) -> dict:
+    """Diff the current dossier against a backup.
+
+    If the current record is missing (e.g. the dossier was deleted and
+    only a deletion backup remains), the diff is ``added`` from None to
+    the backup payload.
+    """
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+    from scoutfootball.storage.record_diff import diff_records
+
+    store = _dossier_store()
+    try:
+        backup_record = (
+            store.load_backup(dossier_id, backup_filename) if backup_filename else None
+        )
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_record: dict | None
+    try:
+        current_record = store.load(dossier_id)
+    except DossierStoreError as exc:
+        if exc.code != "dossier_not_found":
+            return _clean_json_value({
+                "status": "error",
+                "code": exc.code,
+                "message": exc.code,
+                "http_status": exc.http_status,
+            })
+        current_record = None
+
+    if backup_record is None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "backup_filename_required",
+            "message": "backup_filename query parameter is required",
+            "http_status": 400,
+        })
+
+    changes = diff_records(current_record, backup_record)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-diff",
+        "version": "1.0.0",
+        "dossier_id": dossier_id,
+        "current_revision": (
+            current_record.get("server_revision") if current_record else None
+        ),
+        "backup_revision": backup_record.get("server_revision"),
+        "change_count": len(changes),
+        "changes": changes,
+    })
+
+
+def restore_decision_dossier_from_backup(
+    dossier_id: str,
+    backup_filename: str,
+    *,
+    expected_revision: int | None = None,
+) -> dict:
+    """Restore a decision dossier from a backup, creating a new revision."""
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    store = _dossier_store()
+    try:
+        record = store.restore_from_backup(
+            dossier_id, backup_filename, expected_revision=expected_revision,
+        )
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "restored_from": backup_filename,
+        "record": record,
+    })
+
+
+def _validate_entry_list(field_name, value, *, entry_id_field, valid_enums=None):
+    """Validate the shape and enum values of an entry-list field.
+
+    Returns an error dict (without ``_clean_json_value`` wrapping) if
+    early shape checks fail, or ``None`` if the value passes. Detailed
+    schema validation (required string fields, id uniqueness, max
+    length, evidence_refs shape) is left to the Pydantic model
+    re-validation in the store; this helper only catches the most
+    common caller mistakes (non-list value, non-dict entry, missing
+    id, invalid enum) so callers get fast, specific feedback before
+    the current record is loaded.
+    """
+    if not isinstance(value, list):
+        return {
+            "status": "error",
+            "code": "invalid_field",
+            "message": (
+                f"{field_name} must be a list of objects "
+                f"(got {type(value).__name__})"
+            ),
+            "http_status": 400,
+            "metadata": {"invalid_field": field_name},
+        }
+    for idx, entry in enumerate(value):
+        if not isinstance(entry, dict):
+            return {
+                "status": "error",
+                "code": "invalid_field",
+                "message": (
+                    f"{field_name}[{idx}] must be an object "
+                    f"(got {type(entry).__name__})"
+                ),
+                "http_status": 400,
+                "metadata": {"invalid_field": field_name, "index": idx},
+            }
+        entry_id = entry.get(entry_id_field)
+        if not isinstance(entry_id, str) or not entry_id.strip():
+            return {
+                "status": "error",
+                "code": "invalid_field",
+                "message": (
+                    f"{field_name}[{idx}].{entry_id_field} must be a "
+                    f"non-empty string"
+                ),
+                "http_status": 400,
+                "metadata": {
+                    "invalid_field": field_name,
+                    "index": idx,
+                    "sub_field": entry_id_field,
+                },
+            }
+        if valid_enums:
+            for enum_field, allowed in valid_enums.items():
+                enum_value = entry.get(enum_field)
+                if enum_value is None:
+                    continue
+                if enum_value not in allowed:
+                    return {
+                        "status": "error",
+                        "code": "invalid_field",
+                        "message": (
+                            f"{field_name}[{idx}].{enum_field}="
+                            f"{enum_value!r} is not one of "
+                            f"{sorted(allowed)}"
+                        ),
+                        "http_status": 400,
+                        "metadata": {
+                            "invalid_field": field_name,
+                            "index": idx,
+                            "sub_field": enum_field,
+                        },
+                    }
+    return None
+
+
+# Editable fields for a decision dossier. The update API only accepts keys
+# in this set; everything else (schema, version, dossier_id, limitations,
+# linked_artifacts, etc.) is preserved from the current revision and cannot
+# be mutated through this endpoint. The entry-list fields (supporting_evidence,
+# counter_evidence, comparisons, risks) use full-list replacement semantics:
+# the caller sends the complete new list and the model re-validates each
+# entry's schema, id uniqueness and enum values (fact_tier / severity).
+_DOSSIER_EDITABLE_FIELDS = frozenset({
+    "title",
+    "brief_id",
+    "candidate_player_name",
+    "candidate_team_name",
+    "human_opinion",
+    "recommendation",
+    "status",
+    "decision",
+    "decision_note",
+    "notes",
+    "supporting_evidence",
+    "counter_evidence",
+    "comparisons",
+    "risks",
+})
+
+
+def update_decision_dossier(
+    dossier_id: str,
+    fields: dict,
+    *,
+    expected_revision: int,
+) -> dict:
+    """Apply a partial update to a decision dossier, creating a new revision.
+
+    ``fields`` may contain any subset of :data:`_DOSSIER_EDITABLE_FIELDS`.
+    Keys outside that set are rejected with ``invalid_field`` so the
+    endpoint cannot be used to mutate schema/version/dossier_id/
+    limitations/linked_artifacts/etc. The entry-list fields
+    (supporting_evidence, counter_evidence, comparisons, risks) ARE
+    editable and use full-list replacement semantics: the caller sends
+    the complete new list and the model re-validates each entry's
+    schema, id uniqueness and enum values (fact_tier / severity).
+
+    The current record is loaded, the editable fields are merged in, the
+    ``revision`` is bumped and ``updated_at`` is refreshed, then the
+    merged payload is saved with ``expected_revision`` (If-Match style).
+    The store handles backup creation and atomic write.
+    """
+    from scoutfootball.recruitment.dossier import (
+        VALID_DECISION_VALUES,
+        VALID_DOSSIER_STATUS,
+        DossierValidationError,
+    )
+    from scoutfootball.recruitment.dossier import (
+        VALID_FACT_TIERS as DOSSIER_VALID_FACT_TIERS,
+    )
+    from scoutfootball.recruitment.dossier import (
+        VALID_RISK_SEVERITY as DOSSIER_VALID_RISK_SEVERITY,
+    )
+    from scoutfootball.recruitment.dossier_store import DossierStoreError
+
+    if not isinstance(fields, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "fields must be a JSON object",
+            "http_status": 400,
+        })
+
+    # Reject any field the update API does not own. This keeps the
+    # endpoint's surface explicit and prevents callers from silently
+    # mutating schema/version/evidence through merge.
+    invalid_keys = set(fields.keys()) - _DOSSIER_EDITABLE_FIELDS
+    if invalid_keys:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_field",
+            "message": (
+                "fields must be a subset of: "
+                + ", ".join(sorted(_DOSSIER_EDITABLE_FIELDS))
+            ),
+            "http_status": 400,
+            "metadata": {"invalid_fields": sorted(invalid_keys)},
+        })
+
+    # Validate status / decision enum values before loading the current
+    # record so callers get fast, specific feedback.
+    if "status" in fields:
+        if fields["status"] not in VALID_DOSSIER_STATUS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_status",
+                "message": (
+                    f"invalid status: {fields['status']!r} "
+                    f"(must be one of {sorted(VALID_DOSSIER_STATUS)})"
+                ),
+                "http_status": 400,
+            })
+    if "decision" in fields and fields["decision"] is not None:
+        if fields["decision"] not in VALID_DECISION_VALUES:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_decision",
+                "message": (
+                    f"invalid decision: {fields['decision']!r} "
+                    f"(must be one of {sorted(VALID_DECISION_VALUES)} or null)"
+                ),
+                "http_status": 400,
+            })
+
+    # Early shape/enum validation for entry-list fields. The Pydantic
+    # model re-validates each entry's full schema (required fields, id
+    # uniqueness, max length, evidence_refs shape) when the store saves;
+    # these checks just give callers fast, specific feedback for the
+    # most common mistakes (non-list value, non-dict entry, missing id,
+    # invalid enum) before the current record is loaded.
+    _dossier_entry_list_specs = {
+        "supporting_evidence": (
+            "evidence_id", {"fact_tier": DOSSIER_VALID_FACT_TIERS},
+        ),
+        "counter_evidence": (
+            "evidence_id", {"fact_tier": DOSSIER_VALID_FACT_TIERS},
+        ),
+        "comparisons": (
+            "comparison_id", {"fact_tier": DOSSIER_VALID_FACT_TIERS},
+        ),
+        "risks": (
+            "risk_id",
+            {
+                "fact_tier": DOSSIER_VALID_FACT_TIERS,
+                "severity": DOSSIER_VALID_RISK_SEVERITY,
+            },
+        ),
+    }
+    for list_field, (id_field, enum_map) in _dossier_entry_list_specs.items():
+        if list_field in fields:
+            err = _validate_entry_list(
+                list_field,
+                fields[list_field],
+                entry_id_field=id_field,
+                valid_enums=enum_map,
+            )
+            if err is not None:
+                return _clean_json_value(err)
+
+    store = _dossier_store()
+    try:
+        current_record = store.load(dossier_id)
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_dossier = current_record["dossier"]
+    merged = dict(current_dossier)
+    merged.update(fields)
+
+    # The DecisionDossier model_validator requires:
+    #   - status='decided' => decision != null
+    #   - status != 'decided' => decision is null
+    # If the caller moves status to 'decided' without providing a
+    # decision, reject early with a clear code. If the caller moves
+    # status away from 'decided' but leaves a decision, also reject.
+    merged_status = merged.get("status")
+    merged_decision = merged.get("decision")
+    if merged_status == "decided" and not merged_decision:
+        return _clean_json_value({
+            "status": "error",
+            "code": "decision_required",
+            "message": (
+                "decision is required when status is 'decided' "
+                f"(one of: {sorted(VALID_DECISION_VALUES)})"
+            ),
+            "http_status": 400,
+        })
+    if merged_status != "decided" and merged_decision is not None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "decision_not_allowed",
+            "message": (
+                f"decision can only be set when status='decided' "
+                f"(got status={merged_status!r}, decision={merged_decision!r})"
+            ),
+            "http_status": 400,
+        })
+
+    # Bump revision + updated_at. The store re-validates via the model,
+    # so this is convenience, not a security boundary.
+    merged["revision"] = int(current_dossier.get("revision", 1)) + 1
+    merged["updated_at"] = _utc_now_iso_helper()
+
+    try:
+        record = store.save(
+            dossier_id, merged, expected_revision=expected_revision,
+        )
+    except DossierValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except DossierStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.recruitment-decision-dossier-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+# ── Opposition & Match Pack API ─────────────────────────────────────────
+
+
+def _briefing_store():
+    """Build a BriefingStore rooted at report_root/opposition/briefings."""
+    from scoutfootball.opposition.store import BriefingStore
+
+    return BriefingStore(_settings().report_root / "opposition" / "briefings")
+
+
+def get_opposition_contracts() -> dict:
+    """Return the Core DataContract registry for the Opposition pack."""
+    from scoutfootball.opposition.contracts import (
+        build_opposition_contract_registry,
+        contracts_to_dict,
+        fact_type_for_artifact,
+    )
+
+    store = _briefing_store()
+    briefing_count = store.count()
+
+    review_store = _review_store()
+    review_count = review_store.count()
+
+    registry = build_opposition_contract_registry(
+        briefing_count=briefing_count,
+        post_match_review_count=review_count,
+    )
+    contracts = contracts_to_dict(registry)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-contract-registry",
+        "version": "1.0.0",
+        "count": len(contracts),
+        "contracts": contracts,
+        "fact_types": [
+            fact_type_for_artifact(c["artifact_id"]).value for c in contracts
+        ],
+        "disclaimer": (
+            "Registry enumerates opposition & match artifacts reusing the "
+            "Core DataContract type.  Only artifacts with at least one "
+            "stored record are included; absent artifacts are omitted, not "
+            "stubbed, because opposition data is maintainer-authored on "
+            "demand."
+        ),
+    })
+
+
+def get_opposition_briefings(limit: int = 100) -> dict:
+    """List stored source-limited match briefings (most recent first)."""
+    store = _briefing_store()
+    records = store.list_records(limit=limit)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-list",
+        "version": "1.0.0",
+        "count": len(records),
+        "briefings": records,
+    })
+
+
+def get_opposition_briefing(briefing_id: str) -> dict:
+    """Load one stored match briefing by ID."""
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    store = _briefing_store()
+    try:
+        record = store.load(briefing_id)
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def create_opposition_briefing(payload: dict) -> dict:
+    """Create a new source-limited match briefing from a JSON payload.
+
+    The payload must be a valid ``scoutfootball.opposition-briefing``
+    v1.0.0 object.  Returns the stored record envelope on success.
+    """
+    from scoutfootball.opposition.briefing import BriefingValidationError
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    if not isinstance(payload, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "payload must be a JSON object",
+            "http_status": 400,
+        })
+
+    briefing_id = payload.get("briefing_id")
+    if not isinstance(briefing_id, str) or not briefing_id:
+        return _clean_json_value({
+            "status": "error",
+            "code": "missing_briefing_id",
+            "message": "briefing_id is required",
+            "http_status": 400,
+        })
+
+    store = _briefing_store()
+    try:
+        record = store.save(briefing_id, payload, expected_revision=0)
+    except BriefingValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def list_opposition_briefing_backups(briefing_id: str) -> dict:
+    """List on-disk backups for one match briefing."""
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    store = _briefing_store()
+    try:
+        backups = store.list_backups(briefing_id)
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-backup-list",
+        "version": "1.0.0",
+        "briefing_id": briefing_id,
+        "count": len(backups),
+        "backups": backups,
+    })
+
+
+def load_opposition_briefing_backup(briefing_id: str, backup_filename: str) -> dict:
+    """Load one backup record for a match briefing."""
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    store = _briefing_store()
+    try:
+        record = store.load_backup(briefing_id, backup_filename)
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def diff_opposition_briefing_versions(
+    briefing_id: str,
+    backup_filename: str | None = None,
+) -> dict:
+    """Diff the current briefing against a backup."""
+    from scoutfootball.opposition.store import BriefingStoreError
+    from scoutfootball.storage.record_diff import diff_records
+
+    store = _briefing_store()
+    try:
+        backup_record = (
+            store.load_backup(briefing_id, backup_filename) if backup_filename else None
+        )
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_record: dict | None
+    try:
+        current_record = store.load(briefing_id)
+    except BriefingStoreError as exc:
+        if exc.code != "briefing_not_found":
+            return _clean_json_value({
+                "status": "error",
+                "code": exc.code,
+                "message": exc.code,
+                "http_status": exc.http_status,
+            })
+        current_record = None
+
+    if backup_record is None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "backup_filename_required",
+            "message": "backup_filename query parameter is required",
+            "http_status": 400,
+        })
+
+    changes = diff_records(current_record, backup_record)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-diff",
+        "version": "1.0.0",
+        "briefing_id": briefing_id,
+        "current_revision": current_record.get("server_revision") if current_record else None,
+        "backup_revision": backup_record.get("server_revision"),
+        "change_count": len(changes),
+        "changes": changes,
+    })
+
+
+def restore_opposition_briefing_from_backup(
+    briefing_id: str,
+    backup_filename: str,
+    *,
+    expected_revision: int | None = None,
+) -> dict:
+    """Restore a match briefing from a backup, creating a new revision."""
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    store = _briefing_store()
+    try:
+        record = store.restore_from_backup(
+            briefing_id, backup_filename, expected_revision=expected_revision,
+        )
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "restored_from": backup_filename,
+        "record": record,
+    })
+
+
+# ── Opposition post-match review API ─────────────────────────────────────
+
+
+def _review_store():
+    """Build a ReviewStore rooted at report_root/opposition/reviews."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStore
+
+    return ReviewStore(_settings().report_root / "opposition" / "reviews")
+
+
+def get_post_match_reviews(limit: int = 100) -> dict:
+    """List stored post-match reviews (most recent first)."""
+    store = _review_store()
+    records = store.list_records(limit=limit)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-list",
+        "version": "1.0.0",
+        "count": len(records),
+        "reviews": records,
+    })
+
+
+def get_post_match_review(review_id: str) -> dict:
+    """Load one stored post-match review by ID."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    store = _review_store()
+    try:
+        record = store.load(review_id)
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def create_post_match_review(payload: dict) -> dict:
+    """Create a new post-match review from a JSON payload.
+
+    The payload must be a valid ``scoutfootball.opposition-post-match-review``
+    v1.0.0 object.  Returns the stored record envelope on success.
+    """
+    from scoutfootball.opposition.post_match_review import ReviewValidationError
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    if not isinstance(payload, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "payload must be a JSON object",
+            "http_status": 400,
+        })
+
+    review_id = payload.get("review_id")
+    if not isinstance(review_id, str) or not review_id:
+        return _clean_json_value({
+            "status": "error",
+            "code": "missing_review_id",
+            "message": "review_id is required",
+            "http_status": 400,
+        })
+
+    store = _review_store()
+    try:
+        record = store.save(review_id, payload, expected_revision=0)
+    except ReviewValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def list_post_match_review_backups(review_id: str) -> dict:
+    """List on-disk backups for one post-match review."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    store = _review_store()
+    try:
+        backups = store.list_backups(review_id)
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-backup-list",
+        "version": "1.0.0",
+        "review_id": review_id,
+        "count": len(backups),
+        "backups": backups,
+    })
+
+
+def load_post_match_review_backup(review_id: str, backup_filename: str) -> dict:
+    """Load one backup record for a post-match review."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    store = _review_store()
+    try:
+        record = store.load_backup(review_id, backup_filename)
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def diff_post_match_review_versions(
+    review_id: str,
+    backup_filename: str | None = None,
+) -> dict:
+    """Diff the current review against a backup.
+
+    If the current record is missing (e.g. the review was deleted and
+    only a deletion backup remains), the diff is ``added`` from None to
+    the backup payload.
+    """
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+    from scoutfootball.storage.record_diff import diff_records
+
+    store = _review_store()
+    try:
+        backup_record = (
+            store.load_backup(review_id, backup_filename) if backup_filename else None
+        )
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_record: dict | None
+    try:
+        current_record = store.load(review_id)
+    except ReviewStoreError as exc:
+        if exc.code != "review_not_found":
+            return _clean_json_value({
+                "status": "error",
+                "code": exc.code,
+                "message": exc.code,
+                "http_status": exc.http_status,
+            })
+        current_record = None
+
+    if backup_record is None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "backup_filename_required",
+            "message": "backup_filename query parameter is required",
+            "http_status": 400,
+        })
+
+    changes = diff_records(current_record, backup_record)
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-diff",
+        "version": "1.0.0",
+        "review_id": review_id,
+        "current_revision": (
+            current_record.get("server_revision") if current_record else None
+        ),
+        "backup_revision": backup_record.get("server_revision"),
+        "change_count": len(changes),
+        "changes": changes,
+    })
+
+
+def restore_post_match_review_from_backup(
+    review_id: str,
+    backup_filename: str,
+    *,
+    expected_revision: int | None = None,
+) -> dict:
+    """Restore a post-match review from a backup, creating a new revision."""
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    store = _review_store()
+    try:
+        record = store.restore_from_backup(
+            review_id, backup_filename, expected_revision=expected_revision,
+        )
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
+        "version": "1.0.0",
+        "restored_from": backup_filename,
+        "record": record,
+    })
+
+
+# Editable fields for a post-match review. The update API only accepts
+# keys in this set; everything else (schema, version, review_id,
+# hypothesis_results, falsified_patterns, new_questions, evidence,
+# linked_artifacts, limitations, etc.) is preserved from the current
+# revision and cannot be mutated through this endpoint. The entry-list
+# fields (hypothesis_results, falsified_patterns, new_questions,
+# supporting_evidence, counter_evidence) use full-list replacement
+# semantics: the caller sends the complete new list and the model
+# re-validates each entry's schema, id uniqueness and enum values
+# (fact_tier / severity / outcome).
+_REVIEW_EDITABLE_FIELDS = frozenset({
+    "title",
+    "briefing_id",
+    "match_id",
+    "home_team",
+    "away_team",
+    "competition",
+    "season",
+    "final_score_home",
+    "final_score_away",
+    "human_opinion",
+    "recommendation",
+    "status",
+    "decision",
+    "decision_note",
+    "notes",
+    "hypothesis_results",
+    "falsified_patterns",
+    "new_questions",
+    "supporting_evidence",
+    "counter_evidence",
+})
+
+
+def update_post_match_review(
+    review_id: str,
+    fields: dict,
+    *,
+    expected_revision: int,
+) -> dict:
+    """Apply a partial update to a post-match review, creating a new revision.
+
+    ``fields`` may contain any subset of :data:`_REVIEW_EDITABLE_FIELDS`.
+    Keys outside that set are rejected with ``invalid_field`` so the
+    endpoint cannot be used to mutate schema/version/review_id/
+    limitations/linked_artifacts/etc. The entry-list fields
+    (hypothesis_results, falsified_patterns, new_questions,
+    supporting_evidence, counter_evidence) ARE editable and use
+    full-list replacement semantics: the caller sends the complete new
+    list and the model re-validates each entry's schema, id uniqueness
+    and enum values (fact_tier / severity / outcome).
+
+    The current record is loaded, the editable fields are merged in, the
+    ``revision`` is bumped and ``updated_at`` is refreshed, then the
+    merged payload is saved with ``expected_revision`` (If-Match style).
+    The store handles backup creation and atomic write.
+    """
+    from scoutfootball.opposition.post_match_review import (
+        VALID_FACT_TIERS as REVIEW_VALID_FACT_TIERS,
+    )
+    from scoutfootball.opposition.post_match_review import (
+        VALID_HYPOTHESIS_OUTCOMES,
+        VALID_REVIEW_DECISIONS,
+        VALID_REVIEW_STATUS,
+        ReviewValidationError,
+    )
+    from scoutfootball.opposition.post_match_review import (
+        VALID_RISK_SEVERITY as REVIEW_VALID_RISK_SEVERITY,
+    )
+    from scoutfootball.opposition.post_match_review_store import ReviewStoreError
+
+    if not isinstance(fields, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "fields must be a JSON object",
+            "http_status": 400,
+        })
+
+    # Reject any field the update API does not own. This keeps the
+    # endpoint's surface explicit and prevents callers from silently
+    # mutating schema/version/evidence through merge.
+    invalid_keys = set(fields.keys()) - _REVIEW_EDITABLE_FIELDS
+    if invalid_keys:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_field",
+            "message": (
+                "fields must be a subset of: "
+                + ", ".join(sorted(_REVIEW_EDITABLE_FIELDS))
+            ),
+            "http_status": 400,
+            "metadata": {"invalid_fields": sorted(invalid_keys)},
+        })
+
+    # Validate status / decision enum values before loading the current
+    # record so callers get fast, specific feedback.
+    if "status" in fields:
+        if fields["status"] not in VALID_REVIEW_STATUS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_status",
+                "message": (
+                    f"invalid status: {fields['status']!r} "
+                    f"(must be one of {sorted(VALID_REVIEW_STATUS)})"
+                ),
+                "http_status": 400,
+            })
+    if "decision" in fields and fields["decision"] is not None:
+        if fields["decision"] not in VALID_REVIEW_DECISIONS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_decision",
+                "message": (
+                    f"invalid decision: {fields['decision']!r} "
+                    f"(must be one of {sorted(VALID_REVIEW_DECISIONS)} or null)"
+                ),
+                "http_status": 400,
+            })
+    if "final_score_home" in fields and fields["final_score_home"] is not None:
+        if not isinstance(fields["final_score_home"], int) or fields["final_score_home"] < 0:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_score",
+                "message": "final_score_home must be a non-negative integer or null",
+                "http_status": 400,
+            })
+    if "final_score_away" in fields and fields["final_score_away"] is not None:
+        if not isinstance(fields["final_score_away"], int) or fields["final_score_away"] < 0:
+            return _clean_json_value({
+                "status": "error",
+                "code": "invalid_score",
+                "message": "final_score_away must be a non-negative integer or null",
+                "http_status": 400,
+            })
+
+    # Early shape/enum validation for entry-list fields. The Pydantic
+    # model re-validates each entry's full schema (required fields, id
+    # uniqueness, max length, evidence_refs shape) when the store saves;
+    # these checks just give callers fast, specific feedback for the
+    # most common mistakes (non-list value, non-dict entry, missing id,
+    # invalid enum) before the current record is loaded.
+    _review_entry_list_specs = {
+        "hypothesis_results": (
+            "hypothesis_id",
+            {
+                "outcome": VALID_HYPOTHESIS_OUTCOMES,
+                "fact_tier": REVIEW_VALID_FACT_TIERS,
+            },
+        ),
+        "falsified_patterns": (
+            "pattern_id",
+            {
+                "severity": REVIEW_VALID_RISK_SEVERITY,
+                "fact_tier": REVIEW_VALID_FACT_TIERS,
+            },
+        ),
+        "new_questions": (
+            "question_id", {"fact_tier": REVIEW_VALID_FACT_TIERS},
+        ),
+        "supporting_evidence": (
+            "evidence_id", {"fact_tier": REVIEW_VALID_FACT_TIERS},
+        ),
+        "counter_evidence": (
+            "evidence_id", {"fact_tier": REVIEW_VALID_FACT_TIERS},
+        ),
+    }
+    for list_field, (id_field, enum_map) in _review_entry_list_specs.items():
+        if list_field in fields:
+            err = _validate_entry_list(
+                list_field,
+                fields[list_field],
+                entry_id_field=id_field,
+                valid_enums=enum_map,
+            )
+            if err is not None:
+                return _clean_json_value(err)
+
+    store = _review_store()
+    try:
+        current_record = store.load(review_id)
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_review = current_record["review"]
+    merged = dict(current_review)
+    merged.update(fields)
+
+    # The PostMatchReview model_validator requires:
+    #   - status='finalized' => decision != null
+    #   - status != 'finalized' => decision is null
+    # If the caller moves status to 'finalized' without providing a
+    # decision, reject early with a clear code. If the caller moves
+    # status away from 'finalized' but leaves a decision, also reject.
+    merged_status = merged.get("status")
+    merged_decision = merged.get("decision")
+    if merged_status == "finalized" and not merged_decision:
+        return _clean_json_value({
+            "status": "error",
+            "code": "decision_required",
+            "message": (
+                "decision is required when status is 'finalized' "
+                "(one of: confirmed, falsified, partial, inconclusive)"
+            ),
+            "http_status": 400,
+        })
+    if merged_status != "finalized" and merged_decision is not None:
+        return _clean_json_value({
+            "status": "error",
+            "code": "decision_not_allowed",
+            "message": (
+                f"decision can only be set when status='finalized' "
+                f"(got status={merged_status!r}, decision={merged_decision!r})"
+            ),
+            "http_status": 400,
+        })
+
+    # Bump revision + updated_at. The store re-validates via the model,
+    # so this is convenience, not a security boundary.
+    merged["revision"] = int(current_review.get("revision", 1)) + 1
+    merged["updated_at"] = _utc_now_iso_helper()
+
+    try:
+        record = store.save(
+            review_id, merged, expected_revision=expected_revision,
+        )
+    except ReviewValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except ReviewStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-post-match-review-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+# Editable fields for an opposition briefing. The update API only accepts
+# keys in this set; everything else (schema, version, briefing_id,
+# revision, created_at, updated_at, author, limitations, etc.) is
+# preserved from the current revision and cannot be mutated through
+# this endpoint. The entry-list field ``sections`` uses full-list
+# replacement semantics: the caller sends the complete new list and
+# the model re-validates each entry's schema, ``section_id`` uniqueness
+# and ``fact_tier`` enum value. The briefing model has no
+# status/decision state machine (unlike dossier/review), so the
+# consistency checks are limited to shape and enum validation.
+_BRIEFING_EDITABLE_FIELDS = frozenset({
+    "title",
+    "home_team",
+    "away_team",
+    "match_id",
+    "kickoff_at",
+    "competition",
+    "season",
+    "sections",
+    "linked_pattern_card_ids",
+    "linked_scenario_tree_id",
+    "linked_post_match_review_id",
+    "notes",
+})
+
+
+def update_opposition_briefing(
+    briefing_id: str,
+    fields: dict,
+    *,
+    expected_revision: int,
+) -> dict:
+    """Apply a partial update to an opposition briefing, creating a new revision.
+
+    ``fields`` may contain any subset of :data:`_BRIEFING_EDITABLE_FIELDS`.
+    Keys outside that set are rejected with ``invalid_field`` so the
+    endpoint cannot be used to mutate schema/version/briefing_id/
+    revision/created_at/updated_at/author/limitations through merge.
+    The entry-list field ``sections`` IS editable and uses full-list
+    replacement semantics: the caller sends the complete new list and
+    the model re-validates each entry's schema, ``section_id``
+    uniqueness (including the ``custom:<tail>`` rule) and ``fact_tier``
+    enum value.
+
+    The briefing model has no status/decision state machine (unlike the
+    decision dossier and post-match review), so this endpoint does not
+    perform decision-consistency checks. ``kickoff_at`` accepts an ISO
+    8601 datetime string or null; ``linked_scenario_tree_id`` /
+    ``linked_post_match_review_id`` accept a string or null;
+    ``linked_pattern_card_ids`` accepts a list of strings. These are
+    re-validated by the Pydantic model when the store saves.
+
+    The current record is loaded, the editable fields are merged in, the
+    ``revision`` is bumped and ``updated_at`` is refreshed, then the
+    merged payload is saved with ``expected_revision`` (If-Match style).
+    The store handles backup creation and atomic write.
+    """
+    from scoutfootball.opposition.briefing import (
+        VALID_FACT_TIERS as BRIEFING_VALID_FACT_TIERS,
+    )
+    from scoutfootball.opposition.briefing import BriefingValidationError
+    from scoutfootball.opposition.store import BriefingStoreError
+
+    if not isinstance(fields, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_payload",
+            "message": "fields must be a JSON object",
+            "http_status": 400,
+        })
+
+    # Reject any field the update API does not own. This keeps the
+    # endpoint's surface explicit and prevents callers from silently
+    # mutating schema/version/briefing_id/limitations through merge.
+    invalid_keys = set(fields.keys()) - _BRIEFING_EDITABLE_FIELDS
+    if invalid_keys:
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_field",
+            "message": (
+                "fields must be a subset of: "
+                + ", ".join(sorted(_BRIEFING_EDITABLE_FIELDS))
+            ),
+            "http_status": 400,
+            "metadata": {"invalid_fields": sorted(invalid_keys)},
+        })
+
+    # Early shape/enum validation for the ``sections`` entry-list field.
+    # The Pydantic model re-validates each entry's full schema (required
+    # section_id, custom section_id tail pattern, fact_tier enum, summary
+    # max length, evidence_refs shape, section_id uniqueness) when the
+    # store saves; these checks just give callers fast, specific feedback
+    # for the most common mistakes (non-list value, non-dict entry,
+    # missing section_id, invalid fact_tier) before the current record is
+    # loaded.
+    if "sections" in fields:
+        err = _validate_entry_list(
+            "sections",
+            fields["sections"],
+            entry_id_field="section_id",
+            valid_enums={"fact_tier": BRIEFING_VALID_FACT_TIERS},
+        )
+        if err is not None:
+            return _clean_json_value(err)
+
+    store = _briefing_store()
+    try:
+        current_record = store.load(briefing_id)
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+        })
+
+    current_briefing = current_record["briefing"]
+    merged = dict(current_briefing)
+    merged.update(fields)
+
+    # Bump revision + updated_at. The store re-validates via the model,
+    # so this is convenience, not a security boundary.
+    merged["revision"] = int(current_briefing.get("revision", 1)) + 1
+    merged["updated_at"] = _utc_now_iso_helper()
+
+    try:
+        record = store.save(
+            briefing_id, merged, expected_revision=expected_revision,
+        )
+    except BriefingValidationError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": "validation_error",
+            "message": str(exc),
+            "http_status": 400,
+        })
+    except BriefingStoreError as exc:
+        return _clean_json_value({
+            "status": "error",
+            "code": exc.code,
+            "message": exc.code,
+            "http_status": exc.http_status,
+            "metadata": exc.metadata,
+        })
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.opposition-briefing-record",
+        "version": "1.0.0",
+        "record": record,
+    })
+
+
+def export_local_pack() -> dict:
+    """Bundle all local personal artifacts into a portable offline pack.
+
+    The pack is a single JSON document with a manifest, hashes and the
+    full records for every recruitment brief and opposition briefing
+    stored under ``report_root``.  It is intended for offline backup,
+    migration to a new machine, or hand-off to another reviewer via
+    file transfer.  No cloud, no account, no telemetry.
+
+    The pack schema is ``scoutfootball.portable-pack`` v1.0.0.  Each
+    section carries its own schema/version so consumers can validate
+    individual sections without parsing the whole pack.
+    """
+    import hashlib
+    import json
+
+    brief_store = _brief_store()
+    briefing_store = _briefing_store()
+
+    brief_records = brief_store.list_records(limit=100)
+    briefing_records = briefing_store.list_records(limit=100)
+
+    # Pull full records for each summary entry, skipping any that fail
+    # to load (corrupted records are reported in ``skipped`` but do not
+    # abort the export).
+    full_briefs: list[dict] = []
+    skipped_briefs: list[dict] = []
+    seen_brief_ids: set[str] = set()
+    for summary in brief_records:
+        brief_id = summary.get("brief_id")
+        if brief_id:
+            seen_brief_ids.add(brief_id)
+        try:
+            full_briefs.append(brief_store.load(brief_id))
+        except Exception as exc:  # noqa: BLE001 — report, don't crash export
+            logger.warning("export_local_pack: brief load failed", exc_info=True)
+            skipped_briefs.append({
+                "brief_id": brief_id,
+                "reason": str(exc) or type(exc).__name__,
+            })
+
+    # ``list_records`` silently skips files that fail to parse, so corrupt
+    # JSON files would otherwise vanish from the export without a trace.
+    # Detect them by globbing the store root directly and reporting any
+    # ``*.json`` file whose stem is not in ``seen_brief_ids``.
+    if brief_store.root.exists():
+        for path in brief_store.root.glob("*.json"):
+            stem = path.stem
+            if stem not in seen_brief_ids:
+                logger.warning(
+                    "export_local_pack: corrupt brief file skipped: %s",
+                    path,
+                )
+                skipped_briefs.append({
+                    "brief_id": stem,
+                    "reason": "file failed to parse (corrupt JSON or schema violation)",
+                })
+
+    full_briefings: list[dict] = []
+    skipped_briefings: list[dict] = []
+    seen_briefing_ids: set[str] = set()
+    for summary in briefing_records:
+        briefing_id = summary.get("briefing_id")
+        if briefing_id:
+            seen_briefing_ids.add(briefing_id)
+        try:
+            full_briefings.append(briefing_store.load(briefing_id))
+        except Exception as exc:  # noqa: BLE001 — report, don't crash export
+            logger.warning("export_local_pack: briefing load failed", exc_info=True)
+            skipped_briefings.append({
+                "briefing_id": briefing_id,
+                "reason": str(exc) or type(exc).__name__,
+            })
+
+    if briefing_store.root.exists():
+        for path in briefing_store.root.glob("*.json"):
+            stem = path.stem
+            if stem not in seen_briefing_ids:
+                logger.warning(
+                    "export_local_pack: corrupt briefing file skipped: %s",
+                    path,
+                )
+                skipped_briefings.append({
+                    "briefing_id": stem,
+                    "reason": "file failed to parse (corrupt JSON or schema violation)",
+                })
+
+    sections = {
+        "recruitment_briefs": {
+            "schema": "scoutfootball.recruitment-brief-record",
+            "version": "1.0.0",
+            "count": len(full_briefs),
+            "records": full_briefs,
+        },
+        "opposition_briefings": {
+            "schema": "scoutfootball.opposition-briefing-record",
+            "version": "1.0.0",
+            "count": len(full_briefings),
+            "records": full_briefings,
+        },
+    }
+
+    # Stable per-section SHA-256 over the canonical JSON of each section
+    # (sorted keys, no ASCII escaping, 2-space indent).  Used by
+    # importers to detect in-transit corruption.
+    section_hashes: dict[str, str] = {}
+    for name, section in sections.items():
+        canonical = json.dumps(section, ensure_ascii=False, sort_keys=True, indent=2)
+        section_hashes[name] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    pack = {
+        "schema": "scoutfootball.portable-pack",
+        "version": "1.0.0",
+        "exported_at": _utc_now_iso_helper(),
+        "app_version": _app_version_helper(),
+        "sections": sections,
+        "section_hashes": section_hashes,
+        "skipped": {
+            "recruitment_briefs": skipped_briefs,
+            "opposition_briefings": skipped_briefings,
+        },
+        "license_summary": _portable_pack_license_summary(),
+    }
+    return _clean_json_value({
+        "status": "ok",
+        "pack": pack,
+    })
+
+
+_PORTABLE_PACK_SCHEMA = "scoutfootball.portable-pack"
+_PORTABLE_PACK_VERSION = "1.0.0"
+_PORTABLE_PACK_SECTIONS = ("recruitment_briefs", "opposition_briefings")
+_PORTABLE_PACK_MAX_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB hard cap
+
+
+def import_local_pack(pack: dict, *, overwrite: bool = False) -> dict:
+    """Import a portable pack into the local stores.
+
+    Mirrors :func:`export_local_pack`: the ``pack`` argument is the inner
+    ``pack`` object from an export response (``response["pack"]``). The
+    function writes each section's records into the corresponding local
+    store via the standard ``save()`` API, so revision history and backup
+    semantics are preserved.
+
+    Failure model (three tiers):
+
+    1. **Pack-level (fail-closed)**: unknown schema, unsupported version,
+       or missing mandatory keys reject the entire pack. No records are
+       written.
+    2. **Section-level (fail-closed per section)**: ``section_hashes``
+       mismatch indicates in-transit corruption; the entire section is
+       skipped and reported in ``section_errors``. Other sections are
+       still imported.
+    3. **Record-level (fail-soft)**: a record that fails validation or
+       conflicts with an existing local ID is reported in ``skipped`` or
+       ``conflicts`` and does not abort the import. This matches
+       :func:`export_local_pack`'s behavior of skipping corrupt records
+       rather than aborting the export.
+
+    Conflict handling:
+
+    - ``overwrite=False`` (default): records whose ID already exists
+      locally are reported in ``conflicts`` and not modified. This is the
+      safe default for "merge pack into existing local store".
+    - ``overwrite=True``: existing local records are replaced by calling
+      ``save(id, payload, expected_revision=current_revision)``, which
+      bumps ``server_revision`` and creates a revision backup. This is
+      the appropriate mode for "restore from pack" or "sync from another
+      machine".
+
+    The pack's envelope fields (``server_revision``, ``stored_at``) are
+    NOT preserved — the target store manages its own revision counter.
+    Only the inner ``brief`` / ``briefing`` payload (the user-authored
+    content) is imported.
+
+    Size guard: packs larger than ``_PORTABLE_PACK_MAX_SIZE_BYTES``
+    (100 MB) are rejected to prevent accidental memory exhaustion from
+    malformed or hostile payloads. The export currently produces packs
+    well under 1 MB (100 briefs × ~5 KB each), so 100 MB is a generous
+    ceiling that catches pathological inputs without rejecting any
+    legitimate pack.
+    """
+    import hashlib
+    import json
+
+    # ── Pack-level validation ───────────────────────────────────────
+    if not isinstance(pack, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_pack",
+            "message": "pack must be a JSON object",
+        })
+
+    pack_size = len(json.dumps(pack, ensure_ascii=False).encode("utf-8"))
+    if pack_size > _PORTABLE_PACK_MAX_SIZE_BYTES:
+        return _clean_json_value({
+            "status": "error",
+            "code": "pack_too_large",
+            "message": (
+                f"pack is {pack_size} bytes, exceeds "
+                f"{_PORTABLE_PACK_MAX_SIZE_BYTES} byte limit"
+            ),
+        })
+
+    schema = pack.get("schema")
+    version = pack.get("version")
+    if schema != _PORTABLE_PACK_SCHEMA:
+        return _clean_json_value({
+            "status": "error",
+            "code": "incompatible_schema",
+            "message": (
+                f"pack schema '{schema}' is not '{_PORTABLE_PACK_SCHEMA}'"
+            ),
+        })
+    if version != _PORTABLE_PACK_VERSION:
+        return _clean_json_value({
+            "status": "error",
+            "code": "incompatible_version",
+            "message": (
+                f"pack version '{version}' is not "
+                f"'{_PORTABLE_PACK_VERSION}'"
+            ),
+        })
+
+    sections = pack.get("sections")
+    section_hashes = pack.get("section_hashes")
+    if not isinstance(sections, dict) or not isinstance(section_hashes, dict):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_pack",
+            "message": "pack.sections and pack.section_hashes must be objects",
+        })
+
+    # ── Section-level: hash verification + record import ────────────
+    brief_store = _brief_store()
+    briefing_store = _briefing_store()
+
+    # Build existing-ID → revision maps for conflict detection. Using
+    # list_records() avoids N load() calls; each list_records() is a
+    # single glob + parse of small summary fields.
+    existing_brief_revs: dict[str, int] = {
+        s["brief_id"]: int(s["server_revision"])
+        for s in brief_store.list_records(limit=100)
+    }
+    existing_briefing_revs: dict[str, int] = {
+        s["briefing_id"]: int(s["server_revision"])
+        for s in briefing_store.list_records(limit=100)
+    }
+
+    section_results: list[dict] = []
+    section_errors: list[dict] = []
+
+    for section_name in _PORTABLE_PACK_SECTIONS:
+        section = sections.get(section_name)
+        if not isinstance(section, dict):
+            section_errors.append({
+                "section": section_name,
+                "code": "missing_section",
+                "message": f"section '{section_name}' is missing or not an object",
+            })
+            continue
+
+        # Hash verification (fail-closed for this section only)
+        recorded_hash = section_hashes.get(section_name)
+        if not isinstance(recorded_hash, str) or len(recorded_hash) != 64:
+            section_errors.append({
+                "section": section_name,
+                "code": "missing_or_invalid_hash",
+                "message": (
+                    f"section_hashes['{section_name}'] must be a 64-char "
+                    f"SHA-256 hex string"
+                ),
+            })
+            continue
+        canonical = json.dumps(section, ensure_ascii=False, sort_keys=True, indent=2)
+        actual_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        if actual_hash != recorded_hash:
+            section_errors.append({
+                "section": section_name,
+                "code": "hash_mismatch",
+                "message": (
+                    f"section hash mismatch (recorded={recorded_hash[:12]}…, "
+                    f"actual={actual_hash[:12]}…); section may be corrupted "
+                    f"in transit"
+                ),
+            })
+            continue
+
+        # Record-level import
+        records = section.get("records")
+        if not isinstance(records, list):
+            section_errors.append({
+                "section": section_name,
+                "code": "invalid_records",
+                "message": "section.records must be a list",
+            })
+            continue
+
+        # Pick the right store / payload key / id field for this section
+        if section_name == "recruitment_briefs":
+            store = brief_store
+            payload_key = "brief"
+            id_field = "brief_id"
+            existing_revs = existing_brief_revs
+        else:
+            store = briefing_store
+            payload_key = "briefing"
+            id_field = "briefing_id"
+            existing_revs = existing_briefing_revs
+
+        imported = 0
+        conflicts: list[dict] = []
+        skipped: list[dict] = []
+
+        for record in records:
+            if not isinstance(record, dict):
+                skipped.append({
+                    "reason": "record is not an object",
+                })
+                continue
+
+            payload = record.get(payload_key)
+            record_id = record.get(id_field) or (
+                payload.get(id_field) if isinstance(payload, dict) else None
+            )
+            if not isinstance(record_id, str) or not record_id:
+                skipped.append({
+                    "reason": f"missing or invalid {id_field}",
+                })
+                continue
+
+            if not isinstance(payload, dict):
+                skipped.append({
+                    id_field: record_id,
+                    "reason": f"missing or invalid '{payload_key}' payload",
+                })
+                continue
+
+            current_revision = existing_revs.get(record_id)
+            try:
+                if current_revision is None:
+                    # New record: create with revision 1
+                    store.save(record_id, payload, expected_revision=None)
+                    imported += 1
+                elif overwrite:
+                    # Existing record: replace via revision bump
+                    # (creates a revision backup automatically)
+                    store.save(
+                        record_id, payload,
+                        expected_revision=current_revision,
+                    )
+                    imported += 1
+                else:
+                    # Conflict: existing record, overwrite not authorized
+                    conflicts.append({
+                        id_field: record_id,
+                        "local_revision": current_revision,
+                    })
+            except Exception as exc:  # noqa: BLE001 — report, don't abort
+                logger.warning(
+                    "import_local_pack: save failed for %s=%s: %s",
+                    id_field, record_id, exc,
+                    exc_info=True,
+                )
+                skipped.append({
+                    id_field: record_id,
+                    "reason": str(exc) or type(exc).__name__,
+                })
+
+            # If we just imported or overwrote, update the existing_revs
+            # cache so a second record with the same ID in the pack would
+            # be detected as a conflict (rather than creating a duplicate).
+            if current_revision is None or overwrite:
+                existing_revs[record_id] = existing_revs.get(record_id, 0) + 1
+
+        section_results.append({
+            "section": section_name,
+            "schema": section.get("schema"),
+            "version": section.get("version"),
+            "total_records": len(records),
+            "imported": imported,
+            "conflicts": conflicts,
+            "skipped": skipped,
+        })
+
+    # ── Compose summary ─────────────────────────────────────────────
+    total_imported = sum(s["imported"] for s in section_results)
+    total_conflicts = sum(len(s["conflicts"]) for s in section_results)
+    total_skipped = sum(len(s["skipped"]) for s in section_results)
+
+    return _clean_json_value({
+        "status": "ok",
+        "schema": "scoutfootball.portable-pack-import",
+        "version": "1.0.0",
+        "imported_at": _utc_now_iso_helper(),
+        "overwrite_mode": bool(overwrite),
+        "summary": {
+            "total_imported": total_imported,
+            "total_conflicts": total_conflicts,
+            "total_skipped": total_skipped,
+        },
+        "section_results": section_results,
+        "section_errors": section_errors,
+        "limitations": [
+            "Pack envelope fields (server_revision, stored_at) are not "
+            "preserved; the target store manages its own revision counter.",
+            "Record-level failures (validation, conflict) are reported in "
+            "skipped/conflicts and do not abort the import.",
+            "Section hash mismatch skips the entire section; other sections "
+            "are still imported.",
+            "Local-only operation; no telemetry is uploaded.",
+        ],
+    })
+
+
+def _utc_now_iso_helper() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(tz=UTC).isoformat()
+
+
+def _app_version_helper() -> str:
+    from scoutfootball import __version__
+
+    return __version__
+
+
+def _portable_pack_license_summary() -> dict:
+    """Return a compact license summary for the portable pack header."""
+    artifacts = get_artifacts_summary()
+    return {
+        "default": "maintainer-local MIT",
+        "note": (
+            "All records in this pack are personal local objects authored "
+            "by the maintainer.  Derived metrics reusing public StatsBomb "
+            "Open Data retain that source's CC-BY-SA-4.0 attribution "
+            "requirement; raw event data is NOT included in this pack."
+        ),
+        "sources_attribution": artifacts.get("license_attribution", {}),
+    }
 
 
 def get_wc_tournament_standings(group: str | None = None) -> dict:
@@ -8430,6 +12951,240 @@ def get_wc_tournament_standings(group: str | None = None) -> dict:
     })
 
 
+def get_wc_tournament_standings_probabilities(
+    group: str | None = None,
+    num_simulations: int = 2000,
+) -> dict:
+    """Return group standings enriched with Monte Carlo advancement probabilities.
+
+    Runs a strength-weighted group-stage simulation and returns per-team
+    ``advance_prob`` and ``win_group_prob`` alongside the current standings.
+    When ``group`` is provided, only that group's data is returned; otherwise
+    all 12 groups are included.
+
+    Uses the existing ``simulate_group_stage`` function with ``mode="strength"``
+    and a fixed seed for stability across calls with the same input state.
+    """
+    from dataclasses import asdict
+
+    from scoutfootball.worldcup.tournament import (
+        compute_all_standings,
+        compute_group_standings,
+    )
+
+    state = _wc_tournament_state()
+
+    if group:
+        letter = group.upper()
+        if letter not in GROUPS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "unknown_group",
+                "message": f"Unknown group '{group}'. Valid: A-L",
+            })
+        group_filter = letter
+    else:
+        group_filter = None
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads or not strengths:
+        return _clean_json_value({
+            "status": "no_data",
+            "group": group_filter,
+            "groups": {},
+            "num_simulations": 0,
+            "disclaimer": (
+                "World Cup squad data unavailable; probability estimates "
+                "cannot be computed."
+            ),
+        })
+
+    from scoutfootball.worldcup.data import simulate_group_stage
+
+    sim_result = simulate_group_stage(
+        state,
+        team_strengths=strengths,
+        num_simulations=num_simulations,
+        mode="strength",
+        seed=42,
+    )
+
+    prob_by_team: dict[str, dict[str, float]] = {}
+    for entry in sim_result.get("advancement_probability", []):
+        prob_by_team[entry["team"]] = {
+            "advance_prob": entry.get("advance_prob", 0.0),
+            "win_group_prob": entry.get("win_group_prob", 0.0),
+        }
+
+    if group_filter:
+        standings_rows = compute_group_standings(state, group_filter)
+        groups_out = {
+            group_filter: [
+                {
+                    **asdict(s),
+                    "advance_prob": prob_by_team.get(s.team, {}).get(
+                        "advance_prob", 0.0
+                    ),
+                    "win_group_prob": prob_by_team.get(s.team, {}).get(
+                        "win_group_prob", 0.0
+                    ),
+                }
+                for s in standings_rows
+            ],
+        }
+    else:
+        all_standings = compute_all_standings(state)
+        groups_out = {
+            letter: [
+                {
+                    **asdict(s),
+                    "advance_prob": prob_by_team.get(s.team, {}).get(
+                        "advance_prob", 0.0
+                    ),
+                    "win_group_prob": prob_by_team.get(s.team, {}).get(
+                        "win_group_prob", 0.0
+                    ),
+                }
+                for s in rows
+            ]
+            for letter, rows in all_standings.items()
+        }
+
+    return _clean_json_value({
+        "status": "ok",
+        "group": group_filter,
+        "groups": groups_out,
+        "num_simulations": sim_result.get("num_simulations", 0),
+        "remaining_matches": sim_result.get("remaining_matches", 0),
+        "mode": "strength",
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": sim_result.get(
+            "disclaimer",
+            (
+                "Advancement probabilities use strength-weighted Monte Carlo "
+                "simulation of remaining group matches. Illustrative only."
+            ),
+        ),
+    })
+
+
+def get_wc_tournament_overall_leaderboard(
+    num_simulations: int = 2000,
+    sort_by: str = "advance_prob",
+) -> dict:
+    """Return all 48 World Cup teams ranked by advancement probability.
+
+    Runs a strength-weighted group-stage simulation and returns a flat list
+    of all teams sorted by the requested metric, alongside their group,
+    current standings position, advance probability, and group-win probability.
+
+    Parameters
+    ----------
+    num_simulations:
+        Number of Monte Carlo iterations.
+    sort_by:
+        Column to sort by. One of ``"advance_prob"`` (default),
+        ``"win_group_prob"``, ``"points"``, ``"goal_difference"``,
+        ``"goals_for"``.
+    """
+    from scoutfootball.worldcup.tournament import compute_all_standings
+
+    state = _wc_tournament_state()
+
+    if sort_by not in ("advance_prob", "win_group_prob", "points", "goal_difference", "goals_for"):
+        return _clean_json_value({
+            "status": "error",
+            "code": "invalid_sort",
+            "message": (
+                f"Invalid sort_by '{sort_by}'. Valid: advance_prob, "
+                "win_group_prob, points, goal_difference, goals_for"
+            ),
+        })
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads or not strengths:
+        return _clean_json_value({
+            "status": "no_data",
+            "teams": [],
+            "num_simulations": 0,
+            "sort_by": sort_by,
+            "disclaimer": (
+                "World Cup squad data unavailable; probability estimates "
+                "cannot be computed."
+            ),
+        })
+
+    from scoutfootball.worldcup.data import simulate_group_stage
+
+    sim_result = simulate_group_stage(
+        state,
+        team_strengths=strengths,
+        num_simulations=num_simulations,
+        mode="strength",
+        seed=42,
+    )
+
+    prob_by_team: dict[str, dict[str, float]] = {}
+    for entry in sim_result.get("advancement_probability", []):
+        prob_by_team[entry["team"]] = {
+            "advance_prob": entry.get("advance_prob", 0.0),
+            "win_group_prob": entry.get("win_group_prob", 0.0),
+        }
+
+    all_standings = compute_all_standings(state)
+
+    teams: list[dict[str, Any]] = []
+    for letter, rows in all_standings.items():
+        for pos, s in enumerate(rows, start=1):
+            prob = prob_by_team.get(s.team, {})
+            teams.append({
+                "team": s.team,
+                "group": letter,
+                "position": pos,
+                "played": s.played,
+                "won": s.won,
+                "drawn": s.drawn,
+                "lost": s.lost,
+                "goals_for": s.goals_for,
+                "goals_against": s.goals_against,
+                "goal_difference": s.goal_difference,
+                "points": s.points,
+                "advance_prob": prob.get("advance_prob", 0.0),
+                "win_group_prob": prob.get("win_group_prob", 0.0),
+            })
+
+    if sort_by == "advance_prob":
+        teams.sort(key=lambda t: (-t["advance_prob"], -t["points"], -t["goal_difference"]))
+    elif sort_by == "win_group_prob":
+        teams.sort(key=lambda t: (-t["win_group_prob"], -t["points"], -t["goal_difference"]))
+    elif sort_by == "points":
+        teams.sort(key=lambda t: (-t["points"], -t["goal_difference"], -t["goals_for"]))
+    elif sort_by == "goal_difference":
+        teams.sort(key=lambda t: (-t["goal_difference"], -t["points"]))
+    elif sort_by == "goals_for":
+        teams.sort(key=lambda t: (-t["goals_for"], -t["points"]))
+
+    for rank, t in enumerate(teams, start=1):
+        t["rank"] = rank
+
+    return _clean_json_value({
+        "status": "ok",
+        "teams": teams,
+        "num_simulations": sim_result.get("num_simulations", 0),
+        "remaining_matches": sim_result.get("remaining_matches", 0),
+        "mode": "strength",
+        "sort_by": sort_by,
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": sim_result.get(
+            "disclaimer",
+            (
+                "Advancement probabilities use strength-weighted Monte Carlo "
+                "simulation of remaining group matches. Illustrative only."
+            ),
+        ),
+    })
+
+
 def get_wc_tournament_matches(
     group: str | None = None,
     pending: bool = False,
@@ -8458,6 +13213,643 @@ def get_wc_tournament_matches(
         "status": "ok",
         "count": len(matches_out),
         "matches": matches_out,
+    })
+
+
+def get_wc_tournament_match_predictions(group: str | None = None) -> dict:
+    """Batch Poisson predictions for scheduled group-stage matches.
+
+    Returns a compact per-match prediction summary for all scheduled
+    group-stage matches in the tournament state (filtered by ``group``
+    when provided). Reuses the existing ``world_cup_strength_poisson``
+    model. Completed matches are annotated with their actual result and
+    a prediction-delta classification (``as_expected`` / ``upset`` /
+    ``hold``) so the frontend can surface actual-vs-predicted badges.
+    """
+    from scoutfootball.worldcup.tournament import _match_completed
+
+    state = _wc_tournament_state()
+
+    if group:
+        letter = group.upper()
+        if letter not in GROUPS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "unknown_group",
+                "message": f"Unknown group '{group}'. Valid: A-L",
+            })
+
+    enriched_squads, _strengths = _get_wc_enriched_squads()
+    if not enriched_squads:
+        return _clean_json_value({
+            "status": "no_data",
+            "group": group.upper() if group else None,
+            "count": 0,
+            "predictions": [],
+            "model": "world_cup_strength_poisson",
+            "disclaimer": (
+                "World Cup squad data unavailable; predictions cannot be "
+                "computed."
+            ),
+        })
+
+    predictions: list[dict[str, Any]] = []
+    for m in state.matches:
+        if group and m.get("group") != group.upper():
+            continue
+        home = m.get("home")
+        away = m.get("away")
+        if not home or not away or home == away:
+            continue
+        match_base = {
+            "match_id": m["match_id"],
+            "home": home,
+            "away": away,
+            "group": m.get("group"),
+            "matchday": m.get("matchday"),
+            "date": m.get("date"),
+            "venue": m.get("venue"),
+            "city": m.get("city"),
+        }
+        if home not in enriched_squads or away not in enriched_squads:
+            predictions.append({
+                **match_base,
+                "status": "team_not_found",
+                "completed": False,
+            })
+            continue
+        pred = get_world_cup_match_prediction(home, away)
+        if "error" in pred:
+            predictions.append({
+                **match_base,
+                "status": "error",
+                "message": pred["error"],
+                "completed": False,
+            })
+            continue
+        result = state.results.get(m["match_id"])
+        completed = _match_completed(result)
+        entry: dict[str, Any] = {
+            **match_base,
+            "status": "ok",
+            "completed": completed,
+            "home_win_prob": pred["home_win"],
+            "draw_prob": pred["draw"],
+            "away_win_prob": pred["away_win"],
+            "expected_goals_home": pred["home_lambda"],
+            "expected_goals_away": pred["away_lambda"],
+            "home_strength": pred["home_strength"],
+            "away_strength": pred["away_strength"],
+            "host_bonus": pred["host_bonus"],
+            "home_is_host": home in HOSTS,
+            "away_is_host": away in HOSTS,
+            "most_likely_scoreline": _most_likely_wc_scoreline(
+                pred["score_matrix"]
+            ),
+        }
+        if completed and result is not None:
+            entry["result"] = {
+                "home_goals": result.get("home_goals"),
+                "away_goals": result.get("away_goals"),
+                "winner": result.get("winner"),
+                "decided_by": result.get("decided_by"),
+            }
+            entry["delta"] = _classify_prediction_delta(
+                pred["home_win"],
+                pred["draw"],
+                pred["away_win"],
+                int(result.get("home_goals", 0)),
+                int(result.get("away_goals", 0)),
+            )
+        predictions.append(entry)
+
+    return _clean_json_value({
+        "status": "ok",
+        "group": group.upper() if group else None,
+        "count": len(predictions),
+        "predictions": predictions,
+        "model": "world_cup_strength_poisson",
+        "model_version": "wc-1.0",
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": (
+            "Per-match predictions use the world_cup_strength_poisson "
+            "baseline model. Pre-recording only; does not reflect in-play "
+            "state. Delta classification compares actual result to argmax "
+            "prediction; outcomes with pre-match probability < 0.30 are "
+            "flagged as upsets."
+        ),
+    })
+
+
+def get_wc_tournament_match_impact(
+    group: str | None = None,
+    num_simulations: int = 1000,
+    top_n: int = 10,
+) -> dict:
+    """Rank remaining group-stage matches by their impact on advancement odds.
+
+    For each pending match, simulates three outcomes (home win / draw / away
+    win) and measures how much each team's advancement probability shifts
+    across the three scenarios. Matches are ranked by total impact (sum of
+    absolute probability swings across all teams in the group).
+
+    Parameters
+    ----------
+    group:
+        Optional group letter filter (A-L). All groups when omitted.
+    num_simulations:
+        Monte Carlo iterations per outcome scenario (default 1000).
+    top_n:
+        Maximum number of matches to return (default 10).
+    """
+    import copy
+
+    from scoutfootball.worldcup.data import simulate_group_stage
+    from scoutfootball.worldcup.tournament import (
+        GROUPS,
+        _match_completed,
+    )
+
+    state = _wc_tournament_state()
+
+    # Cache keyed on tournament state fingerprint + parameters; state changes
+    # (e.g. marking a result) invalidate the cache automatically.
+    cache_key = (
+        f"wc_match_impact::{_wc_tournament_state_fingerprint(state)}"
+        f"::{group}::{num_simulations}::{top_n}"
+    )
+    cached = _wc_cache.get(cache_key)
+    if cached is not _MISSING:
+        return cached
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads or not strengths:
+        return _clean_json_value({
+            "status": "no_data",
+            "matches": [],
+            "num_simulations": 0,
+            "disclaimer": (
+                "World Cup squad data unavailable; match impact estimates "
+                "cannot be computed."
+            ),
+        })
+
+    if group:
+        group_upper = group.upper()
+        if group_upper not in GROUPS:
+            return _clean_json_value({
+                "status": "error",
+                "code": "unknown_group",
+                "message": f"Unknown group '{group}'. Valid: A-L",
+            })
+        groups_to_check = [group_upper]
+    else:
+        groups_to_check = list(GROUPS.keys())
+
+    pending_matches = []
+    for m in state.matches:
+        m_group = m.get("group")
+        if not m_group or m_group in ("r32", "r16", "qf", "sf", "final"):
+            continue
+        if m_group not in groups_to_check:
+            continue
+        result = state.results.get(m["match_id"])
+        if _match_completed(result):
+            continue
+        pending_matches.append(m)
+
+    if not pending_matches:
+        result = _clean_json_value({
+            "status": "ok",
+            "matches": [],
+            "num_simulations": num_simulations,
+            "mode": "strength",
+            "source_attribution": _STATSBOMB_ATTRIBUTION,
+            "disclaimer": "No remaining group-stage matches to analyze.",
+        })
+        _wc_cache.set(cache_key, result)
+        return result
+
+    def _sim_with_result(match_id, home_goals, away_goals):
+        modified = copy.deepcopy(state)
+        modified.results[match_id] = {
+            "status": "completed",
+            "home_goals": home_goals,
+            "away_goals": away_goals,
+            "winner": (
+                "home" if home_goals > away_goals
+                else "away" if away_goals > home_goals
+                else "draw"
+            ),
+            "decided_by": "regular",
+        }
+        sim = simulate_group_stage(
+            modified,
+            team_strengths=strengths,
+            num_simulations=num_simulations,
+            mode="strength",
+            seed=42,
+        )
+        prob_map = {}
+        for entry in sim.get("advancement_probability", []):
+            prob_map[entry["team"]] = entry
+        return prob_map
+
+    impact_matches = []
+    for m in pending_matches:
+        mid = m["match_id"]
+        home = m.get("home", "")
+        away = m.get("away", "")
+        m_group = m.get("group", "")
+
+        # Use model-derived scorelines from the WC strength Poisson model
+        # instead of hardcoded 2-1/1-1/1-2. Falls back to defaults if the
+        # prediction endpoint is unavailable.
+        try:
+            prediction = get_world_cup_match_prediction(home, away)
+            if prediction.get("error") or "score_matrix" not in prediction:
+                raise ValueError("prediction unavailable")
+            mls = _most_likely_wc_scoreline(prediction["score_matrix"])
+            # mls format: {"home_goals": int, "away_goals": int, "probability": float}
+            base_home = int(mls.get("home_goals", 1))
+            base_away = int(mls.get("away_goals", 1))
+            # Build three distinct outcome scorelines (home win / draw / away win).
+            if base_home > base_away:
+                home_win_goals = (base_home, base_away)
+                draw_goals = (base_away, base_away)
+                away_win_goals = (max(0, base_away - 1), base_away + 1)
+            elif base_home < base_away:
+                home_win_goals = (base_away, max(0, base_away - 1))
+                draw_goals = (base_home, base_home)
+                away_win_goals = (base_home, base_away)
+            else:
+                # Most likely was a draw — nudge to distinct W/D/L.
+                home_win_goals = (base_home + 1, base_away)
+                draw_goals = (base_home, base_away)
+                away_win_goals = (base_home, base_away + 1)
+            # Safety: ensure W/D/L span.
+            if (
+                home_win_goals[0] <= home_win_goals[1]
+                or draw_goals[0] != draw_goals[1]
+                or away_win_goals[0] >= away_win_goals[1]
+            ):
+                home_win_goals = (2, 1)
+                draw_goals = (1, 1)
+                away_win_goals = (1, 2)
+        except Exception:
+            logger.warning(
+                "get_wc_tournament_match_impact: scoreline prediction failed, using fallback",
+                exc_info=True,
+            )
+            # Fallback: classic 2-1 / 1-1 / 1-2 scenarios.
+            home_win_goals = (2, 1)
+            draw_goals = (1, 1)
+            away_win_goals = (1, 2)
+
+        home_win_probs = _sim_with_result(mid, home_win_goals[0], home_win_goals[1])
+        draw_probs = _sim_with_result(mid, draw_goals[0], draw_goals[1])
+        away_win_probs = _sim_with_result(mid, away_win_goals[0], away_win_goals[1])
+
+        all_teams = set(home_win_probs.keys()) | set(draw_probs.keys()) | set(away_win_probs.keys())
+
+        total_impact = 0.0
+        max_swing = 0.0
+        max_swing_team = ""
+        per_team_impact = []
+
+        for team in sorted(all_teams):
+            hw = home_win_probs.get(team, {}).get("advance_prob", 0.0)
+            dr = draw_probs.get(team, {}).get("advance_prob", 0.0)
+            aw = away_win_probs.get(team, {}).get("advance_prob", 0.0)
+            team_max = max(hw, dr, aw)
+            team_min = min(hw, dr, aw)
+            swing = team_max - team_min
+            total_impact += swing
+            if swing > max_swing:
+                max_swing = swing
+                max_swing_team = team
+            per_team_impact.append({
+                "team": team,
+                "home_win_prob": hw,
+                "draw_prob": dr,
+                "away_win_prob": aw,
+                "swing": swing,
+            })
+
+        per_team_impact.sort(key=lambda t: -t["swing"])
+
+        impact_matches.append({
+            "match_id": mid,
+            "home": home,
+            "away": away,
+            "group": m_group,
+            "matchday": m.get("matchday"),
+            "date": m.get("date"),
+            "venue": m.get("venue"),
+            "city": m.get("city"),
+            "scenario_scorelines": {
+                "home_win": list(home_win_goals),
+                "draw": list(draw_goals),
+                "away_win": list(away_win_goals),
+            },
+            "total_impact": total_impact,
+            "max_swing": max_swing,
+            "max_swing_team": max_swing_team,
+            "per_team": per_team_impact,
+        })
+
+    impact_matches.sort(key=lambda m: -m["total_impact"])
+    top_matches = impact_matches[:top_n]
+
+    result = _clean_json_value({
+        "status": "ok",
+        "matches": top_matches,
+        "total_pending": len(pending_matches),
+        "num_simulations": num_simulations,
+        "mode": "strength",
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": (
+            "Match impact uses strength-weighted Monte Carlo simulation of "
+            "remaining group matches. Impact = sum of advancement probability "
+            "swings across all teams in the group when the match outcome "
+            "varies. Scenario scorelines are derived from the WC strength "
+            "Poisson model's most likely outcome. Illustrative only."
+        ),
+    })
+    _wc_cache.set(cache_key, result)
+    return result
+
+
+def get_wc_tournament_knockout_match_impact(
+    *, num_simulations: int = 5000, top_n: int = 10
+) -> dict:
+    """Rank remaining knockout matches by championship-probability swing.
+
+    Mirrors :func:`get_wc_tournament_match_impact` but for knockout fixtures:
+    for each pending KO match with both teams populated, simulates the three
+    outcomes (home win / draw / away win; draws resolved by penalties
+    assigned to the home side for the simulation only) and measures each
+    team's championship probability swing across the scenarios.
+
+    Returns the top-N matches sorted by total championship-probability impact.
+    """
+    import copy
+
+    from scoutfootball.worldcup.data import project_knockout_probabilities
+    from scoutfootball.worldcup.tournament import (
+        get_knockout_overview,
+    )
+
+    state = _wc_tournament_state()
+
+    # Cache keyed on tournament state fingerprint + parameters; state changes
+    # (e.g. marking a result or regenerating the bracket) invalidate the cache.
+    cache_key = (
+        f"wc_ko_match_impact::{_wc_tournament_state_fingerprint(state)}"
+        f"::{num_simulations}::{top_n}"
+    )
+    cached = _wc_cache.get(cache_key)
+    if cached is not _MISSING:
+        return cached
+
+    overview = get_knockout_overview(state)
+    if not overview.get("generated"):
+        return _clean_json_value({
+            "status": "not_generated",
+            "matches": [],
+            "num_simulations": 0,
+            "disclaimer": (
+                "No knockout bracket has been generated. Call "
+                "/world-cup/tournament/knockout/generate first."
+            ),
+        })
+
+    enriched_squads, strengths = _get_wc_enriched_squads()
+    if not enriched_squads or not strengths:
+        return _clean_json_value({
+            "status": "no_data",
+            "matches": [],
+            "num_simulations": 0,
+            "disclaimer": (
+                "World Cup squad data unavailable; knockout match impact "
+                "cannot be computed."
+            ),
+        })
+
+    pending = []
+    for m in overview.get("matches", []):
+        if m.get("status") == "completed":
+            continue
+        home = m.get("home")
+        away = m.get("away")
+        if not home or not away:
+            continue
+        pending.append(m)
+
+    if not pending:
+        result = _clean_json_value({
+            "status": "ok",
+            "matches": [],
+            "num_simulations": num_simulations,
+            "mode": "strength",
+            "source_attribution": _STATSBOMB_ATTRIBUTION,
+            "disclaimer": "No remaining knockout matches with both teams set.",
+        })
+        _wc_cache.set(cache_key, result)
+        return result
+
+    def _sim_knockout_with_result(match_id: str, winner: str):
+        modified = copy.deepcopy(state)
+        ko_match = modified.knockout_match_by_id(match_id)
+        if not ko_match:
+            return {}
+        # Apply a 1-0 or 0-1 result depending on winner.
+        if winner == ko_match.get("home"):
+            hg, ag = 1, 0
+        else:
+            hg, ag = 0, 1
+        ko_match["status"] = "completed"
+        ko_match["home_goals"] = hg
+        ko_match["away_goals"] = ag
+        ko_match["winner"] = winner
+        ko_match["decided_by"] = "regular"
+        modified.results[match_id] = {
+            "status": "completed",
+            "home_goals": hg,
+            "away_goals": ag,
+            "winner": winner,
+            "decided_by": "regular",
+        }
+        if "matches" not in modified.knockout:
+            modified.knockout["matches"] = []
+        for i, km in enumerate(modified.knockout.get("matches", [])):
+            if km.get("match_id") == match_id:
+                modified.knockout["matches"][i] = ko_match
+                break
+        # Re-project KO bracket from modified state. Pass num_simulations so
+        # the caller's requested MC iteration count is actually honored.
+        new_overview = get_knockout_overview(modified)
+        result = project_knockout_probabilities(
+            new_overview, strengths, num_simulations=num_simulations
+        )
+        prob_map = {}
+        for entry in result.get("tournament_win_probability", []):
+            prob_map[entry["team"]] = entry.get("win_probability", 0.0)
+        return prob_map
+
+    impact_matches = []
+    for m in pending:
+        mid = m.get("match_id", "")
+        home = m.get("home", "")
+        away = m.get("away", "")
+        round_label = m.get("round_label", m.get("round", ""))
+
+        home_win_probs = _sim_knockout_with_result(mid, home)
+        away_win_probs = _sim_knockout_with_result(mid, away)
+        # No draw scenario in KO; assign draw column to a 50/50 split for
+        # presentation parity with the group-stage panel.
+        draw_probs = {
+            team: (home_win_probs.get(team, 0.0) + away_win_probs.get(team, 0.0)) / 2.0
+            for team in set(home_win_probs) | set(away_win_probs)
+        }
+
+        all_teams = set(home_win_probs) | set(away_win_probs) | set(draw_probs)
+        total_impact = 0.0
+        max_swing = 0.0
+        max_swing_team = ""
+        per_team_impact = []
+        for team in sorted(all_teams):
+            hw = home_win_probs.get(team, 0.0)
+            dr = draw_probs.get(team, 0.0)
+            aw = away_win_probs.get(team, 0.0)
+            team_max = max(hw, dr, aw)
+            team_min = min(hw, dr, aw)
+            swing = team_max - team_min
+            total_impact += swing
+            if swing > max_swing:
+                max_swing = swing
+                max_swing_team = team
+            per_team_impact.append({
+                "team": team,
+                "home_win_prob": hw,
+                "draw_prob": dr,
+                "away_win_prob": aw,
+                "swing": swing,
+            })
+        per_team_impact.sort(key=lambda t: -t["swing"])
+
+        impact_matches.append({
+            "match_id": mid,
+            "home": home,
+            "away": away,
+            "round": round_label,
+            "position": m.get("position"),
+            "total_impact": total_impact,
+            "max_swing": max_swing,
+            "max_swing_team": max_swing_team,
+            "per_team": per_team_impact,
+        })
+
+    impact_matches.sort(key=lambda m: -m["total_impact"])
+    top_matches = impact_matches[:top_n]
+
+    result = _clean_json_value({
+        "status": "ok",
+        "matches": top_matches,
+        "total_pending": len(pending),
+        "num_simulations": num_simulations,
+        "mode": "strength",
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": (
+            "Knockout match impact uses Bradley-Terry strength model with "
+            "Monte Carlo tournament win probability. Impact = sum of "
+            "championship probability swings across all teams when the "
+            "match winner varies. Draw column is the average of the two "
+            "win scenarios because knockout matches cannot end in a draw. "
+            "Illustrative only."
+        ),
+    })
+    _wc_cache.set(cache_key, result)
+    return result
+
+
+def get_wc_tournament_top_matches(
+    *, group_top_n: int = 5, knockout_top_n: int = 5, num_simulations: int = 1000
+) -> dict:
+    """Combine group-stage and KO match impact into a single top-N view.
+
+    Returns a unified leaderboard of the most impactful remaining matches
+    across the whole tournament, suitable for a 'Top Matches to Watch'
+    panel. Normalizes the impact metric so group-stage advancement swings
+    are comparable to KO championship swings.
+    """
+    group_impact = get_wc_tournament_match_impact(
+        num_simulations=num_simulations, top_n=group_top_n
+    )
+    ko_impact = get_wc_tournament_knockout_match_impact(
+        num_simulations=max(num_simulations, 5000), top_n=knockout_top_n
+    )
+
+    unified: list[dict[str, Any]] = []
+
+    if group_impact.get("status") == "ok":
+        for m in group_impact.get("matches", []):
+            unified.append({
+                "match_id": m["match_id"],
+                "stage": "group",
+                "home": m["home"],
+                "away": m["away"],
+                "stage_label": f"Group {m.get('group', '')}",
+                "date": m.get("date", ""),
+                "venue": m.get("venue", ""),
+                "city": m.get("city", ""),
+                "total_impact": m["total_impact"],
+                "max_swing": m["max_swing"],
+                "max_swing_team": m["max_swing_team"],
+                "impact_metric": "advancement_prob_swing",
+                "per_team": m.get("per_team", []),
+            })
+
+    if ko_impact.get("status") == "ok":
+        for m in ko_impact.get("matches", []):
+            unified.append({
+                "match_id": m["match_id"],
+                "stage": "knockout",
+                "home": m["home"],
+                "away": m["away"],
+                "stage_label": m.get("round", "Knockout"),
+                "date": "",
+                "venue": "",
+                "city": "",
+                "total_impact": m["total_impact"],
+                "max_swing": m["max_swing"],
+                "max_swing_team": m["max_swing_team"],
+                "impact_metric": "championship_prob_swing",
+                "per_team": m.get("per_team", []),
+            })
+
+    # Sort by total_impact (which is naturally on different scales between
+    # group and KO; we keep raw values so the user can see the actual swing
+    # magnitude per stage, but rank by total_impact).
+    unified.sort(key=lambda m: -m["total_impact"])
+
+    return _clean_json_value({
+        "schema": "scoutfootball.world-cup-top-matches",
+        "version": "1.0.0",
+        "status": "ok",
+        "matches": unified[: group_top_n + knockout_top_n],
+        "group_stage_count": len(group_impact.get("matches", [])),
+        "knockout_count": len(ko_impact.get("matches", [])),
+        "group_stage_status": group_impact.get("status", "no_data"),
+        "knockout_status": ko_impact.get("status", "no_data"),
+        "source_attribution": _STATSBOMB_ATTRIBUTION,
+        "disclaimer": (
+            "Unified top matches to watch, combining group-stage advancement "
+            "swings and knockout championship swings. The two stages use "
+            "different baseline probabilities, so total_impact is not strictly "
+            "comparable across stages — review per_team swings for context. "
+            "Illustrative only."
+        ),
     })
 
 
@@ -8582,7 +13974,8 @@ def get_backtest_report_card() -> dict:
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_backtest_report_card failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_prediction_anomalies(
@@ -8700,7 +14093,8 @@ def get_prediction_anomalies(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_prediction_anomalies failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def get_team_performance_profile(
@@ -8819,7 +14213,8 @@ def get_team_performance_profile(
         _BACKTEST_CACHE[f"{cache_key}_timestamp"] = now
         return result
     except Exception as exc:
-        return {"status": "error", "message": str(exc)}
+        logger.warning("get_team_performance_profile failed", exc_info=True)
+        return _make_error_response(str(exc))
 
 
 def apply_wc_tournament_result(
@@ -8920,11 +14315,17 @@ def reset_wc_tournament() -> dict:
 
 def get_wc_knockout_bracket() -> dict:
     """Return the current knockout bracket state."""
-    from scoutfootball.worldcup.tournament import get_knockout_overview
+    from scoutfootball.worldcup.tournament import (
+        get_knockout_overview,
+        get_tournament_state_contract,
+    )
 
     state = _wc_tournament_state()
     overview = get_knockout_overview(state)
     overview["status"] = "ok"
+    # Core DataContract: tournament_state (knockout bracket is part of state).
+    overview["contracts"] = [get_tournament_state_contract(state)]
+    overview["fact_types"] = ["expected_callup"]
     return _clean_json_value(overview)
 
 
@@ -9052,6 +14453,7 @@ def _capture_wc_knockout_prediction_snapshot(state: Any, match_id: str) -> dict[
             ],
         }
     except Exception:
+        logger.warning("capture wc knockout prediction snapshot failed", exc_info=True)
         return None
 
 
@@ -9471,6 +14873,7 @@ def _decode_wc_tournament_import(encoded: str) -> tuple[Any | None, dict | None]
         json_bytes = base64.urlsafe_b64decode(padded)
         state_dict = json.loads(json_bytes.decode("utf-8"))
     except Exception as exc:
+        logger.warning("decode wc tournament import failed", exc_info=True)
         return None, _clean_json_value({
             "status": "error",
             "code": "decode_failed",

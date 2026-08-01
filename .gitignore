@@ -14,6 +14,7 @@ frontend/local-data-manifest.json
 
 # Raw data: allow specific sources, exclude others
 data/raw/transfermarkt_datasets/
+data/raw/reep/
 data/silver/**
 data/gold/scoutlab.duckdb
 data/gold/scoutfootball.duckdb
@@ -23,6 +24,7 @@ data/models/*
 data/reports/**
 data/logs/**
 data/soccerdata/**
+data/quarantine/**
 !data/**/.gitkeep
 !data/README.md
 !data/config/**
@@ -77,3 +79,9 @@ data/logs/**/*
 data/raw/statsbomb_open/events/
 data/raw/statsbomb_open/matches/
 data/raw/statsbomb_open/lineups/
+
+# Agent working state (investigations, scratch scripts)
+.agents/
+
+# electron-builder caches (winCodeSign .7z etc.)
+desktop/.cache/

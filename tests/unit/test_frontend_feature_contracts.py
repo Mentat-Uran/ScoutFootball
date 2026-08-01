@@ -140,7 +140,7 @@ def test_broken_view_regressions_are_guarded() -> None:
     assert 'fetchJson("/predictions/calibration")' in app_js
     assert 'valueSummaryMeta.status === "demo"' in app_js
     assert "真实标签可用" in app_js
-    assert "github.com/Mentaturan/ScoutFootball_for_World_Cup" in html
+    assert "github.com/Mentat-Uran/ScoutFootball_for_World_Cup" in html
     assert 'rel="icon" href="favicon.svg"' in html
 
 

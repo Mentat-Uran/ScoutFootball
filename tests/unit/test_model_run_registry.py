@@ -26,7 +26,13 @@ if _real_torch is None:
     sys.modules["torch"] = _mock_torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from optimizer.data import build_run_lineage, compute_input_hash, save_model_run  # noqa: E402
+from optimizer.data import (  # noqa: E402
+    build_run_lineage,
+    compute_error_cases,
+    compute_input_hash,
+    optimizer_input_artifacts,
+    save_model_run,
+)
 
 # Restore real torch so other test files are not poisoned
 if _real_torch is not None:
@@ -47,6 +53,38 @@ class TestSaveModelRun:
         assert (run_dir / "optimized_params.npy").exists()
         assert (run_dir / "meta.json").exists()
 
+    def test_explicit_candidate_run_id_reuses_its_prepared_directory(self, tmp_path):
+        candidate_dir = tmp_path / "candidate-run"
+        candidate_dir.mkdir()
+        history = candidate_dir / "training_history.json"
+        history.write_text("{}", encoding="utf-8")
+
+        run_dir = save_model_run(
+            np.array([1.0], dtype=np.float32),
+            {"spearman": 0.65},
+            output_dir=tmp_path,
+            run_id="candidate-run",
+        )
+
+        assert run_dir == candidate_dir
+        assert history.exists()
+        assert (candidate_dir / "optimized_params.npy").exists()
+        meta = json.loads((candidate_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["activation"]["status"] == "not_activated"
+
+    def test_candidate_artifact_metadata_is_preserved(self, tmp_path):
+        run_dir = save_model_run(
+            np.array([1.0], dtype=np.float32),
+            {"spearman": 0.65},
+            output_dir=tmp_path,
+            candidate_artifacts={
+                "ratings": {"path": "player_ratings_candidate.parquet", "rows": 4}
+            },
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["candidate_artifacts"]["ratings"]["rows"] == 4
+
     def test_meta_json_content(self, tmp_path):
         params = np.random.randn(77).astype(np.float32)
         metrics = {"spearman": 0.65, "pearson": 0.68}
@@ -57,6 +95,51 @@ class TestSaveModelRun:
         assert meta["params_shape"] == [77]
         assert abs(meta["params_mean"] - params.mean()) < 0.01
         assert abs(meta["metrics"]["spearman"] - 0.65) < 0.01
+
+    def test_nested_holdout_metrics_remain_machine_readable(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        run_dir = save_model_run(
+            params,
+            {
+                "baseline_test": {"spearman": 0.55},
+                "optimized_test": {"spearman": 0.65},
+            },
+            output_dir=tmp_path,
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["metrics"]["baseline_test"]["spearman"] == 0.55
+        assert meta["metrics"]["optimized_test"]["spearman"] == 0.65
+
+    def test_error_cases_are_derived_from_current_holdout_predictions(self):
+        matched = pd.DataFrame(
+            {
+                "team": ["Over FC", "Under FC", "Over FC"],
+                "actual_points": [50, 50, 50],
+                "pred_points_calibrated": [65, 35, 55],
+            }
+        )
+
+        result = compute_error_cases(matched)
+
+        assert result is not None
+        assert result["residual_definition"] == "prediction_minus_actual"
+        assert result["over_estimated"][-1] == {"team": "Over FC", "residual": 10.0}
+        assert result["under_estimated"][0] == {"team": "Under FC", "residual": -15.0}
+
+    def test_error_cases_from_the_current_holdout_are_persisted(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        error_cases = {"over_estimated": [{"team": "Over FC", "residual": 10.0}]}
+
+        run_dir = save_model_run(
+            params,
+            {"optimized_test": {"spearman": 0.65}},
+            output_dir=tmp_path,
+            error_cases=error_cases,
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["error_cases"] == error_cases
 
     def test_with_args(self, tmp_path):
         params = np.random.randn(77).astype(np.float32)
@@ -139,6 +222,35 @@ class TestSaveModelRun:
             meta = json.load(f)
         assert meta["train_seasons"] == ["2021,2022,2023"]
         assert meta["test_seasons"] == ["2024"]
+
+    def test_actual_time_split_overrides_cli_count_configuration(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        args = argparse.Namespace(test_seasons=1)
+
+        run_dir = save_model_run(
+            params,
+            {"spearman": 0.65},
+            args=args,
+            output_dir=tmp_path,
+            train_seasons=("2223", "2324"),
+            test_seasons=("2425",),
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert meta["train_seasons"] == ["2223", "2324"]
+        assert meta["test_seasons"] == ["2425"]
+
+    def test_numeric_cli_test_season_count_is_not_saved_as_a_split(self, tmp_path):
+        params = np.random.randn(77).astype(np.float32)
+        run_dir = save_model_run(
+            params,
+            {"spearman": 0.65},
+            args=argparse.Namespace(test_seasons=1),
+            output_dir=tmp_path,
+        )
+
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        assert "test_seasons" not in meta
 
     def test_position_metrics_persisted(self, tmp_path):
         params = np.random.randn(77).astype(np.float32)
@@ -229,3 +341,31 @@ class TestComputeInputHash:
         (gold_dir / "rating_feature_matrix.parquet").write_bytes(b"test")
         h2 = compute_input_hash(tmp_path)
         assert h1 != h2
+
+    def test_active_rating_output_never_changes_optimizer_input_hash(self, tmp_path):
+        ratings = tmp_path / "gold" / "feature_store" / "player_ratings_optimized.parquet"
+        ratings.parent.mkdir(parents=True)
+        ratings.write_bytes(b"active-score-v1")
+
+        before = compute_input_hash(tmp_path)
+        ratings.write_bytes(b"active-score-v2")
+        after = compute_input_hash(tmp_path)
+
+        assert before == after
+        assert "gold/feature_store/player_ratings_optimized.parquet" not in (
+            optimizer_input_artifacts(tmp_path)
+        )
+
+    def test_lineage_lists_only_actual_optimizer_inputs(self, tmp_path):
+        raw = tmp_path / "raw" / "football_data"
+        raw.mkdir(parents=True)
+        (raw / "combined_results.parquet").write_bytes(b"results")
+        active = tmp_path / "gold" / "feature_store" / "player_ratings_optimized.parquet"
+        active.parent.mkdir(parents=True, exist_ok=True)
+        active.write_bytes(b"active-score")
+
+        lineage = build_run_lineage(tmp_path)
+
+        assert lineage["dataset_snapshot"]["input_artifacts"] == [
+            "raw/football_data/combined_results.parquet"
+        ]
