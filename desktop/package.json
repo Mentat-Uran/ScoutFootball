@@ -59,11 +59,28 @@
     "win": {
       "target": [
         {
-          "target": "dir",
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
           "arch": ["x64"]
         }
       ],
       "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64"]
+        }
+      ],
+      "identity": null
     },
     "publish": null
   }
