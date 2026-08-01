@@ -43,7 +43,7 @@ The public repository contains source code and only deliberately selected sample
 
 ## Automation
 
-The repository includes opt-in workflows for checks and release tasks. Every checked-in workflow is manual-only through `workflow_dispatch`; there are no push, pull-request, or scheduled triggers. A passing workflow is not a deployment or data-license claim.
+The repository includes opt-in workflows for checks and release tasks. Existing data, export, optimization, and release workflows are manual-only through `workflow_dispatch`. The deliberately small `brief-ci.yml` runs on pull requests targeting `main` and pushes to non-`main` branches; it does not run on pushes to `main`. A passing workflow is not a deployment or data-license claim.
 
 ## Contributing
 
