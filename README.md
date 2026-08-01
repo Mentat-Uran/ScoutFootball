@@ -41,9 +41,9 @@ Do not commit personal files, credentials, raw private datasets, local logs, mod
 
 The public repository contains source code and only deliberately selected sample or static assets. A local checkout may contain additional ignored data required for experiments.
 
-## GitHub Actions
+## Automation
 
-This repository intentionally contains no GitHub Actions workflows. Checks and research runs are performed locally, and a passing local check is not a deployment or data-license claim.
+The repository includes opt-in workflows for checks and release tasks. Every checked-in workflow is manual-only through `workflow_dispatch`; there are no push, pull-request, or scheduled triggers. A passing workflow is not a deployment or data-license claim.
 
 ## Contributing
 

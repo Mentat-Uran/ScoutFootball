@@ -37,5 +37,5 @@ Run focused tests for the files changed. Do not claim a full data or runtime val
 
 - Inspect `git status`, the current branch, and the diff before staging.
 - Stage only files belonging to the change. Never commit `.env` files, credentials, personal data, raw private datasets, logs, caches, model caches, downloaded binaries, or local runtime output.
-- This public repository intentionally has no GitHub Actions workflows. Do not add workflow files or rely on hosted automation for validation.
+- Checked-in GitHub workflows are manual-only through `workflow_dispatch`. Do not add push, pull-request, scheduled, or other automatic triggers without an explicit project decision.
 - Keep commits small and explain behavior changes in the commit message and documentation.
