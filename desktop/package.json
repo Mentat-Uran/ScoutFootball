@@ -1,0 +1,69 @@
+{
+  "name": "scoutfootball",
+  "version": "1.1.0",
+  "description": "ScoutFootball — Local-first football analytics platform",
+  "main": "main.js",
+  "author": "Uran",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac --arm64",
+    "build:all": "electron-builder --mac --arm64 --win --x64"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.mentaturan.scoutfootball",
+    "productName": "ScoutFootball",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "frontend/**/*",
+      "package.json",
+      "!frontend/data/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend-dist/scoutfootball-server",
+        "to": "backend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../data/gold",
+        "to": "data/gold",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../data/models",
+        "to": "data/models",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../data/reports",
+        "to": "data/reports",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../data/raw/statsbomb_open",
+        "to": "data/raw/statsbomb_open",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "publish": null
+  }
+}

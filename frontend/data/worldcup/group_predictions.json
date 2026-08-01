@@ -1,0 +1,1433 @@
+{
+  "model": "poisson_strength_ratio",
+  "groups": [
+    {
+      "group": "A",
+      "projected_table": [
+        {
+          "team": "Mexico",
+          "exp_points": 4.98,
+          "exp_gf": 4.93,
+          "exp_ga": 3.67,
+          "exp_gd": 1.26,
+          "projected_rank": 1,
+          "strength": 0.412,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Czech Republic",
+          "exp_points": 4.08,
+          "exp_gf": 4.1,
+          "exp_ga": 4.16,
+          "exp_gd": -0.06,
+          "projected_rank": 2,
+          "strength": 0.404,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "South Korea",
+          "exp_points": 3.89,
+          "exp_gf": 3.96,
+          "exp_ga": 4.31,
+          "exp_gd": -0.35,
+          "projected_rank": 3,
+          "strength": 0.369,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "South Africa",
+          "exp_points": 3.55,
+          "exp_gf": 3.73,
+          "exp_ga": 4.58,
+          "exp_gd": -0.85,
+          "projected_rank": 4,
+          "strength": 0.324,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-11",
+          "home": "Mexico",
+          "away": "South Africa",
+          "exp_home_goals": 1.74,
+          "exp_away_goals": 1.15,
+          "home_win_p": 0.512,
+          "draw_p": 0.2362,
+          "away_win_p": 0.2517,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-11",
+          "home": "South Korea",
+          "away": "Czech Republic",
+          "exp_home_goals": 1.34,
+          "exp_away_goals": 1.36,
+          "home_win_p": 0.3665,
+          "draw_p": 0.2581,
+          "away_win_p": 0.3755,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-18",
+          "home": "South Africa",
+          "away": "Czech Republic",
+          "exp_home_goals": 1.26,
+          "exp_away_goals": 1.45,
+          "home_win_p": 0.3269,
+          "draw_p": 0.2563,
+          "away_win_p": 0.4169,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-18",
+          "home": "Mexico",
+          "away": "South Korea",
+          "exp_home_goals": 1.63,
+          "exp_away_goals": 1.23,
+          "home_win_p": 0.4679,
+          "draw_p": 0.244,
+          "away_win_p": 0.2881,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-24",
+          "home": "Mexico",
+          "away": "Czech Republic",
+          "exp_home_goals": 1.56,
+          "exp_away_goals": 1.29,
+          "home_win_p": 0.4373,
+          "draw_p": 0.2478,
+          "away_win_p": 0.3149,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-24",
+          "home": "South Africa",
+          "away": "South Korea",
+          "exp_home_goals": 1.32,
+          "exp_away_goals": 1.39,
+          "home_win_p": 0.3545,
+          "draw_p": 0.2578,
+          "away_win_p": 0.3877,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "B",
+      "projected_table": [
+        {
+          "team": "Switzerland",
+          "exp_points": 4.95,
+          "exp_gf": 4.82,
+          "exp_ga": 3.58,
+          "exp_gd": 1.24,
+          "projected_rank": 1,
+          "strength": 0.568,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Canada",
+          "exp_points": 4.91,
+          "exp_gf": 4.95,
+          "exp_ga": 3.75,
+          "exp_gd": 1.2,
+          "projected_rank": 2,
+          "strength": 0.452,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Bosnia and Herzegovina",
+          "exp_points": 4.27,
+          "exp_gf": 4.3,
+          "exp_ga": 4.07,
+          "exp_gd": 0.23,
+          "projected_rank": 3,
+          "strength": 0.439,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Qatar",
+          "exp_points": 2.44,
+          "exp_gf": 3.0,
+          "exp_ga": 5.67,
+          "exp_gd": -2.67,
+          "projected_rank": 4,
+          "strength": 0.271,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-12",
+          "home": "Canada",
+          "away": "Bosnia and Herzegovina",
+          "exp_home_goals": 1.57,
+          "exp_away_goals": 1.28,
+          "home_win_p": 0.4407,
+          "draw_p": 0.2475,
+          "away_win_p": 0.3119,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-13",
+          "home": "Qatar",
+          "away": "Switzerland",
+          "exp_home_goals": 0.97,
+          "exp_away_goals": 1.88,
+          "home_win_p": 0.1905,
+          "draw_p": 0.2222,
+          "away_win_p": 0.5873,
+          "most_likely_score": "0-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-18",
+          "home": "Bosnia and Herzegovina",
+          "away": "Switzerland",
+          "exp_home_goals": 1.23,
+          "exp_away_goals": 1.48,
+          "home_win_p": 0.3164,
+          "draw_p": 0.2553,
+          "away_win_p": 0.4283,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-18",
+          "home": "Canada",
+          "away": "Qatar",
+          "exp_home_goals": 2.0,
+          "exp_away_goals": 1.01,
+          "home_win_p": 0.6033,
+          "draw_p": 0.2123,
+          "away_win_p": 0.1844,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-24",
+          "home": "Bosnia and Herzegovina",
+          "away": "Qatar",
+          "exp_home_goals": 1.79,
+          "exp_away_goals": 1.02,
+          "home_win_p": 0.5533,
+          "draw_p": 0.232,
+          "away_win_p": 0.2147,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-24",
+          "home": "Canada",
+          "away": "Switzerland",
+          "exp_home_goals": 1.38,
+          "exp_away_goals": 1.46,
+          "home_win_p": 0.357,
+          "draw_p": 0.2508,
+          "away_win_p": 0.3922,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "C",
+      "projected_table": [
+        {
+          "team": "Brazil",
+          "exp_points": 5.81,
+          "exp_gf": 5.5,
+          "exp_ga": 2.99,
+          "exp_gd": 2.51,
+          "projected_rank": 1,
+          "strength": 0.818,
+          "opta_win_prob": 0.112
+        },
+        {
+          "team": "Morocco",
+          "exp_points": 4.08,
+          "exp_gf": 4.08,
+          "exp_ga": 4.17,
+          "exp_gd": -0.09,
+          "projected_rank": 2,
+          "strength": 0.51,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Scotland",
+          "exp_points": 3.34,
+          "exp_gf": 3.54,
+          "exp_ga": 4.72,
+          "exp_gd": -1.18,
+          "projected_rank": 3,
+          "strength": 0.45,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Haiti",
+          "exp_points": 3.31,
+          "exp_gf": 3.51,
+          "exp_ga": 4.75,
+          "exp_gd": -1.24,
+          "projected_rank": 4,
+          "strength": 0.413,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-13",
+          "home": "Brazil",
+          "away": "Morocco",
+          "exp_home_goals": 1.78,
+          "exp_away_goals": 1.03,
+          "home_win_p": 0.5501,
+          "draw_p": 0.2329,
+          "away_win_p": 0.217,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-13",
+          "home": "Haiti",
+          "away": "Scotland",
+          "exp_home_goals": 1.34,
+          "exp_away_goals": 1.36,
+          "home_win_p": 0.3678,
+          "draw_p": 0.2581,
+          "away_win_p": 0.3741,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-19",
+          "home": "Morocco",
+          "away": "Scotland",
+          "exp_home_goals": 1.49,
+          "exp_away_goals": 1.22,
+          "home_win_p": 0.4353,
+          "draw_p": 0.2546,
+          "away_win_p": 0.3101,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-19",
+          "home": "Haiti",
+          "away": "Brazil",
+          "exp_home_goals": 1.0,
+          "exp_away_goals": 1.83,
+          "home_win_p": 0.2031,
+          "draw_p": 0.2276,
+          "away_win_p": 0.5693,
+          "most_likely_score": "0-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-24",
+          "home": "Morocco",
+          "away": "Haiti",
+          "exp_home_goals": 1.56,
+          "exp_away_goals": 1.17,
+          "home_win_p": 0.4638,
+          "draw_p": 0.2509,
+          "away_win_p": 0.2853,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-24",
+          "home": "Brazil",
+          "away": "Scotland",
+          "exp_home_goals": 1.89,
+          "exp_away_goals": 0.96,
+          "home_win_p": 0.5912,
+          "draw_p": 0.221,
+          "away_win_p": 0.1878,
+          "most_likely_score": "1-0"
+        }
+      ]
+    },
+    {
+      "group": "D",
+      "projected_table": [
+        {
+          "team": "United States",
+          "exp_points": 5.47,
+          "exp_gf": 5.38,
+          "exp_ga": 3.37,
+          "exp_gd": 2.01,
+          "projected_rank": 1,
+          "strength": 0.567,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Turkey",
+          "exp_points": 4.1,
+          "exp_gf": 4.12,
+          "exp_ga": 4.16,
+          "exp_gd": -0.04,
+          "projected_rank": 2,
+          "strength": 0.491,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Paraguay",
+          "exp_points": 3.67,
+          "exp_gf": 3.82,
+          "exp_ga": 4.52,
+          "exp_gd": -0.7,
+          "projected_rank": 3,
+          "strength": 0.403,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Australia",
+          "exp_points": 3.29,
+          "exp_gf": 3.55,
+          "exp_ga": 4.82,
+          "exp_gd": -1.27,
+          "projected_rank": 4,
+          "strength": 0.378,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-12",
+          "home": "United States",
+          "away": "Paraguay",
+          "exp_home_goals": 1.83,
+          "exp_away_goals": 1.1,
+          "home_win_p": 0.5456,
+          "draw_p": 0.2286,
+          "away_win_p": 0.2258,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-13",
+          "home": "Australia",
+          "away": "Turkey",
+          "exp_home_goals": 1.23,
+          "exp_away_goals": 1.48,
+          "home_win_p": 0.3152,
+          "draw_p": 0.2551,
+          "away_win_p": 0.4296,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-19",
+          "home": "Paraguay",
+          "away": "Turkey",
+          "exp_home_goals": 1.27,
+          "exp_away_goals": 1.43,
+          "home_win_p": 0.3341,
+          "draw_p": 0.2568,
+          "away_win_p": 0.4091,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-19",
+          "home": "United States",
+          "away": "Australia",
+          "exp_home_goals": 1.89,
+          "exp_away_goals": 1.06,
+          "home_win_p": 0.5671,
+          "draw_p": 0.223,
+          "away_win_p": 0.2099,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-25",
+          "home": "United States",
+          "away": "Turkey",
+          "exp_home_goals": 1.66,
+          "exp_away_goals": 1.21,
+          "home_win_p": 0.4787,
+          "draw_p": 0.2424,
+          "away_win_p": 0.279,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-25",
+          "home": "Paraguay",
+          "away": "Australia",
+          "exp_home_goals": 1.45,
+          "exp_away_goals": 1.26,
+          "home_win_p": 0.4155,
+          "draw_p": 0.2564,
+          "away_win_p": 0.3281,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "E",
+      "projected_table": [
+        {
+          "team": "Germany",
+          "exp_points": 5.83,
+          "exp_gf": 5.56,
+          "exp_ga": 2.99,
+          "exp_gd": 2.57,
+          "projected_rank": 1,
+          "strength": 0.771,
+          "opta_win_prob": 0.072
+        },
+        {
+          "team": "Ivory Coast",
+          "exp_points": 4.65,
+          "exp_gf": 4.53,
+          "exp_ga": 3.75,
+          "exp_gd": 0.78,
+          "projected_rank": 2,
+          "strength": 0.602,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Ecuador",
+          "exp_points": 3.44,
+          "exp_gf": 3.62,
+          "exp_ga": 4.68,
+          "exp_gd": -1.06,
+          "projected_rank": 3,
+          "strength": 0.448,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Curacao",
+          "exp_points": 2.69,
+          "exp_gf": 3.1,
+          "exp_ga": 5.39,
+          "exp_gd": -2.29,
+          "projected_rank": 4,
+          "strength": 0.333,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-14",
+          "home": "Germany",
+          "away": "Curacao",
+          "exp_home_goals": 2.13,
+          "exp_away_goals": 0.85,
+          "home_win_p": 0.6679,
+          "draw_p": 0.1935,
+          "away_win_p": 0.1386,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-14",
+          "home": "Ivory Coast",
+          "away": "Ecuador",
+          "exp_home_goals": 1.63,
+          "exp_away_goals": 1.12,
+          "home_win_p": 0.4916,
+          "draw_p": 0.2462,
+          "away_win_p": 0.2622,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-20",
+          "home": "Germany",
+          "away": "Ivory Coast",
+          "exp_home_goals": 1.59,
+          "exp_away_goals": 1.15,
+          "home_win_p": 0.4755,
+          "draw_p": 0.2491,
+          "away_win_p": 0.2754,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-20",
+          "home": "Curacao",
+          "away": "Ecuador",
+          "exp_home_goals": 1.21,
+          "exp_away_goals": 1.51,
+          "home_win_p": 0.3056,
+          "draw_p": 0.254,
+          "away_win_p": 0.4404,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-25",
+          "home": "Germany",
+          "away": "Ecuador",
+          "exp_home_goals": 1.84,
+          "exp_away_goals": 0.99,
+          "home_win_p": 0.5735,
+          "draw_p": 0.2264,
+          "away_win_p": 0.2002,
+          "most_likely_score": "1-0"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-25",
+          "home": "Curacao",
+          "away": "Ivory Coast",
+          "exp_home_goals": 1.04,
+          "exp_away_goals": 1.75,
+          "home_win_p": 0.2258,
+          "draw_p": 0.236,
+          "away_win_p": 0.5382,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "F",
+      "projected_table": [
+        {
+          "team": "Netherlands",
+          "exp_points": 5.49,
+          "exp_gf": 5.19,
+          "exp_ga": 3.18,
+          "exp_gd": 2.01,
+          "projected_rank": 1,
+          "strength": 0.728,
+          "opta_win_prob": 0.054
+        },
+        {
+          "team": "Japan",
+          "exp_points": 4.11,
+          "exp_gf": 4.08,
+          "exp_ga": 4.12,
+          "exp_gd": -0.04,
+          "projected_rank": 2,
+          "strength": 0.521,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Sweden",
+          "exp_points": 4.01,
+          "exp_gf": 4.02,
+          "exp_ga": 4.18,
+          "exp_gd": -0.16,
+          "projected_rank": 3,
+          "strength": 0.527,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Tunisia",
+          "exp_points": 2.92,
+          "exp_gf": 3.26,
+          "exp_ga": 5.07,
+          "exp_gd": -1.81,
+          "projected_rank": 4,
+          "strength": 0.405,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-14",
+          "home": "Netherlands",
+          "away": "Japan",
+          "exp_home_goals": 1.66,
+          "exp_away_goals": 1.1,
+          "home_win_p": 0.5045,
+          "draw_p": 0.2436,
+          "away_win_p": 0.2518,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-14",
+          "home": "Sweden",
+          "away": "Tunisia",
+          "exp_home_goals": 1.6,
+          "exp_away_goals": 1.14,
+          "home_win_p": 0.4812,
+          "draw_p": 0.2481,
+          "away_win_p": 0.2707,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-20",
+          "home": "Netherlands",
+          "away": "Sweden",
+          "exp_home_goals": 1.65,
+          "exp_away_goals": 1.11,
+          "home_win_p": 0.5002,
+          "draw_p": 0.2445,
+          "away_win_p": 0.2553,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-20",
+          "home": "Japan",
+          "away": "Tunisia",
+          "exp_home_goals": 1.59,
+          "exp_away_goals": 1.15,
+          "home_win_p": 0.4769,
+          "draw_p": 0.2488,
+          "away_win_p": 0.2743,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-25",
+          "home": "Netherlands",
+          "away": "Tunisia",
+          "exp_home_goals": 1.88,
+          "exp_away_goals": 0.97,
+          "home_win_p": 0.5876,
+          "draw_p": 0.2221,
+          "away_win_p": 0.1903,
+          "most_likely_score": "1-0"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-25",
+          "home": "Japan",
+          "away": "Sweden",
+          "exp_home_goals": 1.39,
+          "exp_away_goals": 1.31,
+          "home_win_p": 0.391,
+          "draw_p": 0.2577,
+          "away_win_p": 0.3513,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "G",
+      "projected_table": [
+        {
+          "team": "Belgium",
+          "exp_points": 5.98,
+          "exp_gf": 5.75,
+          "exp_ga": 2.91,
+          "exp_gd": 2.84,
+          "projected_rank": 1,
+          "strength": 0.599,
+          "opta_win_prob": 0.032
+        },
+        {
+          "team": "Egypt",
+          "exp_points": 4.22,
+          "exp_gf": 4.23,
+          "exp_ga": 4.09,
+          "exp_gd": 0.14,
+          "projected_rank": 2,
+          "strength": 0.383,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "New Zealand",
+          "exp_points": 4.06,
+          "exp_gf": 4.08,
+          "exp_ga": 4.18,
+          "exp_gd": -0.1,
+          "projected_rank": 3,
+          "strength": 0.396,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Iran",
+          "exp_points": 2.35,
+          "exp_gf": 2.89,
+          "exp_ga": 5.77,
+          "exp_gd": -2.88,
+          "projected_rank": 4,
+          "strength": 0.231,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-15",
+          "home": "Belgium",
+          "away": "Egypt",
+          "exp_home_goals": 1.76,
+          "exp_away_goals": 1.04,
+          "home_win_p": 0.5421,
+          "draw_p": 0.235,
+          "away_win_p": 0.2229,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-15",
+          "home": "Iran",
+          "away": "New Zealand",
+          "exp_home_goals": 1.07,
+          "exp_away_goals": 1.7,
+          "home_win_p": 0.2386,
+          "draw_p": 0.24,
+          "away_win_p": 0.5214,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-21",
+          "home": "Belgium",
+          "away": "Iran",
+          "exp_home_goals": 2.26,
+          "exp_away_goals": 0.81,
+          "home_win_p": 0.7032,
+          "draw_p": 0.1787,
+          "away_win_p": 0.1181,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-21",
+          "home": "Egypt",
+          "away": "New Zealand",
+          "exp_home_goals": 1.38,
+          "exp_away_goals": 1.32,
+          "home_win_p": 0.3844,
+          "draw_p": 0.2579,
+          "away_win_p": 0.3576,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-26",
+          "home": "Belgium",
+          "away": "New Zealand",
+          "exp_home_goals": 1.73,
+          "exp_away_goals": 1.06,
+          "home_win_p": 0.5309,
+          "draw_p": 0.2378,
+          "away_win_p": 0.2314,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-26",
+          "home": "Egypt",
+          "away": "Iran",
+          "exp_home_goals": 1.81,
+          "exp_away_goals": 1.01,
+          "home_win_p": 0.5611,
+          "draw_p": 0.2299,
+          "away_win_p": 0.209,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "H",
+      "projected_table": [
+        {
+          "team": "Spain",
+          "exp_points": 6.35,
+          "exp_gf": 6.13,
+          "exp_ga": 2.69,
+          "exp_gd": 3.44,
+          "projected_rank": 1,
+          "strength": 0.925,
+          "opta_win_prob": 0.161
+        },
+        {
+          "team": "Uruguay",
+          "exp_points": 3.9,
+          "exp_gf": 3.94,
+          "exp_ga": 4.34,
+          "exp_gd": -0.4,
+          "projected_rank": 2,
+          "strength": 0.523,
+          "opta_win_prob": 0.038
+        },
+        {
+          "team": "Cape Verde",
+          "exp_points": 3.45,
+          "exp_gf": 3.64,
+          "exp_ga": 4.74,
+          "exp_gd": -1.1,
+          "projected_rank": 3,
+          "strength": 0.427,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Saudi Arabia",
+          "exp_points": 2.92,
+          "exp_gf": 3.26,
+          "exp_ga": 5.2,
+          "exp_gd": -1.94,
+          "projected_rank": 4,
+          "strength": 0.381,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-15",
+          "home": "Spain",
+          "away": "Cape Verde",
+          "exp_home_goals": 2.07,
+          "exp_away_goals": 0.88,
+          "home_win_p": 0.6478,
+          "draw_p": 0.2013,
+          "away_win_p": 0.1508,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-15",
+          "home": "Saudi Arabia",
+          "away": "Uruguay",
+          "exp_home_goals": 1.2,
+          "exp_away_goals": 1.52,
+          "home_win_p": 0.2986,
+          "draw_p": 0.253,
+          "away_win_p": 0.4484,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-21",
+          "home": "Spain",
+          "away": "Saudi Arabia",
+          "exp_home_goals": 2.19,
+          "exp_away_goals": 0.83,
+          "home_win_p": 0.6833,
+          "draw_p": 0.1872,
+          "away_win_p": 0.1295,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-21",
+          "home": "Cape Verde",
+          "away": "Uruguay",
+          "exp_home_goals": 1.27,
+          "exp_away_goals": 1.44,
+          "home_win_p": 0.332,
+          "draw_p": 0.2567,
+          "away_win_p": 0.4113,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-26",
+          "home": "Spain",
+          "away": "Uruguay",
+          "exp_home_goals": 1.87,
+          "exp_away_goals": 0.98,
+          "home_win_p": 0.582,
+          "draw_p": 0.2238,
+          "away_win_p": 0.1942,
+          "most_likely_score": "1-0"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-26",
+          "home": "Cape Verde",
+          "away": "Saudi Arabia",
+          "exp_home_goals": 1.49,
+          "exp_away_goals": 1.23,
+          "home_win_p": 0.4319,
+          "draw_p": 0.2549,
+          "away_win_p": 0.3132,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "I",
+      "projected_table": [
+        {
+          "team": "France",
+          "exp_points": 5.97,
+          "exp_gf": 5.74,
+          "exp_ga": 2.92,
+          "exp_gd": 2.82,
+          "projected_rank": 1,
+          "strength": 0.863,
+          "opta_win_prob": 0.128
+        },
+        {
+          "team": "Senegal",
+          "exp_points": 4.49,
+          "exp_gf": 4.41,
+          "exp_ga": 3.88,
+          "exp_gd": 0.53,
+          "projected_rank": 2,
+          "strength": 0.616,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Norway",
+          "exp_points": 3.79,
+          "exp_gf": 3.88,
+          "exp_ga": 4.41,
+          "exp_gd": -0.53,
+          "projected_rank": 3,
+          "strength": 0.529,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Iraq",
+          "exp_points": 2.39,
+          "exp_gf": 2.92,
+          "exp_ga": 5.74,
+          "exp_gd": -2.82,
+          "projected_rank": 4,
+          "strength": 0.324,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-16",
+          "home": "France",
+          "away": "Senegal",
+          "exp_home_goals": 1.66,
+          "exp_away_goals": 1.1,
+          "home_win_p": 0.5052,
+          "draw_p": 0.2435,
+          "away_win_p": 0.2513,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-16",
+          "home": "Iraq",
+          "away": "Norway",
+          "exp_home_goals": 1.1,
+          "exp_away_goals": 1.66,
+          "home_win_p": 0.2511,
+          "draw_p": 0.2435,
+          "away_win_p": 0.5054,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-22",
+          "home": "France",
+          "away": "Iraq",
+          "exp_home_goals": 2.29,
+          "exp_away_goals": 0.8,
+          "home_win_p": 0.711,
+          "draw_p": 0.1752,
+          "away_win_p": 0.1137,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-22",
+          "home": "Senegal",
+          "away": "Norway",
+          "exp_home_goals": 1.52,
+          "exp_away_goals": 1.2,
+          "home_win_p": 0.4442,
+          "draw_p": 0.2535,
+          "away_win_p": 0.3022,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-26",
+          "home": "France",
+          "away": "Norway",
+          "exp_home_goals": 1.79,
+          "exp_away_goals": 1.02,
+          "home_win_p": 0.5556,
+          "draw_p": 0.2314,
+          "away_win_p": 0.2129,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-26",
+          "home": "Iraq",
+          "away": "Senegal",
+          "exp_home_goals": 1.02,
+          "exp_away_goals": 1.79,
+          "home_win_p": 0.2128,
+          "draw_p": 0.2313,
+          "away_win_p": 0.5559,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "J",
+      "projected_table": [
+        {
+          "team": "Argentina",
+          "exp_points": 5.57,
+          "exp_gf": 5.35,
+          "exp_ga": 3.14,
+          "exp_gd": 2.21,
+          "projected_rank": 1,
+          "strength": 0.788,
+          "opta_win_prob": 0.087
+        },
+        {
+          "team": "Algeria",
+          "exp_points": 4.91,
+          "exp_gf": 4.79,
+          "exp_ga": 3.59,
+          "exp_gd": 1.2,
+          "projected_rank": 2,
+          "strength": 0.683,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Austria",
+          "exp_points": 4.1,
+          "exp_gf": 4.15,
+          "exp_ga": 4.17,
+          "exp_gd": -0.02,
+          "projected_rank": 3,
+          "strength": 0.568,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Jordan",
+          "exp_points": 2.06,
+          "exp_gf": 2.7,
+          "exp_ga": 6.09,
+          "exp_gd": -3.39,
+          "projected_rank": 4,
+          "strength": 0.324,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-16",
+          "home": "Argentina",
+          "away": "Algeria",
+          "exp_home_goals": 1.51,
+          "exp_away_goals": 1.21,
+          "home_win_p": 0.441,
+          "draw_p": 0.2539,
+          "away_win_p": 0.3051,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-16",
+          "home": "Austria",
+          "away": "Jordan",
+          "exp_home_goals": 1.86,
+          "exp_away_goals": 0.98,
+          "home_win_p": 0.5799,
+          "draw_p": 0.2244,
+          "away_win_p": 0.1956,
+          "most_likely_score": "1-0"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-22",
+          "home": "Argentina",
+          "away": "Austria",
+          "exp_home_goals": 1.65,
+          "exp_away_goals": 1.1,
+          "home_win_p": 0.5015,
+          "draw_p": 0.2443,
+          "away_win_p": 0.2542,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-22",
+          "home": "Algeria",
+          "away": "Jordan",
+          "exp_home_goals": 2.04,
+          "exp_away_goals": 0.89,
+          "home_win_p": 0.6394,
+          "draw_p": 0.2045,
+          "away_win_p": 0.1561,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-27",
+          "home": "Argentina",
+          "away": "Jordan",
+          "exp_home_goals": 2.19,
+          "exp_away_goals": 0.83,
+          "home_win_p": 0.6836,
+          "draw_p": 0.1871,
+          "away_win_p": 0.1293,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-27",
+          "home": "Algeria",
+          "away": "Austria",
+          "exp_home_goals": 1.54,
+          "exp_away_goals": 1.19,
+          "home_win_p": 0.4546,
+          "draw_p": 0.2522,
+          "away_win_p": 0.2932,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "K",
+      "projected_table": [
+        {
+          "team": "Portugal",
+          "exp_points": 6.27,
+          "exp_gf": 6.09,
+          "exp_ga": 2.75,
+          "exp_gd": 3.34,
+          "projected_rank": 1,
+          "strength": 0.753,
+          "opta_win_prob": 0.065
+        },
+        {
+          "team": "Colombia",
+          "exp_points": 4.55,
+          "exp_gf": 4.47,
+          "exp_ga": 3.85,
+          "exp_gd": 0.62,
+          "projected_rank": 2,
+          "strength": 0.522,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "DR Congo",
+          "exp_points": 3.42,
+          "exp_gf": 3.64,
+          "exp_ga": 4.79,
+          "exp_gd": -1.15,
+          "projected_rank": 3,
+          "strength": 0.351,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Uzbekistan",
+          "exp_points": 2.42,
+          "exp_gf": 2.93,
+          "exp_ga": 5.74,
+          "exp_gd": -2.81,
+          "projected_rank": 4,
+          "strength": 0.271,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-17",
+          "home": "Portugal",
+          "away": "DR Congo",
+          "exp_home_goals": 2.06,
+          "exp_away_goals": 0.89,
+          "home_win_p": 0.6447,
+          "draw_p": 0.2025,
+          "away_win_p": 0.1528,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-17",
+          "home": "Uzbekistan",
+          "away": "Colombia",
+          "exp_home_goals": 1.01,
+          "exp_away_goals": 1.8,
+          "home_win_p": 0.2103,
+          "draw_p": 0.2304,
+          "away_win_p": 0.5593,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-23",
+          "home": "Portugal",
+          "away": "Uzbekistan",
+          "exp_home_goals": 2.34,
+          "exp_away_goals": 0.78,
+          "home_win_p": 0.7225,
+          "draw_p": 0.1701,
+          "away_win_p": 0.1075,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-23",
+          "home": "DR Congo",
+          "away": "Colombia",
+          "exp_home_goals": 1.15,
+          "exp_away_goals": 1.59,
+          "home_win_p": 0.2763,
+          "draw_p": 0.2492,
+          "away_win_p": 0.4745,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-27",
+          "home": "Portugal",
+          "away": "Colombia",
+          "exp_home_goals": 1.69,
+          "exp_away_goals": 1.08,
+          "home_win_p": 0.5147,
+          "draw_p": 0.2415,
+          "away_win_p": 0.2438,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-27",
+          "home": "DR Congo",
+          "away": "Uzbekistan",
+          "exp_home_goals": 1.6,
+          "exp_away_goals": 1.14,
+          "home_win_p": 0.4785,
+          "draw_p": 0.2486,
+          "away_win_p": 0.273,
+          "most_likely_score": "1-1"
+        }
+      ]
+    },
+    {
+      "group": "L",
+      "projected_table": [
+        {
+          "team": "England",
+          "exp_points": 6.01,
+          "exp_gf": 5.75,
+          "exp_ga": 2.89,
+          "exp_gd": 2.86,
+          "projected_rank": 1,
+          "strength": 0.85,
+          "opta_win_prob": 0.098
+        },
+        {
+          "team": "Croatia",
+          "exp_points": 4.44,
+          "exp_gf": 4.38,
+          "exp_ga": 3.93,
+          "exp_gd": 0.45,
+          "projected_rank": 2,
+          "strength": 0.57,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Ghana",
+          "exp_points": 3.78,
+          "exp_gf": 3.88,
+          "exp_ga": 4.44,
+          "exp_gd": -0.56,
+          "projected_rank": 3,
+          "strength": 0.495,
+          "opta_win_prob": 0.01
+        },
+        {
+          "team": "Panama",
+          "exp_points": 2.41,
+          "exp_gf": 2.93,
+          "exp_ga": 5.68,
+          "exp_gd": -2.75,
+          "projected_rank": 4,
+          "strength": 0.345,
+          "opta_win_prob": 0.01
+        }
+      ],
+      "matches": [
+        {
+          "matchday": 1,
+          "date": "2026-06-17",
+          "home": "England",
+          "away": "Croatia",
+          "exp_home_goals": 1.71,
+          "exp_away_goals": 1.07,
+          "home_win_p": 0.5256,
+          "draw_p": 0.239,
+          "away_win_p": 0.2354,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 1,
+          "date": "2026-06-17",
+          "home": "Ghana",
+          "away": "Panama",
+          "exp_home_goals": 1.68,
+          "exp_away_goals": 1.09,
+          "home_win_p": 0.5132,
+          "draw_p": 0.2418,
+          "away_win_p": 0.245,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-23",
+          "home": "England",
+          "away": "Ghana",
+          "exp_home_goals": 1.84,
+          "exp_away_goals": 0.99,
+          "home_win_p": 0.572,
+          "draw_p": 0.2268,
+          "away_win_p": 0.2012,
+          "most_likely_score": "1-0"
+        },
+        {
+          "matchday": 2,
+          "date": "2026-06-23",
+          "home": "Croatia",
+          "away": "Panama",
+          "exp_home_goals": 1.8,
+          "exp_away_goals": 1.01,
+          "home_win_p": 0.5597,
+          "draw_p": 0.2303,
+          "away_win_p": 0.21,
+          "most_likely_score": "1-1"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-27",
+          "home": "England",
+          "away": "Panama",
+          "exp_home_goals": 2.2,
+          "exp_away_goals": 0.83,
+          "home_win_p": 0.6869,
+          "draw_p": 0.1857,
+          "away_win_p": 0.1274,
+          "most_likely_score": "2-0"
+        },
+        {
+          "matchday": 3,
+          "date": "2026-06-27",
+          "home": "Croatia",
+          "away": "Ghana",
+          "exp_home_goals": 1.51,
+          "exp_away_goals": 1.21,
+          "home_win_p": 0.4404,
+          "draw_p": 0.254,
+          "away_win_p": 0.3056,
+          "most_likely_score": "1-1"
+        }
+      ]
+    }
+  ]
+}

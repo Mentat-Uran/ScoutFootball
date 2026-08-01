@@ -1,0 +1,232 @@
+"""Tests for scripts/check_frontend_manifest.py staleness gate."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = REPO_ROOT / "scripts" / "check_frontend_manifest.py"
+COMMITTED_MANIFEST = REPO_ROOT / "frontend" / "data_manifest.json"
+COMMITTED_DATA_DIR = REPO_ROOT / "frontend" / "data"
+
+
+def _load_module():
+    """Import the script as a module so we can call check_manifest() directly."""
+    spec = importlib.util.spec_from_file_location("check_frontend_manifest", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _make_manifest(files: dict[str, float]) -> dict:
+    return {
+        "generated_at": "2026-06-23T00:00:00+00:00",
+        "file_count": len(files),
+        "total_kb": round(sum(files.values()), 1),
+        "files": [{"path": p, "kb": v} for p, v in sorted(files.items())],
+    }
+
+
+def test_fresh_manifest_returns_zero(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "a.json").write_text('{"x": 1}', encoding="utf-8")
+    (data_dir / "sub").mkdir()
+    (data_dir / "sub" / "b.json").write_text('{"y": 2}', encoding="utf-8")
+
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    # Sizes must match within SIZE_TOLERANCE_KB (0.2).
+    _write_json(manifest_path, _make_manifest({
+        "/data/a.json": round(len('{"x": 1}') / 1024, 1),
+        "/data/sub/b.json": round(len('{"y": 2}') / 1024, 1),
+    }))
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 0
+
+
+def test_missing_manifest_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    manifest_path = tmp_path / "missing.json"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+def test_unreadable_manifest_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    manifest_path = tmp_path / "data_manifest.json"
+    manifest_path.write_text("not valid json {", encoding="utf-8")
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+def test_extra_file_on_disk_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "a.json").write_text('{"x": 1}', encoding="utf-8")
+    (data_dir / "b.json").write_text('{"y": 2}', encoding="utf-8")  # not in manifest
+
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, _make_manifest({
+        "/data/a.json": round(len('{"x": 1}') / 1024, 1),
+    }))
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+def test_missing_file_on_disk_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "a.json").write_text('{"x": 1}', encoding="utf-8")
+    # manifest references b.json which does not exist on disk
+
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, _make_manifest({
+        "/data/a.json": round(len('{"x": 1}') / 1024, 1),
+        "/data/b.json": 1.0,
+    }))
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+def test_size_drift_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    # Actual size ~0.001 KB, manifest says 5.0 KB — well beyond 0.2 tolerance.
+    (data_dir / "a.json").write_text('{"x": 1}', encoding="utf-8")
+
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, _make_manifest({"/data/a.json": 5.0}))
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+def test_size_drift_within_tolerance_returns_zero(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "a.json").write_text('{"x": 1}', encoding="utf-8")
+    actual_kb = round(len('{"x": 1}') / 1024, 1)
+    # Drift of 0.1 KB is within the 0.2 tolerance.
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, _make_manifest({"/data/a.json": actual_kb + 0.1}))
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 0
+
+
+def test_empty_data_dir_with_empty_manifest_returns_zero(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, _make_manifest({}))
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 0
+
+
+def test_duplicate_manifest_entry_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "a.json").write_text('{"x": 1}', encoding="utf-8")
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, {
+        "generated_at": "2026-07-17T00:00:00+00:00",
+        "file_count": 2,
+        "total_kb": 0.0,
+        "files": [
+            {"path": "/data/a.json", "kb": 0.0},
+            {"path": "/data/a.json", "kb": 0.0},
+        ],
+    })
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+def test_manifest_total_mismatch_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "a.json").write_text('{"x": 1}', encoding="utf-8")
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, {
+        "generated_at": "2026-07-17T00:00:00+00:00",
+        "file_count": 1,
+        "total_kb": 5.0,
+        "files": [{"path": "/data/a.json", "kb": 0.0}],
+    })
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+def test_invalid_manifest_file_entry_returns_one(tmp_path: Path) -> None:
+    mod = _load_module()
+    data_dir = tmp_path / "frontend" / "data"
+    data_dir.mkdir(parents=True)
+    manifest_path = tmp_path / "frontend" / "data_manifest.json"
+    _write_json(manifest_path, {
+        "generated_at": "2026-07-17T00:00:00+00:00",
+        "file_count": 1,
+        "total_kb": 0.0,
+        "files": [{"path": "/data/a.json", "kb": "unknown"}],
+    })
+
+    assert mod.check_manifest(manifest_path, data_dir, quiet=True) == 1
+
+
+# ---------------------------------------------------------------------------
+# Integration test: validate the REAL committed manifest against frontend/data/
+# ---------------------------------------------------------------------------
+# The unit tests above only exercise check_manifest() logic with synthetic
+# tmp_path data. They cannot catch the real-world failure mode where a
+# developer edits a frontend/data/*.json file but forgets to regenerate
+# data_manifest.json. This test closes that gap by running check_manifest()
+# against the actual committed files.
+# ---------------------------------------------------------------------------
+
+
+def test_committed_frontend_manifest_is_fresh() -> None:
+    """The committed ``frontend/data_manifest.json`` must match
+    ``frontend/data/`` exactly (file list + sizes within tolerance).
+
+    If this test fails, a frontend data file was added, removed, or
+    resized without regenerating the manifest. Fix by running::
+
+        PYTHONPATH=src python scripts/export_static_frontend_data.py --profile release
+    """
+    if not COMMITTED_MANIFEST.exists():
+        pytest.skip(
+            f"committed manifest not found at {COMMITTED_MANIFEST}; "
+            "skipping integration check (relevant only when manifest is committed)"
+        )
+    if not COMMITTED_DATA_DIR.exists():
+        pytest.skip(
+            f"frontend data dir not found at {COMMITTED_DATA_DIR}; "
+            "skipping integration check (relevant only when data is present)"
+        )
+
+    mod = _load_module()
+    exit_code = mod.check_manifest(
+        COMMITTED_MANIFEST, COMMITTED_DATA_DIR, quiet=True
+    )
+    assert exit_code == 0, (
+        "Committed frontend/data_manifest.json is stale — file list or "
+        "sizes do not match frontend/data/. Regenerate with: "
+        "PYTHONPATH=src python scripts/export_static_frontend_data.py "
+        "--profile release"
+    )

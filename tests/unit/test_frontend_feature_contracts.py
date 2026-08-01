@@ -1,0 +1,367 @@
+"""Contract checks for the restored scouting and action-value workbenches."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+FRONTEND = PROJECT_ROOT / "frontend"
+
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def test_scouting_and_action_navigation_are_visible() -> None:
+    html = _read(FRONTEND / "index.html")
+
+    for view in ("scouting", "actions"):
+        marker = f'data-view="{view}"'
+        start = html.index(marker)
+        button = html[html.rfind("<button", 0, start) : html.index("</button>", start)]
+        assert "display:none" not in button.replace(" ", "")
+
+
+def test_frontend_foundation_keeps_keyboard_navigation_and_theme_state_explicit() -> None:
+    html = _read(FRONTEND / "index.html")
+    app_js = _read(FRONTEND / "app.js")
+    css = _read(FRONTEND / "style.css")
+
+    assert 'class="skip-link" href="#main-content"' in html
+    assert 'id="main-content" tabindex="-1"' in html
+    assert 'button.setAttribute("aria-current", "page")' in app_js
+    assert 'toggle.setAttribute("aria-pressed", darkMode ? "true" : "false")' in app_js
+    assert "--focus-ring" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
+
+
+def test_scouting_adapter_preserves_queue_contract_fields() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    for field in (
+        "player_name",
+        "reason_code",
+        "review_status",
+        "reviewer_note",
+        "as_of_date",
+        "rating_snapshot_id",
+    ):
+        assert f"p.{field}" in app_js
+
+    review_data = json.loads(_read(FRONTEND / "data" / "review_queue.json"))
+    first = review_data["players"][0]
+    assert first["player_name"]
+    assert first["reason_code"]
+
+
+def test_action_value_renderer_supports_current_xt_and_vaep_contracts() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    action_data = json.loads(_read(FRONTEND / "data" / "action_values.json"))
+
+    assert "actionData" not in app_js
+    assert 'metricKey = mode === "vaep" ? "vaep_per_90" : "xt_per_90"' in app_js
+    assert action_data["xt_players"][0]["xt_per_90"] is not None
+    assert action_data["vaep_players"][0]["vaep_per_90"] is not None
+    assert action_data["metrics"]["xt_rows"] > 0
+    assert action_data["metrics"]["vaep_rows"] > 0
+
+
+def test_restored_workbenches_expose_filters_and_boundaries() -> None:
+    html = _read(FRONTEND / "index.html")
+
+    for element_id in (
+        "scout-search",
+        "scout-status-filter",
+        "scout-save-snapshot",
+        "scout-export-csv",
+        "scout-export-workspace",
+        "scout-import-workspace",
+        "scout-server-save",
+        "scout-server-load",
+        "scout-workspace-dialog",
+        "action-search",
+        "action-competition-filter",
+        "action-minutes-filter",
+    ):
+        assert f'id="{element_id}"' in html
+
+    assert "StatsBomb Open Data" in html
+    assert "450" in html
+
+
+def test_scouting_workspace_is_loaded_before_the_app_and_has_a_versioned_contract() -> None:
+    html = _read(FRONTEND / "index.html")
+    app_js = _read(FRONTEND / "app.js")
+    workspace_js = _read(FRONTEND / "scouting-workspace.js")
+
+    assert html.index('src="scouting-workspace.js"') < html.index('src="app.js"')
+    assert 'const VERSION = "1.2.0"' in workspace_js
+    assert "workspace_id" in workspace_js
+    assert "revision" in workspace_js
+    assert "analyzeConflict" in workspace_js
+    assert "mergeWorkspaces" in workspace_js
+    assert "shortlist_dossiers" in workspace_js
+    assert 'if (typeof SCOUTING_WORKSPACE !== "undefined") ensureScoutingWorkspaceMeta();' in app_js
+    assert "Number.MAX_SAFE_INTEGER" in app_js
+    assert "saveScoutingWorkspaceToServer" in app_js
+    assert "loadLatestScoutingWorkspaceFromServer" in app_js
+    assert 'headers["If-Match"]' in app_js
+    assert "SCOUT_DOSSIERS_KEY" in app_js
+    assert "updateShortlistDossier" in app_js
+    assert "currentLang" not in app_js
+
+
+def test_static_server_404_continues_to_mapped_json_fallback() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "_staticUrlFor(apiPath) === null" in app_js
+    assert '"/review-queue": "/data/review_queue.json"' in app_js
+    assert '"/action-values": "/data/action_values.json"' in app_js
+
+
+def test_league_coverage_counts_rated_teams_not_player_rows() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "ratedTeams: new Set()" in app_js
+    assert "ratedTeams.add(p.team)" in app_js
+    assert "entry.ratedTeams.size" in app_js
+
+
+def test_broken_view_regressions_are_guarded() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    html = _read(FRONTEND / "index.html")
+
+    assert 'const z = appState.lang === "zh";' in app_js
+    assert "formatTimestamp(licenseData.updated_at)" in app_js
+    assert "squadLoading: new Set()" in app_js
+    assert "正在加载球队名单" in app_js
+    assert "selectedPredictionCalibration" in app_js
+    assert 'fetchJson("/predictions/calibration")' in app_js
+    assert 'valueSummaryMeta.status === "demo"' in app_js
+    assert "真实标签可用" in app_js
+    assert "github.com/Mentat-Uran/ScoutFootball_for_World_Cup" in html
+    assert 'rel="icon" href="favicon.svg"' in html
+
+
+def test_player_scouting_report_export_buttons_exist() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert 'id="btn-export-csv"' in app_js
+    assert 'id="btn-export-json"' in app_js
+    assert "exportPlayerScoutingReportCSV" in app_js
+    assert "exportPlayerScoutingReportJSON" in app_js
+    assert "_buildScoutingReport" in app_js
+    # Radar labels must match the API's _RADAR_LABELS.
+    assert '"Reliability"' in app_js
+    assert '"Impact"' in app_js
+    # Old wrong labels must be gone.
+    assert '"Volume"' not in app_js
+    assert '"Overall"' not in app_js
+
+
+def test_player_position_percentiles_field_name_matches_api() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    # API returns position_percentiles (plural dict); the old code read
+    # position_percentile (singular) which was always undefined.
+    assert "profile.position_percentiles" in app_js
+    assert "profile.position_percentile " not in app_js  # no stale singular read
+    assert "overall_score" in app_js
+
+
+def test_player_comparison_export_button_and_function_exist() -> None:
+    html = _read(FRONTEND / "index.html")
+    app_js = _read(FRONTEND / "app.js")
+
+    assert 'id="btn-compare-export-csv"' in html
+    assert "exportPlayerComparisonCSV" in app_js
+    assert "lastCompareData" in app_js
+    assert "exportPlayerComparisonCSV" in app_js
+    assert "exportPlayerComparisonJSON" in app_js
+    assert 'schema: "scoutfootball.player-comparison-export"' in app_js
+    assert 'id="btn-compare-export-json"' in html
+    assert "compare-add-shortlist" in app_js
+
+
+def test_form_trend_rendering_is_present() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "home_form_trend" in app_js
+    assert "away_form_trend" in app_js
+    assert "_renderFormTrendCard" in app_js
+    assert "trend-sparkline" in app_js
+    assert "form_rating" in app_js
+    assert "momentum" in app_js
+    assert (FRONTEND / "favicon.svg").exists()
+
+
+def test_static_prediction_teams_are_not_joined_histories() -> None:
+    team_data = json.loads(_read(FRONTEND / "data" / "teams.json"))
+    teams = team_data.get("teams", [])
+
+    assert teams
+    assert all("," not in team for team in teams)
+
+
+def test_training_exports_calibration_detail_for_frontend() -> None:
+    pipeline = _read(PROJECT_ROOT / "src" / "scoutfootball" / "pipeline.py")
+
+    assert "resolved.model_root, save_detail=True" in pipeline
+
+
+def test_world_cup_briefing_exports_keep_local_scope_and_csv_safety() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "exportWcBriefingJSON" in app_js
+    assert "exportWcBriefingCSV" in app_js
+    assert 'schema: "scoutfootball.world-cup-match-briefing-export"' in app_js
+    assert 'storage_scope: "browser-local-download"' in app_js
+    assert 'row.map(csvCell).join(",")' in app_js
+
+
+def test_tournament_import_preview_keeps_integrity_diagnostics_read_only() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "fetchWcTournamentImportPreview" in app_js
+    assert "preview?.integrity_errors" in app_js
+    assert "local state was not written" in app_js
+    assert "dlg.dataset.previewFor !== encoded" in app_js
+
+
+def test_tournament_import_preview_renders_bounded_change_ledgers_as_text() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "renderWcTournamentImportPreviewDetails" in app_js
+    assert "preview?.result_changes" in app_js
+    assert "preview?.knockout_changes" in app_js
+    assert 'document.createElement("li")' in app_js
+    assert 'row.textContent = formatItem(item)' in app_js
+
+
+def test_qualification_impact_has_local_export_contract() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "exportWcQualificationImpactJSON" in app_js
+    assert 'schema: "scoutfootball.world-cup-qualification-impact-export"' in app_js
+    assert 'storage_scope: "browser-local-download"' in app_js
+    assert 'id="wc-qualification-export"' in app_js
+    assert "# Squad Role Depth" in app_js
+    assert "team?.squad?.balance?.roles" in app_js
+    assert "data.squad_balance" in app_js
+    assert "wc-export-briefing-json" in app_js
+    assert "wc-export-briefing-csv" in app_js
+
+
+def test_world_cup_role_comparison_is_api_backed_and_bounded() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    index_html = _read(FRONTEND / "index.html")
+
+    assert "fetchWcSquadBalanceComparison" in app_js
+    assert "/world-cup/squad-balance-comparison/" in app_js
+    assert "wc-compare-role-depth" in app_js
+    assert "wc-compare-role-depth" in index_html
+    assert "exportWcSquadBalanceComparisonJSON" in app_js
+    assert "exportWcSquadBalanceComparisonCSV" in app_js
+    assert 'schema: "scoutfootball.world-cup-squad-balance-comparison-export"' in app_js
+    assert "wc-export-role-comparison-json" in index_html
+    assert "wc-export-role-comparison-csv" in index_html
+
+
+def test_shortlist_decision_pack_exports_are_local_and_formula_safe() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    index_html = _read(FRONTEND / "index.html")
+
+    assert "buildShortlistDecisionPack" in app_js
+    assert "exportShortlistDecisionPackJSON" in app_js
+    assert "exportShortlistDecisionPackCSV" in app_js
+    assert 'schema: "scoutfootball.shortlist-decision-pack"' in app_js
+    assert 'storage_scope: "browser-local-download"' in app_js
+    assert "row.map(csvCell).join(\",\")" in app_js
+    assert "scout-export-decision-pack-json" in index_html
+    assert "scout-export-decision-pack-csv" in index_html
+    assert "sendShortlistToTacticalBoard" in app_js
+    assert "browser-local-shortlist" in app_js
+    assert "scout-shortlist-to-tactical" in index_html
+
+
+def test_truth_label_supervision_report_is_wired_to_reports_view() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    index_html = _read(FRONTEND / "index.html")
+
+    assert "fetchTruthLabelSupervision" in app_js
+    assert 'fetchJson("/reports/truth-labels")' in app_js
+    assert "truthLabelSupervision" in app_js
+    assert "transfermarktIdentityReport" in app_js
+    assert "temporally_eligible_rows" in app_js
+    assert "post_season_rows" in app_js
+    assert 'fetchJson("/reports/transfermarkt-identities")' in app_js
+    assert "truth-label-supervision-content" in index_html
+    assert "/reports/truth-labels" in index_html
+
+
+def test_match_prediction_exports_are_local_and_bounded() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    html = _read(FRONTEND / "index.html")
+    assert "buildCurrentPredictionExport" in app_js
+    assert 'schema: "scoutfootball.match-prediction-export"' in app_js
+    assert "exportCurrentPredictionJSON" in app_js
+    assert "exportCurrentPredictionCSV" in app_js
+    assert 'version: "1.1.0"' in app_js
+    assert "contextual_evidence" in app_js
+    assert "non_additive_to_prediction: true" in app_js
+    assert "compactHeadToHeadEvidence" in app_js
+    assert "compactMomentumEvidence" in app_js
+    assert "capturePredictionEvidence" in app_js
+    assert "row.map(csvCell).join(\",\")" in app_js
+    assert "btn-prediction-export-json" in html
+
+
+def test_prematch_tactical_handoff_keeps_context_separate() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    tactical_js = _read(FRONTEND / "tactical-board.js")
+    assert "buildPrematchDecisionPack" in app_js
+    assert "currentPredictionEvidenceFor(match)" in app_js
+    assert "contextual_evidence" in app_js
+    assert "non_additive_to_prediction: true" in tactical_js
+    assert 'version: "1.1.0"' in tactical_js
+
+
+def test_knockout_briefing_handoff_keeps_unresolved_slots_explicit() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    assert "openKnockoutMatchBriefing" in app_js
+    assert "/world-cup/tournament/knockout/${encodeURIComponent(matchId)}/briefing" in app_js
+    assert "no opponent or briefing is inferred" in app_js
+    assert "wc-ko-brief" in app_js
+
+
+def test_knockout_result_review_uses_a_local_pre_recording_snapshot() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "/world-cup/tournament/knockout/${encodeURIComponent(matchId)}/review" in app_js
+    assert "wc-ko-review" in app_js
+    assert "Local result comparison only; not a model evaluation." in app_js
+
+
+def test_knockout_review_ledger_is_explicitly_local_application_state() -> None:
+    app_js = _read(FRONTEND / "app.js")
+
+    assert "/world-cup/tournament/knockout/reviews" in app_js
+    assert "wc-ko-review-ledger" in app_js
+    assert "Audits local application state only" in app_js
+
+
+def test_action_value_dossier_export_keeps_local_scouting_context_separate() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    assert 'schema: "scoutfootball.action-value-research-dossier-export"' in app_js
+    assert "browser-local-shortlist-dossier" in app_js
+    assert "non_additive_to_action_values: true" in app_js
+
+
+def test_action_value_rating_candidates_require_strict_identity_context() -> None:
+    app_js = _read(FRONTEND / "app.js")
+    assert "fetchActionValueRatingLinks" in app_js
+    assert "renderActionValueRatingLinks" in app_js
+    assert "strict-name-team-season-candidates" in app_js
+    assert "requires_human_identity_verification: true" in app_js
+    assert "name-only links are not inferred" in app_js
