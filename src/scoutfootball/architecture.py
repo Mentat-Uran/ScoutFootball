@@ -738,6 +738,33 @@ def build_capability_registry() -> CapabilityRegistry:
             cli_commands=("minutes-sensitivity",),
         ),
         Capability(
+            id="ratings.cohort_sensitivity",
+            name="PRS-MODEL-013 cohort 子采样敏感性分析",
+            description=(
+                "PRS-2 切片 PRS-MODEL-013：B2 cohort 成员敏感性诊断。"
+                "对每个角色池随机 hold out 一定比例的球员（默认 "
+                "5%/10%/20%），在缩减池上从零重新计算 B0→B2 分数，"
+                "在 baseline 和 perturbed 池的公共球员上衡量排名稳定性。"
+                "与 PRS-MODEL-011/012 不同，cohort 扰动有最根本的效应："
+                "B0 百分位变化（参考池变了）、B2 prior 变化（stable_core "
+                "成员变了）、B2 收缩变化（prior 变了）。整个 B0→B2 链在"
+                "缩减池上重新计算。通过四个指标衡量排名稳定性："
+                "Spearman 相关系数、平均绝对排名变动、最大绝对排名变动、"
+                "top-N 重叠率。每条扰动报告 common_player_count、"
+                "perturbed_prior_mean、perturbed_prior_source 以便观察"
+                "缩减池是否触发 prior fallback。种子确定性：每个 "
+                "(base_seed, role_family, repeat_index) 三元组通过 SHA256 "
+                "派生独立种子。池子小于 min_pool_size（默认 10）的角色"
+                "跳过扰动。诊断为只读，不修改特征矩阵、cohort 定义或"
+                "任何 parquet 产物；不参与 fail-closed verdict（敏感性"
+                "指标是信号不是门禁）。CLI cohort-sensitivity 支持 "
+                "--fractions/--baseline-minutes/--n-repeats/--top-n/"
+                "--min-pool-size/--seed/--json。"
+            ),
+            domain="player_ratings",
+            cli_commands=("cohort-sensitivity",),
+        ),
+        Capability(
             id="predictions.match",
             name="比赛结果预测",
             description="Poisson、Dixon-Coles、集成模型等多种比赛结果预测，含概率校准。",

@@ -1678,6 +1678,139 @@ def _cmd_minutes_sensitivity(args: argparse.Namespace) -> None:
         print(f"  - {lim}")
 
 
+def _cmd_cohort_sensitivity(args: argparse.Namespace) -> None:
+    """Build the PRS-MODEL-013 B2 cohort subsampling sensitivity report.
+
+    Randomly holds out a fraction of players from each role pool,
+    recomputes B0->B2 from scratch on the remaining pool, and measures
+    ranking stability on the common players versus the baseline.
+    Read-only; does not modify the feature matrix, cohort definition, or
+    any parquet artifact.
+    """
+    from scoutfootball.config import PlatformSettings
+    from scoutfootball.evaluation.cohort_sensitivity import (
+        DEFAULT_HOLDOUT_FRACTIONS,
+        compute_cohort_sensitivity_report,
+    )
+
+    settings = PlatformSettings.from_root()
+
+    # Parse --fractions "0.05,0.10,0.20" into a tuple of floats.
+    if args.fractions:
+        try:
+            fractions = tuple(
+                float(f.strip()) for f in args.fractions.split(",") if f.strip()
+            )
+        except ValueError:
+            print(
+                f"error: --fractions must be comma-separated floats, got {args.fractions!r}"
+            )
+            sys.exit(2)
+        if not fractions:
+            fractions = DEFAULT_HOLDOUT_FRACTIONS
+    else:
+        fractions = DEFAULT_HOLDOUT_FRACTIONS
+
+    report = compute_cohort_sensitivity_report(
+        settings=settings,
+        baseline_reference_minutes=args.baseline_minutes,
+        holdout_fractions=fractions,
+        n_repeats=args.n_repeats,
+        top_n=args.top_n,
+        min_pool_size=args.min_pool_size,
+        seed=args.seed,
+    )
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
+
+    if report["status"] != "ok":
+        print(f"Cohort sensitivity report: {report['status']}")
+        ev = report.get("evidence", {})
+        if ev:
+            print(f"  reason: {ev.get('reason', 'unknown')}")
+        return
+
+    print(
+        f"Cohort sensitivity report "
+        f"(schema {report['schema']} v{report['schema_version']})"
+    )
+    print(f"status: {report['status']}")
+    print(f"baseline: {report['baseline_schema']} v{report['baseline_version']}")
+    print(f"baseline_reference_minutes: {report['baseline_reference_minutes']}")
+    print(f"holdout_fractions: {report['holdout_fractions']}")
+    print(f"n_repeats: {report['n_repeats']}")
+    print(f"top_n: {report['top_n']}")
+    print(f"min_pool_size: {report['min_pool_size']}")
+    print(f"seed: {report['seed']}")
+    print()
+
+    print("--- Per-role sensitivity ---")
+    for rs in report["role_summaries"]:
+        role = rs["role_family"]
+        n = rs["player_count"]
+        baseline_prior = rs["baseline_prior_mean"]
+        baseline_src = rs["baseline_prior_source"]
+        skipped = rs["skipped_reason"]
+        if skipped:
+            print(
+                f"{role}: {n} players, prior={baseline_prior:.2f} ({baseline_src}), "
+                f"SKIPPED ({skipped})"
+            )
+            print()
+            continue
+
+        min_sp = rs["min_spearman_correlation"]
+        max_sp = rs["max_spearman_correlation"]
+        worst_frac = rs["worst_holdout_fraction"]
+        worst_rep = rs["worst_repeat_index"]
+        print(
+            f"{role}: {n} players, prior={baseline_prior:.2f} ({baseline_src})"
+        )
+        if min_sp is not None:
+            print(
+                f"  worst case: fraction={worst_frac}, repeat={worst_rep} "
+                f"(min_spearman={min_sp:.4f}, max_spearman={max_sp:.4f})"
+            )
+        for hr in rs["holdout_results"]:
+            frac = hr["holdout_fraction"]
+            held = hr["held_out_count"]
+            remaining = hr["remaining_count"]
+            min_s = hr["min_spearman_correlation"]
+            max_s = hr["max_spearman_correlation"]
+            mean_s = hr["mean_spearman_correlation"]
+            print(
+                f"  fraction={frac:.2f} (held={held}, remaining={remaining}): "
+                f"min={min_s:.4f}, mean={mean_s:.4f}, max={max_s:.4f} "
+                f"over {hr['n_repeats']} repeats"
+            )
+            for rep in hr["repeats"]:
+                sp = rep["spearman_correlation"]
+                mean_shift = rep["mean_abs_rank_shift"]
+                max_shift = rep["max_abs_rank_shift"]
+                overlap = rep["top_n_overlap"]
+                common = rep["common_player_count"]
+                psrc = rep.get("perturbed_prior_source", "n/a")
+                skipped_rep = rep.get("skipped_reason")
+                if skipped_rep:
+                    print(
+                        f"    repeat {rep['repeat_index']}: SKIPPED ({skipped_rep})"
+                    )
+                else:
+                    print(
+                        f"    repeat {rep['repeat_index']}: spearman={sp:.4f}, "
+                        f"mean_shift={mean_shift:.2f}, max_shift={max_shift}, "
+                        f"top_n_overlap={overlap:.2f} "
+                        f"(common={common}, prior={psrc})"
+                    )
+        print()
+
+    print("Limitations:")
+    for lim in report["limitations"]:
+        print(f"  - {lim}")
+
+
 def _cmd_label_stability(args: argparse.Namespace) -> None:
     """Build the PRS-LABEL-006 label stability report.
 
@@ -4965,6 +5098,9 @@ def _cmd_validate_review(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    from scoutfootball.evaluation.cohort_sensitivity import (
+        DEFAULT_HOLDOUT_FRACTIONS,
+    )
     from scoutfootball.evaluation.minutes_sensitivity import (
         DEFAULT_MINUTES_DELTAS,
     )
@@ -5790,6 +5926,69 @@ def build_parser() -> argparse.ArgumentParser:
         help="Top-N window for overlap calculation (default: 10)",
     )
     minutes_sensitivity_p.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit full report as JSON",
+    )
+
+    cohort_sensitivity_p = sub.add_parser(
+        "cohort-sensitivity",
+        help=(
+            "Build the PRS-MODEL-013 B2 cohort subsampling sensitivity "
+            "report: randomly holds out a fraction of players from each "
+            "role pool, recomputes B0->B2 from scratch on the remaining "
+            "pool (B0 percentiles, prior, and shrinkage all change), and "
+            "measures ranking stability on the common players versus the "
+            "baseline. Read-only; does not modify the feature matrix, "
+            "cohort definition, or any parquet artifact."
+        ),
+    )
+    cohort_sensitivity_p.add_argument(
+        "--fractions",
+        type=str,
+        help=(
+            "Comma-separated list of holdout fractions in [0, 1) (e.g. "
+            "0.05,0.10,0.20). Default: "
+            f"{','.join(map(str, DEFAULT_HOLDOUT_FRACTIONS))}"
+        ),
+    )
+    cohort_sensitivity_p.add_argument(
+        "--baseline-minutes",
+        type=float,
+        default=900.0,
+        help=(
+            "Baseline reference_minutes for B2 (default: 900, matching "
+            "B2 default)"
+        ),
+    )
+    cohort_sensitivity_p.add_argument(
+        "--n-repeats",
+        type=int,
+        default=5,
+        help="Number of random subsamples per holdout fraction (default: 5)",
+    )
+    cohort_sensitivity_p.add_argument(
+        "--top-n",
+        type=int,
+        default=10,
+        help="Top-N window for overlap calculation (default: 10)",
+    )
+    cohort_sensitivity_p.add_argument(
+        "--min-pool-size",
+        type=int,
+        default=10,
+        help=(
+            "Minimum pool size for perturbation; smaller pools are skipped "
+            "(default: 10)"
+        ),
+    )
+    cohort_sensitivity_p.add_argument(
+        "--seed",
+        type=int,
+        default=20260731,
+        help="Base random seed for reproducible subsampling (default: 20260731)",
+    )
+    cohort_sensitivity_p.add_argument(
         "--json",
         action="store_true",
         help="Emit full report as JSON",
@@ -6798,6 +6997,7 @@ def main() -> None:
         "label-stability": _cmd_label_stability,
         "weight-sensitivity": _cmd_weight_sensitivity,
         "minutes-sensitivity": _cmd_minutes_sensitivity,
+        "cohort-sensitivity": _cmd_cohort_sensitivity,
         "discard-model-run": _cmd_discard_model_run,
         "reject-model-run": _cmd_reject_model_run,
         "promote-model-run": _cmd_promote_model_run,
