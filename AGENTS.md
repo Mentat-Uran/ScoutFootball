@@ -37,5 +37,6 @@ Run focused tests for the files changed. Do not claim a full data or runtime val
 
 - Inspect `git status`, the current branch, and the diff before staging.
 - Stage only files belonging to the change. Never commit `.env` files, credentials, personal data, raw private datasets, logs, caches, model caches, downloaded binaries, or local runtime output.
-- Checked-in GitHub workflows are manual-only through `workflow_dispatch`. Do not add push, pull-request, scheduled, or other automatic triggers without an explicit project decision.
+- Existing data, export, optimization, and release workflows are manual-only through `workflow_dispatch`.
+- `brief-ci.yml` is the deliberately small exception: it runs for pull requests targeting `main` and pushes to non-`main` branches only. Do not add other automatic triggers without an explicit project decision.
 - Keep commits small and explain behavior changes in the commit message and documentation.
