@@ -111,13 +111,23 @@ def _read_optional_parquet(
     return frame
 
 
-def load_data(data_dir: Path):
+def load_data(data_dir: Path, *, standard_path: Path | None = None):
     """加载 FBref 球员数据 (standard + misc + shooting) + Football-Data 球队积分。"""
     artifact_statuses: list[dict] = []
-    standard_path = data_dir / "raw" / "fbref" / "player_stats_big5_3seasons.parquet"
-    fbref = pd.read_parquet(standard_path)
+    preferred_standard_path = data_dir / "raw" / "fbref" / "player_standard_5seasons.parquet"
+    fallback_standard_path = data_dir / "raw" / "fbref" / "player_stats_big5_3seasons.parquet"
+    selected_standard_path = Path(standard_path) if standard_path is not None else (
+        preferred_standard_path if preferred_standard_path.exists() else fallback_standard_path
+    )
+    if not selected_standard_path.is_absolute():
+        selected_standard_path = (
+            selected_standard_path
+            if selected_standard_path.exists()
+            else data_dir / selected_standard_path
+        )
+    fbref = pd.read_parquet(selected_standard_path)
     artifact_statuses.append(
-        {"source": "fbref_standard", "status": "loaded", "path": str(standard_path)},
+        {"source": "fbref_standard", "status": "loaded", "path": str(selected_standard_path)},
     )
 
     goals = fbref[("Performance", "Gls")].values.astype(np.float32)
@@ -522,18 +532,43 @@ def load_data(data_dir: Path):
         total_points=("points", "sum"),
     ).reset_index()
 
-    # Diagnostics: report team name matching rate
-    player_teams = set(df["team"].dropna().unique())
-    pts_teams = set(team_pts["team"].dropna().unique())
-    matched_teams = player_teams & pts_teams
-    unmatched_player = player_teams - pts_teams
-    if unmatched_player:
+    # Diagnostics: compare the actual training unit (team-season) only inside
+    # leagues for which this input has player features.  The former 154/538
+    # raw-string ratio mixed unsupported leagues and multi-club season strings
+    # into one denominator, making valid Big-5 coverage look artificially low.
+    feature_leagues = set(df["league"].dropna().astype(str))
+    feature_groups = (
+        df.assign(_team_key=df["team"].map(normalize_team_name))
+        .groupby(["_team_key", "league", "season"], observed=True)
+        .size()
+        .rename("n_players")
+        .reset_index()
+    )
+    feature_groups = feature_groups.loc[feature_groups["n_players"] >= 5]
+    target_groups = team_pts.loc[team_pts["league"].isin(feature_leagues), [
+        "team", "league", "season"
+    ]].copy()
+    target_groups["_team_key"] = target_groups["team"].map(normalize_team_name)
+    target_groups = target_groups[["_team_key", "league", "season"]].drop_duplicates()
+    matched_groups = target_groups.merge(
+        feature_groups[["_team_key", "league", "season"]],
+        on=["_team_key", "league", "season"],
+        how="inner",
+    )
+    coverage = len(matched_groups) / len(target_groups) if len(target_groups) else 0.0
+    unsupported_leagues = sorted(
+        set(team_pts["league"].astype(str).unique()) - feature_leagues
+    )
+    print(
+        "  球队积分匹配（有球员特征的联赛范围）："
+        f"{len(matched_groups)}/{len(target_groups)} team-season "
+        f"({coverage:.1%})，source_leagues={sorted(feature_leagues)}"
+    )
+    if unsupported_leagues:
         print(
-            f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 球员侧球队匹配积分侧, "
-            f"未匹配: {sorted(unmatched_player)[:20]}"
+            "  未纳入训练的积分联赛（缺少对应球员特征）："
+            f"{unsupported_leagues}"
         )
-    else:
-        print(f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 全部匹配")
 
     # Report NaN stats coverage
     for col in ["defense_composite", "possession_composite"]:
@@ -543,6 +578,7 @@ def load_data(data_dir: Path):
             print(f"  {col}: {n_nan}/{n_total} 行缺失 ({n_nan/n_total*100:.1f}%)")
 
     df.attrs["optimizer_artifact_statuses"] = artifact_statuses
+    df.attrs["fbref_standard_path"] = str(selected_standard_path)
     return df, team_pts, matches_df
 
 
@@ -1179,7 +1215,11 @@ def optimizer_input_artifacts(data_dir: Path) -> list[str]:
     """
     root = Path(data_dir)
     candidates = [
-        "raw/fbref/player_stats_big5_3seasons.parquet",
+        (
+            "raw/fbref/player_standard_5seasons.parquet"
+            if (root / "raw/fbref/player_standard_5seasons.parquet").exists()
+            else "raw/fbref/player_stats_big5_3seasons.parquet"
+        ),
         "raw/football_data/combined_results.parquet",
         "raw/understat/players_10seasons.parquet",
         "gold/feature_store/rating_feature_matrix.parquet",

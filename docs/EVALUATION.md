@@ -1,8 +1,10 @@
 # EVALUATION.md — 评分系统评估报告
 
-> 历史评估快照，不是当前 active rating 的准入证据。2026-07-29 本地审计确认当前 41 个模型运行中没有可复核运行，当前评分早于现行特征矩阵，29,723 条标签中独立合格监督标签为 0。当前缺陷与新评价协议见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)，能力边界见 [`CAPABILITIES.md`](CAPABILITIES.md)。在 PRS-0 生成式研究状态和 active lineage 落地前，不要把下文指标写成当前发布指标。
+> 本文历史表格仍不是独立球员能力真值。当前 active 神经候选和研究门禁的最新事实见下方 2026-08-02 记录；`research_health=not_ready` 时不得把评分写成已验证的球员能力。
 
-最新计算口径：v1.3 GPU 重跑（2026-06-09 23:05，本地 `data/models/runs/20260609T145045Z/meta.json`）。v1.3.1-dev 已新增训练集联赛 residual offset 和 `league_bias_weight`，只读复算显示当前参数 holdout points MAE 可从 11.55 降到 9.44，但完整 optimizer 重跑仍待执行。v1.3.2-dev 已新增可选球员真值标签锚定损失和监督式 NN 候选入口；当前 `player_truth_labels.parquet` 为空，所以尚无可报告的球员级监督指标。
+最新计算口径：历史 v1.3 GPU 重跑仍保留供比较；2026-08-02 已完成 CUDA MLP/Set Transformer 候选比较。MLP active run 为 `20260802T-gpu-mlp-activated-candidate`，holdout Spearman=0.6820、MAE=11.0139、RMSE=14.2681、R²=0.2581，使用 RTX 5070 Ti。该评估的目标是球队赛季积分代理，不是独立球员能力标签；Set Transformer 同切分未优于 MLP。当前标签表有 17 行 post-season 奖项 benchmark，时间可用于因果训练的独立行数仍为 0。
+
+Docker 本地服务已重建并验证：容器 `healthy`，首页、`/health`、`/ratings/meta`、`/reports/model-training`、`/ratings` 和缓存后的 `/health/research` 均返回 200。研究健康报告增加 300 秒进程缓存、并发刷新锁和启动预热；需重算时使用 `/health/research?force_refresh=true`。
 
 ## 数据切分
 

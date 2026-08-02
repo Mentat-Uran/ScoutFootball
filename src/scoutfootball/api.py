@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -50,6 +51,7 @@ from scoutfootball.app.data_loader import (
     load_score_prediction_dc,
     load_team_match,
 )
+from scoutfootball.evaluation.canonical_resolver import load_resolved_player_ratings
 from scoutfootball.evaluation.scouting_queue import build_scouting_queues
 from scoutfootball.head_to_head import get_head_to_head as _compute_head_to_head
 from scoutfootball.head_to_head import load_match_results as _load_match_results
@@ -297,6 +299,14 @@ def health_check() -> HealthResponse:
 # 5. 所有 builder 都是已有的只读函数，``get_detailed_health`` 只是组合层。
 
 _detailed_health_cache = _TTLCache()
+
+# ``/health/research`` includes lineage hashing, model admission, canonical
+# identity resolution and two sensitivity reports. It is intentionally
+# read-only, but too expensive to rebuild for every browser poll. Keep one
+# process-local snapshot and serialize refreshes so concurrent overview
+# requests do not repeat the same work.
+_research_health_cache = _TTLCache()
+_research_health_lock = threading.Lock()
 
 
 def _safe_call(builder_name: str, fn):
@@ -607,7 +617,7 @@ def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
     return result
 
 
-def get_research_health() -> dict[str, Any]:
+def get_research_health(*, force_refresh: bool = False) -> dict[str, Any]:
     """Return the five-layer research health snapshot for the rating system.
 
     Thin wrapper around ``research_health.build_research_health_report`` so
@@ -621,7 +631,22 @@ def get_research_health() -> dict[str, Any]:
         build_research_health_report,
     )
 
-    return build_research_health_report()
+    cache_key = "get_research_health"
+    if not force_refresh:
+        cached = _research_health_cache.get(cache_key)
+        if cached is not _MISSING:
+            return cached
+
+    # Re-check after taking the lock: another request may have completed the
+    # expensive build while this request was waiting.
+    with _research_health_lock:
+        if not force_refresh:
+            cached = _research_health_cache.get(cache_key)
+            if cached is not _MISSING:
+                return cached
+        report = build_research_health_report()
+        _research_health_cache.set(cache_key, report)
+        return report
 
 
 def get_adapter_registry() -> dict[str, Any]:
@@ -6294,6 +6319,20 @@ def get_player_ratings(
     if df.empty:
         return {"count": 0, "players": [], "data_mode": "empty"}
 
+    canonical_resolution = "unavailable"
+    if {
+        "player",
+        "season",
+    }.issubset(df.columns) and "canonical_player_id" not in df.columns:
+        try:
+            df = load_resolved_player_ratings(settings=_settings(), ratings_df=df)
+            canonical_resolution = "ok"
+        except Exception as exc:  # noqa: BLE001 — ratings remain read-only
+            logger.warning("Canonical ratings resolution unavailable: %s", exc)
+            df = df.copy()
+            df["canonical_player_id"] = "unresolved:unknown:missing"
+            df["canonical_match_ambiguous"] = False
+
     # PRS-0 R-003: stamp synthetic fallback in the response so consumers
     # cannot mistake demo data for a real rating artifact. The data is still
     # served (so the UI does not break) but is clearly labeled.
@@ -6316,6 +6355,7 @@ def get_player_ratings(
         "count": len(players),
         "players": players,
         "data_mode": "synthetic" if synthetic else "artifact",
+        "canonical_resolution": canonical_resolution,
         # PRS-1 R-006: stamp the evidence grain so season-proxy ratings
         # cannot be mistaken for match-level evidence in the UI/exports.
         "evidence_grain": _infer_evidence_grain(df),
@@ -6323,7 +6363,7 @@ def get_player_ratings(
 
 
 def get_ratings_meta() -> dict:
-    """Return model metadata and league metrics."""
+    """Return model metadata, league metrics, and rating-source disclosure."""
     meta_df = load_model_meta()
     league_df = load_league_metrics()
 
@@ -6333,7 +6373,141 @@ def get_ratings_meta() -> dict:
 
     leagues = league_df.to_dict(orient="records") if not league_df.empty else []
 
-    return _clean_json_value({"model_meta": meta, "league_metrics": leagues})
+    # Resolve the activated run first. Lexical latest is only a fallback: a
+    # newer research candidate must not be shown as the model currently served
+    # by player_ratings_optimized.parquet.
+    settings = _settings()
+    active_meta_path = (
+        settings.data_root / "gold" / "feature_store" / "optimized_params_meta.json"
+    )
+    active_meta_payload = _read_json(active_meta_path) if active_meta_path.exists() else {}
+    active_model = (
+        active_meta_payload.get("active_model", {})
+        if isinstance(active_meta_payload, dict)
+        else {}
+    )
+    active_run_id = active_model.get("run_id") if isinstance(active_model, dict) else None
+    active_run_meta: dict[str, Any] = {}
+    if isinstance(active_run_id, str) and active_run_id:
+        active_run_meta = _read_json(
+            settings.data_root / "models" / "runs" / active_run_id / "meta.json"
+        )
+    latest_run_meta: dict[str, Any] = {}
+    runs_dir = settings.data_root / "models" / "runs"
+    if runs_dir.exists():
+        for run_dir in sorted(
+            (path for path in runs_dir.iterdir() if path.is_dir()),
+            key=lambda path: path.name,
+            reverse=True,
+        ):
+            meta_path = run_dir / "meta.json"
+            if not meta_path.is_file():
+                continue
+            try:
+                candidate = _read_json(meta_path)
+            except (OSError, json.JSONDecodeError):
+                logger.warning("Skipping unreadable model run metadata: %s", meta_path)
+                continue
+            if candidate:
+                latest_run_meta = {**candidate, "run_id": run_dir.name}
+                break
+
+    selected_run_meta = active_run_meta or latest_run_meta
+    selected_run_id = selected_run_meta.get("run_id") or active_run_id
+
+    current_manifest = _read_json(
+        settings.data_root / "gold" / "feature_store" / "rating_feature_matrix_manifest.json"
+    )
+    training_manifest_hash = (
+        selected_run_meta.get("lineage", {})
+        .get("feature_manifest", {})
+        .get("hash")
+    )
+    current_manifest_hash = current_manifest.get("hash")
+    run_metrics = selected_run_meta.get("metrics", {})
+    coverage = run_metrics.get("team_coverage", {}) if isinstance(run_metrics, dict) else {}
+    test_coverage = coverage.get("test", {}) if isinstance(coverage, dict) else {}
+    candidate_artifacts = (
+        selected_run_meta.get("candidate_artifacts", {})
+        if isinstance(selected_run_meta, dict)
+        else {}
+    )
+    candidate_ratings = (
+        candidate_artifacts.get("ratings", {})
+        if isinstance(candidate_artifacts, dict)
+        else {}
+    )
+    identity_resolution = (
+        candidate_artifacts.get("identity", {})
+        if isinstance(candidate_artifacts, dict)
+        else {}
+    )
+    active_model_type = (
+        active_model.get("model_type")
+        if isinstance(active_model, dict)
+        else None
+    ) or selected_run_meta.get("model_type")
+    activation_status = (
+        "activated"
+        if isinstance(active_run_id, str)
+        and active_run_id
+        and selected_run_id == active_run_id
+        else "unverified"
+    )
+    rating_source = {
+        "kind": "optimizer_proxy_objective",
+        "label": "优化器代理目标产物（非独立验证的球员能力）",
+        "latest_run_id": selected_run_id,
+        "active_run_id": active_run_id,
+        "active_model_type": active_model_type,
+        "activation_status": activation_status,
+        "serving_artifact": "gold/feature_store/player_ratings_optimized.parquet",
+        "model_artifact": (
+            "gold/feature_store/player_rating_model.pt"
+            if active_model_type in {"team_points_mlp", "team_points_set_transformer"}
+            else None
+        ),
+        "training_device": (
+            run_metrics.get("training_device") if isinstance(run_metrics, dict) else None
+        ),
+        "cuda_device": (
+            run_metrics.get("cuda_device") if isinstance(run_metrics, dict) else None
+        ),
+        "architecture": selected_run_meta.get("architecture"),
+        "training_history_endpoint": (
+            f"/reports/model-training?run_id={selected_run_id}" if selected_run_id else None
+        ),
+        "candidate_ratings_artifact": candidate_ratings,
+        "scope": test_coverage.get("scope") if isinstance(test_coverage, dict) else None,
+        "unsupported_leagues": (
+            test_coverage.get("unsupported_target_leagues", [])
+            if isinstance(test_coverage, dict)
+            else []
+        ),
+        "identity_resolution": identity_resolution,
+        "identity_endpoint": "/ratings",
+        "training_objective": (
+            "球队积分代理目标：Spearman/NDCG、积分回归、分布/校准与联赛偏差惩罚"
+        ),
+        "training_manifest_hash": training_manifest_hash,
+        "current_manifest_hash": current_manifest_hash,
+        "manifest_match": (
+            training_manifest_hash is not None
+            and current_manifest_hash is not None
+            and training_manifest_hash == current_manifest_hash
+        ),
+        "research_health_endpoint": "/health/research",
+        "limitations": [
+            "该评分优化球队积分代理目标，不等同于独立监督的球员能力真值。",
+            "research_health=not_ready 时，主界面不得把它作为强排名结论。",
+        ],
+    }
+
+    return _clean_json_value({
+        "model_meta": meta,
+        "league_metrics": leagues,
+        "rating_source": rating_source,
+    })
 
 
 # ── Position group mapping for team strength aggregation ──────────
@@ -7875,6 +8049,78 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
     return {**_make_error_response(f"Run '{run_id}' not found"), "available_runs": _get_run_ids()}
 
 
+def get_model_training_history(run_id: str | None = None) -> dict[str, Any]:
+    """Return the active neural run's training diagnostics for the UI.
+
+    This endpoint exposes convergence history and holdout context only. It
+    never promotes a candidate and does not treat proxy supervision as player
+    ability truth.
+    """
+
+    settings = _settings()
+    feature_store = settings.data_root / "gold" / "feature_store"
+    active_meta = _read_json(feature_store / "optimized_params_meta.json")
+    active = active_meta.get("active_model", {}) if isinstance(active_meta, dict) else {}
+    resolved_run_id = str(run_id or active.get("run_id") or "").strip()
+    if not resolved_run_id or Path(resolved_run_id).name != resolved_run_id:
+        return {
+            "status": "no_data",
+            "message": "No active model run has training diagnostics.",
+        }
+
+    run_dir = settings.data_root / "models" / "runs" / resolved_run_id
+    meta_path = run_dir / "meta.json"
+    history_path = run_dir / "training_history.json"
+    if not run_dir.is_dir() or not meta_path.is_file():
+        return {
+            "status": "no_data",
+            "run_id": resolved_run_id,
+            "message": "Model run metadata is unavailable.",
+        }
+
+    meta = _read_json(meta_path)
+    if history_path.is_file():
+        payload = _read_json(history_path)
+    else:
+        metrics = meta.get("metrics", {}) if isinstance(meta, dict) else {}
+        payload = {
+            "run_id": resolved_run_id,
+            "model_type": meta.get("model_type"),
+            "architecture": meta.get("architecture"),
+            "training_device": metrics.get("training_device"),
+            "cuda_device": metrics.get("cuda_device"),
+            "train_seasons": metrics.get("train_seasons", []),
+            "validation_seasons": metrics.get("validation_seasons", []),
+            "test_seasons": metrics.get("test_seasons", []),
+            "epochs_requested": meta.get("args", {}).get("epochs"),
+            "epochs_completed": metrics.get("epochs_completed"),
+            "best_validation_loss": metrics.get("best_validation_mse"),
+            "test": metrics.get("test", {}),
+            "target_semantics": metrics.get("target_semantics"),
+            "history": metrics.get("history", []),
+        }
+    if not isinstance(payload, dict) or not isinstance(payload.get("history"), list):
+        return {
+            "status": "no_data",
+            "run_id": resolved_run_id,
+            "message": "Training history is unavailable for this run.",
+        }
+
+    payload = {
+        **payload,
+        "status": "ok",
+        "run_id": resolved_run_id,
+        "model_type": payload.get("model_type") or meta.get("model_type"),
+        "architecture": payload.get("architecture") or meta.get("architecture"),
+        "chart_artifact": (
+            f"data/models/runs/{resolved_run_id}/training_curves.svg"
+            if (run_dir / "training_curves.svg").is_file()
+            else None
+        ),
+    }
+    return _clean_json_value(payload)
+
+
 def _player_list_to_csv(player_list: list[dict]) -> str:
     """Convert a list of player dicts to CSV text.
 
@@ -8106,6 +8352,7 @@ def get_player_profile(
     limit: int = 50,
     offset: int = 0,
     fmt: str = "json",
+    canonical_player_id: str | None = None,
 ) -> dict:
     """Return detailed player profile with radar dimensions.
 
@@ -8116,6 +8363,25 @@ def get_player_profile(
     import pandas as pd
 
     df = load_player_ratings()
+
+    # Canonical identity is optional for backward-compatible name routes, but
+    # when supplied it becomes the primary detail selector. This keeps the
+    # UI from silently switching to a same-name row after entity aggregation.
+    if canonical_player_id and {
+        "player",
+        "season",
+    }.issubset(df.columns) and "canonical_player_id" not in df.columns:
+        try:
+            df = load_resolved_player_ratings(
+                settings=_settings(),
+                ratings_df=df,
+            )
+            canonical_mask = (
+                df["canonical_player_id"].astype(str) == canonical_player_id
+            )
+            df = df[canonical_mask].reset_index(drop=True)
+        except Exception as exc:  # noqa: BLE001 — keep legacy name fallback
+            logger.warning("Canonical profile resolution unavailable: %s", exc)
 
     # PRS-0 R-003: refuse to export synthetic fallback as real research CSV.
     # Check at the top so the maintainer gets an immediate, clear error
@@ -8306,6 +8572,8 @@ def get_player_profile(
         "team": row.get("team", ""),
         "league": row.get("league", ""),
         "season": row.get("season", ""),
+        "canonical_player_id": row.get("canonical_player_id"),
+        "canonical_match_ambiguous": bool(row.get("canonical_match_ambiguous", False)),
         "position_group": position,
         "optimized_score": round(score, 1),
         "minutes": round(minutes),

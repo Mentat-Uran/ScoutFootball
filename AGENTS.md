@@ -27,7 +27,7 @@ When documents disagree, prefer the charter for positioning, the capability tabl
 
 ```bash
 uv sync
-uv run pytest -q
+uv run python -m pytest -q       # unit/integration; e2e requires -m e2e explicitly
 node --check frontend/app.js
 ```
 
@@ -35,6 +35,7 @@ Run focused tests for the files changed. Do not claim a full data or runtime val
 
 ## Git and publication
 
+- **Autonomous development is local-only by default.** All commits, builds, exports, and tests happen on the local machine. Do not `git push`, open pull requests, publish releases, or trigger cloud deployment/build steps unless the current user prompt explicitly asks for a push or release. A passing local check is never a reason to push.
 - Inspect `git status`, the current branch, and the diff before staging.
 - Stage only files belonging to the change. Never commit `.env` files, credentials, personal data, raw private datasets, logs, caches, model caches, downloaded binaries, or local runtime output.
 - Existing data, export, optimization, and release workflows are manual-only through `workflow_dispatch`.

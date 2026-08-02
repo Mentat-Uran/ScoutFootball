@@ -53,6 +53,17 @@ SUPERVISION_ELIGIBLE_SOURCES = frozenset(
         LabelSource.SCOUTING_REVIEW.value,
     },
 )
+# Transfermarkt market value is useful as an external proxy anchor, but it is
+# not an independent observation of player ability.  Keep it eligible for
+# proxy training while excluding it from the research-health readiness gate.
+PROXY_LABEL_SOURCES = frozenset({LabelSource.TRANSFERMARKT_VALUE.value})
+INDEPENDENT_PLAYER_LABEL_SOURCES = frozenset(
+    {
+        LabelSource.AWARD.value,
+        LabelSource.MANUAL_CALIBRATION.value,
+        LabelSource.SCOUTING_REVIEW.value,
+    }
+)
 SELF_REFERENTIAL_LABEL_SOURCES = frozenset({LabelSource.EXPERT_TIER.value})
 
 
@@ -112,8 +123,12 @@ def truth_label_supervision_report(df: pd.DataFrame) -> dict[str, Any]:
             "policy": "source-policy-v1",
             "total_rows": int(len(df)),
             "eligible_rows": 0,
+            "proxy_rows": 0,
+            "independent_rows": 0,
             "excluded_rows": int(len(df)),
             "eligible_source_counts": {},
+            "proxy_source_counts": {},
+            "independent_source_counts": {},
             "excluded_source_counts": {},
             "status": "missing_label_source",
             "caveat": "Source eligibility does not prove collection independence.",
@@ -122,19 +137,33 @@ def truth_label_supervision_report(df: pd.DataFrame) -> dict[str, Any]:
 
     sources = df["label_source"].fillna("").astype(str).str.strip().str.lower()
     eligible_mask = sources.isin(SUPERVISION_ELIGIBLE_SOURCES)
+    proxy_mask = sources.isin(PROXY_LABEL_SOURCES)
+    independent_mask = sources.isin(INDEPENDENT_PLAYER_LABEL_SOURCES)
     eligible = sources[eligible_mask].value_counts().sort_index().to_dict()
+    proxy = sources[proxy_mask].value_counts().sort_index().to_dict()
+    independent = sources[independent_mask].value_counts().sort_index().to_dict()
     excluded = sources[~eligible_mask].value_counts().sort_index().to_dict()
     temporal = truth_label_temporal_report(df)
+    independent_temporal = truth_label_temporal_report(
+        df.loc[independent_mask].copy()
+    )
     return {
         "policy": "source-policy-v1",
         "total_rows": int(len(df)),
         "eligible_rows": int(eligible_mask.sum()),
+        "proxy_rows": int(proxy_mask.sum()),
+        "independent_rows": int(independent_mask.sum()),
         "excluded_rows": int((~eligible_mask).sum()),
         "eligible_source_counts": {str(key): int(value) for key, value in eligible.items()},
+        "proxy_source_counts": {str(key): int(value) for key, value in proxy.items()},
+        "independent_source_counts": {
+            str(key): int(value) for key, value in independent.items()
+        },
         "excluded_source_counts": {str(key): int(value) for key, value in excluded.items()},
         "status": "eligible_labels_available" if eligible_mask.any() else "no_eligible_labels",
         "caveat": "Source eligibility does not prove collection independence.",
         "temporal": temporal,
+        "independent_temporal": independent_temporal,
     }
 
 

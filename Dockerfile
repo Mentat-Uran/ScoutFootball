@@ -13,19 +13,24 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Runtime dependencies. ffmpeg enables optional tactical-board MP4 export.
 RUN if [ "$INSTALL_SYSTEM_PACKAGES" = "1" ]; then \
-        apt-get update && \
-        apt-get install -y --no-install-recommends ffmpeg ca-certificates && \
+        sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources && \
+        apt-get -o Acquire::Retries=5 update && \
+        apt-get -o Acquire::Retries=5 install -y --fix-missing --no-install-recommends ffmpeg ca-certificates && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
 WORKDIR /app
 
-# Copy package metadata and source before dependency installation.
+# Keep dependency installation independent from application source changes so
+# a normal code fix does not redownload the complete Python stack.
 COPY pyproject.toml README.md ./
-COPY src/ src/
 
 RUN python -m pip install --no-cache-dir --retries 10 --timeout 120 --upgrade pip && \
-    python -m pip install --no-cache-dir --retries 10 --timeout 120 -e .
+    python -c "import subprocess,sys,tomllib; deps=tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']; subprocess.check_call([sys.executable,'-m','pip','install','--no-cache-dir','--retries','10','--timeout','120','setuptools>=80.0',*deps])"
+
+COPY src/ src/
+
+RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation -e .
 
 # Copy runtime assets after dependencies so data/frontend changes do not
 # invalidate the Python dependency layer.

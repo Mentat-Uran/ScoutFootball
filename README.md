@@ -23,8 +23,29 @@ Requirements: Python 3.11+, [`uv`](https://docs.astral.sh/uv/), and Node.js for 
 ```bash
 uv sync
 uv run python -m scoutfootball --help
-uv run pytest -q
+uv run python -m pytest -q       # unit/integration; e2e requires -m e2e explicitly
 node --check frontend/app.js
+```
+
+The optional optimizer extra is installed in the development group so the
+default local test command can exercise optimizer, MLP, and Set Transformer
+candidate tests. On the maintained Windows workstation, `uv sync --extra
+optimizer` resolves the CUDA 13.0 PyTorch wheel; training selects CUDA when an
+NVIDIA device is available and records the device in run metadata. Candidate
+training remains local-only and writes artifacts under `data/models/runs/`
+until a separate, reversible promotion action is confirmed.
+The runner defaults to a 400-epoch ceiling with 50-epoch validation patience;
+early stopping still selects the best validation checkpoint. Each neural run
+records `training_history.json` and `training_curves.svg`, and the local
+reports page renders the active run's convergence chart through
+`GET /reports/model-training`.
+
+To compare the optimizer prior, the MLP baseline, and Set Transformer on the
+same chronological split:
+
+```bash
+uv run python scripts/train_team_points_mlp.py --compare \
+  --optimizer-run data/models/runs/<optimizer-run-id>
 ```
 
 To run the local service:

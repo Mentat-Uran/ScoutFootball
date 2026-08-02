@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 
 from scoutfootball import __version__
@@ -87,6 +89,7 @@ from scoutfootball.api import (
     get_model_comparison,
     get_model_run_detail,
     get_model_runs,
+    get_model_training_history,
     get_opposition_briefing,
     get_opposition_briefings,
     get_opposition_contracts,
@@ -241,6 +244,56 @@ def _cors_origins() -> list[str]:
     return _DEFAULT_CORS_ORIGINS
 
 
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def require_local_write_access(request: Request) -> None:
+    """Allow writes only from loopback or an explicitly supplied bearer token.
+
+    CORS controls browser read permissions; it is not an authorization layer.
+    The local API therefore defaults to loopback-only writes. A maintainer may
+    opt into a remote, authenticated write path by setting
+    ``SCOUTFOOTBALL_WRITE_TOKEN`` and sending the matching bearer token. The
+    token itself is never included in error responses or logs.
+    """
+    host = request.client.host if request.client else None
+    if is_loopback_client(host):
+        return
+
+    configured_token = os.environ.get("SCOUTFOOTBALL_WRITE_TOKEN", "").strip()
+    authorization = request.headers.get("authorization", "")
+    expected = f"Bearer {configured_token}" if configured_token else ""
+    if expected and secrets.compare_digest(authorization, expected):
+        return
+
+    raise HTTPException(
+        status_code=403,
+        detail={"code": "local_write_access_required"},
+    )
+
+
+class _LocalWriteRoute(APIRoute):
+    """Attach the write guard to every mutating route at registration time.
+
+    Keeping this in the route class makes a newly added POST/PUT/PATCH/DELETE
+    route fail closed by default without relying on a reviewer to remember a
+    decorator argument. The route dependency remains inspectable in tests.
+    """
+
+    def __init__(self, *args, **kwargs):
+        methods = {str(method).upper() for method in (kwargs.get("methods") or [])}
+        dependencies = list(kwargs.get("dependencies") or [])
+        if methods & _WRITE_METHODS:
+            already_guarded = any(
+                getattr(dependency, "dependency", None) is require_local_write_access
+                for dependency in dependencies
+            )
+            if not already_guarded:
+                dependencies.append(Depends(require_local_write_access))
+            kwargs["dependencies"] = dependencies
+        super().__init__(*args, **kwargs)
+
+
 def _scouting_workspace_store() -> ScoutingWorkspaceStore:
     return ScoutingWorkspaceStore(_settings().report_root / "scouting" / "workspaces")
 
@@ -316,6 +369,19 @@ async def _lifespan(app: FastAPI):
         logger.info("WC cache warmed up in %.1fs", time.time() - t0)
     except Exception as e:
         logger.warning("WC cache warmup failed (will compute on first request): %s", e)
+    try:
+        import time
+
+        from scoutfootball.api import get_research_health
+
+        t0 = time.time()
+        get_research_health()
+        logger.info("research health cache warmed up in %.1fs", time.time() - t0)
+    except Exception as e:
+        logger.warning(
+            "research health cache warmup failed (will compute on first request): %s",
+            e,
+        )
     yield
 
 
@@ -326,6 +392,7 @@ def create_app() -> FastAPI:
         description="Local-first football data research platform API",
         lifespan=_lifespan,
     )
+    app.router.route_class = _LocalWriteRoute
 
     # Configurable CORS — set SCOUTFOOTBALL_CORS_ORIGINS env var for production
     app.add_middleware(
@@ -356,14 +423,14 @@ def create_app() -> FastAPI:
         return get_detailed_health(force_refresh=force_refresh)
 
     @app.get("/health/research")
-    def health_research():
+    def health_research(force_refresh: bool = Query(False)):
         """Five-layer research health for the rating system (PRS-0 R-003/R-004).
 
         Fail-closed verdict: a stale, unreviewable, synthetic or
         non-independent-label rating system is reported as ``not_ready``,
         never hidden behind a top-level ``ok``. Read-only and local.
         """
-        return get_research_health()
+        return get_research_health(force_refresh=force_refresh)
 
     @app.get("/license")
     def license_info():
@@ -1500,8 +1567,16 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/player/{player_name}/profile")
-    def player_profile(player_name: str, season: str | None = None):
-        return get_player_profile(player_name, season=season)
+    def player_profile(
+        player_name: str,
+        season: str | None = None,
+        canonical_player_id: str | None = None,
+    ):
+        return get_player_profile(
+            player_name,
+            season=season,
+            canonical_player_id=canonical_player_id,
+        )
 
     @app.get("/players/{player_name}")
     def player_detail(
@@ -1511,6 +1586,7 @@ def create_app() -> FastAPI:
         limit: int = 50,
         offset: int = 0,
         format: str = "json",
+        canonical_player_id: str | None = None,
     ):
         from fastapi.responses import PlainTextResponse
 
@@ -1521,6 +1597,7 @@ def create_app() -> FastAPI:
             limit=limit,
             offset=offset,
             fmt=format,
+            canonical_player_id=canonical_player_id,
         )
         if format == "csv" and isinstance(result, str):
             return PlainTextResponse(result, media_type="text/csv")
@@ -1616,6 +1693,10 @@ def create_app() -> FastAPI:
     @app.get("/reports/model-runs")
     def report_model_runs():
         return get_model_runs()
+
+    @app.get("/reports/model-training")
+    def report_model_training(run_id: str | None = None):
+        return get_model_training_history(run_id=run_id)
 
     @app.get("/reports/model-runs/{run_id}")
     def report_model_run_detail(run_id: str):
@@ -2553,7 +2634,6 @@ def create_app() -> FastAPI:
         ffmpeg_path = shutil.which("ffmpeg")
         return {
             "ffmpeg_available": ffmpeg_path is not None,
-            "ffmpeg_path": ffmpeg_path,
             "supported_formats": {
                 "png": True,
                 "webm": True,  # MediaRecorder-based, browser-side
@@ -2561,9 +2641,6 @@ def create_app() -> FastAPI:
                 "gif": True,  # gif.js-based, browser-side
                 "pdf": True,  # Browser print-based
             },
-            "export_dir": str(
-                _settings().data_root / "reports" / "tactical_exports"
-            ),
         }
 
     @app.post("/tactical-board/export/mp4")
@@ -2572,39 +2649,55 @@ def create_app() -> FastAPI:
         import shutil
         import subprocess
         import tempfile
+        import time
 
+        max_upload_bytes = 50 * 1024 * 1024
         ffmpeg_path = shutil.which("ffmpeg")
         if not ffmpeg_path:
-            return _clean_json_value({
-                "status": "error",
-                "error": "ffmpeg not found on system PATH",
-            })
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "ffmpeg_unavailable"},
+            )
 
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > max_upload_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail={"code": "tactical_upload_too_large"},
+                    )
+            except ValueError:
+                pass
+
+        tmp_in_path: Path | None = None
+        out_path: Path | None = None
+        completed = False
         try:
-            body = await request.body()
-
-            # Reject uploads larger than 50 MB to prevent abuse
-            if len(body) > 50 * 1024 * 1024:
-                return _clean_json_value({
-                    "status": "error",
-                    "error": "Upload exceeds 50 MB size limit",
-                })
-
             export_dir = _settings().data_root / "reports" / "tactical_exports"
             export_dir.mkdir(parents=True, exist_ok=True)
 
-            # Save uploaded WebM to temp file
             with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_in:
-                tmp_in.write(body)
-                tmp_in_path = tmp_in.name
+                tmp_in_path = Path(tmp_in.name)
+                total_bytes = 0
+                async for chunk in request.stream():
+                    total_bytes += len(chunk)
+                    if total_bytes > max_upload_bytes:
+                        raise HTTPException(
+                            status_code=413,
+                            detail={"code": "tactical_upload_too_large"},
+                        )
+                    tmp_in.write(chunk)
 
-            # Generate output path
-            import time
+            if total_bytes == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "tactical_upload_empty"},
+                )
 
-            ts = int(time.time())
+            ts = int(time.time() * 1000)
             out_path = export_dir / f"tactical-board-{ts}.mp4"
 
-            # Convert using ffmpeg
             result = subprocess.run(
                 [
                     ffmpeg_path,
@@ -2620,24 +2713,28 @@ def create_app() -> FastAPI:
                 timeout=60,
             )
 
-            # Clean up temp file
-            Path(tmp_in_path).unlink(missing_ok=True)
-
             if result.returncode != 0:
-                return _clean_json_value({
-                    "status": "error",
-                    "error": f"ffmpeg failed: {result.stderr.decode()[:200]}",
-                })
+                raise HTTPException(
+                    status_code=422,
+                    detail={"code": "tactical_conversion_failed"},
+                )
 
+            completed = True
             return _clean_json_value({
                 "status": "ok",
-                "path": str(out_path),
+                "filename": out_path.name,
                 "size_bytes": out_path.stat().st_size,
             })
         except subprocess.TimeoutExpired:
-            return _clean_json_value({"status": "error", "error": "ffmpeg timeout (60s)"})
-        except Exception as exc:
-            return _clean_json_value({"status": "error", "error": str(exc)})
+            raise HTTPException(
+                status_code=504,
+                detail={"code": "tactical_conversion_timeout"},
+            ) from None
+        finally:
+            if tmp_in_path is not None:
+                tmp_in_path.unlink(missing_ok=True)
+            if not completed and out_path is not None:
+                out_path.unlink(missing_ok=True)
 
     # Serve frontend static files
     frontend_dir = Path(__file__).resolve().parents[2] / "frontend"

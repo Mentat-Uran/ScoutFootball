@@ -3,9 +3,9 @@
 > 自动生成：请勿手工编辑。来源为 `data/project_manifest.json`；重新生成命令为 `PYTHONPATH=src uv run python scripts/generate_manifest.py`。
 
 - manifest schema：`1.0.0`
-- package version：`1.1.0`
-- manifest generated_at：`2026-07-31T07:59:29.546694+00:00`
-- content SHA-256：`9ca79dc1f9ee48e1c4953e9853c2047086b7abd288a6b1074385ddbbe0a21327`
+- package version：`1.1.1`
+- manifest generated_at：`2026-08-02T01:10:52.355905+00:00`
+- content SHA-256：`edd7a5ed12193fb2231fd831ef8a233208bf2a45029d9f210b99b07a38254eab`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -63,6 +63,9 @@
 - `uv run python -m scoutfootball baseline-b0 [--n-bootstrap N] [--seed S] [--top N] [--json]`
 - `uv run python -m scoutfootball baseline-b1 [--n-bootstrap N] [--seed S] [--top N] [--json]`
 - `uv run python -m scoutfootball baseline-b2 [--reference-minutes M] [--n-bootstrap N] [--seed S] [--top N] [--json]`
+- `uv run python -m scoutfootball weight-sensitivity [--deltas D] [--top-n N] [--json]`
+- `uv run python -m scoutfootball minutes-sensitivity [--deltas D] [--baseline-minutes M] [--top-n N] [--json]`
+- `uv run python -m scoutfootball cohort-sensitivity [--fractions F] [--baseline-minutes M] [--n-repeats N] [--top-n N] [--json]`
 - `uv run python -m scoutfootball label-append --label-type T --cohort-hash H --role-family R --season-id S --observation-window W --confidence C --evidence E [pairwise/tier payload]`
 - `uv run python -m scoutfootball label-revoke --target-decision-id D --evidence E`
 - `uv run python -m scoutfootball label-list [--cohort-hash H] [--label-type T] [--role-family R] [--season-id S] [--player-id P] [--include-revoked]`
@@ -118,6 +121,9 @@
 | ratings.label_ledger | player_ratings | delivered | — | label-append, label-revoke, label-list, label-stats, label-audit | — |
 | ratings.label_review_queue | player_ratings | delivered | — | label-review-queue | — |
 | ratings.label_stability | player_ratings | delivered | — | label-stability | — |
+| ratings.weight_sensitivity | player_ratings | delivered | — | weight-sensitivity | — |
+| ratings.minutes_sensitivity | player_ratings | delivered | — | minutes-sensitivity | — |
+| ratings.cohort_sensitivity | player_ratings | delivered | — | cohort-sensitivity | — |
 | predictions.match | match_predictions | delivered | /predictions/{home_team}/{away_team}, /predictions/meta, /predictions/ensemble/weights, /predictions/models/comparison, /predictions/staleness, /predictions/team-accuracy/{team_id}, /predictions/{home_team}/{away_team}/attribution, /predictions/{home_team}/{away_team}/attribution/ci, /predictions/{home_team}/{away_team}/ensemble-attribution, /predictions/{home_team}/{away_team}/ensemble-attribution/ci, /predictions/{home_team}/{away_team}/diagnostics, /predictions/{home_team}/{away_team}/h2h, /predictions/{home_team}/{away_team}/h2h-bias-correction, /predictions/{home_team}/{away_team}/momentum | backtest, tune-predictions, optimize-ensemble | matches |
 | predictions.calibration | match_predictions | delivered | /predictions/calibration, /predictions/backtest, /predictions/tuning, /predictions/drift, /predictions/drift/timeline, /predictions/calibration/reliability, /predictions/calibration/scoreline, /predictions/calibration/comparison, /predictions/calibration/confidence-distribution, /predictions/calibration/error-analysis, /predictions/calibration/outcome-distribution, /predictions/calibration/temporal-validation, /predictions/calibration/probability-heatmap, /predictions/calibration/ci-plot, /predictions/calibration/ci-coverage, /predictions/calibration/ci-width, /predictions/calibration/fold-comparison, /predictions/calibration/league-errors, /predictions/calibration/feature-importance, /predictions/calibration/drift-heatmap, /predictions/calibration/error-clustering, /predictions/calibration/data-drift, /predictions/calibration/stress-test, /predictions/calibration/team-drift, /predictions/calibration/team-profile, /predictions/calibration/uncertainty, /predictions/calibration/profit-loss, /predictions/calibration/trajectory, /predictions/calibration/difficulty, /predictions/calibration/streaks, /predictions/calibration/report-card, /predictions/calibration/anomalies | backtest, tune-predictions | matches, calibration, backtest |
 | predictions.value_bet | match_predictions | delivered | /predictions/{home_team}/{away_team}/value | — | matches |
@@ -143,7 +149,7 @@
 | api.server | infrastructure | delivered | /health, /health/detailed, /health/research, /license, /search, /local-pack/export, /local-pack/import (POST), /tactical-board/capabilities, /tactical-board/export/mp4 (POST) | serve | — |
 | local.portable_pack | infrastructure | delivered | /local-pack/export, /local-pack/import (POST) | export-local-pack, import-local-pack | — |
 | frontend.analyst_console | infrastructure | delivered | — | — | overview, players, compare, value, matches, teams, league, scouting, actions, reports, tactical, wc_schedule, wc_squads, wc_compare, wc_probability, wc_knockout, wc_tournament, license, data, calibration, backtest, help, workflow, versions |
-| data.artifacts | infrastructure | delivered | /artifacts, /model-runs, /reports/model-runs, /reports/model-runs/{run_id} | info, capabilities, data-contracts | data |
+| data.artifacts | infrastructure | delivered | /artifacts, /model-runs, /reports/model-runs, /reports/model-runs/{run_id}, /reports/model-training | info, capabilities, data-contracts | data |
 
 ## 数据契约登记
 

@@ -304,8 +304,9 @@ def load_resolved_player_match(
 
 def load_resolved_player_ratings(
     settings: PlatformSettings | None = None,
+    ratings_df: Any | None = None,
 ) -> Any:
-    """Load ``player_ratings_optimized.parquet`` and return a resolved view.
+    """Load a legacy ratings frame and return a resolved view.
 
     The returned DataFrame is a copy of the legacy ratings table with
     ``player_id``, ``source_name``, ``canonical_player_id`` and
@@ -330,8 +331,14 @@ def load_resolved_player_ratings(
     ``canonical_player_id=unresolved:unknown:missing`` (the defensive
     fallback in ``resolve_canonical_ids``).
 
-    Raises ``ValueError`` if ``player_ratings_optimized.parquet`` is
-    missing, empty or unreadable. A missing or unreadable
+    When ``ratings_df`` is omitted, the frame is loaded from
+    ``player_ratings_optimized.parquet``. Callers that already loaded or
+    filtered the frame may pass it explicitly; it is copied before any
+    derived columns are added. This keeps the API path on the same resolver
+    contract without reading the ratings artifact twice.
+
+    Raises ``ValueError`` if the ratings frame is missing, empty or unreadable.
+    A missing or unreadable
     ``player_match.parquet`` is not fatal: every row gets
     ``canonical_player_id=unresolved:unknown:missing`` so the legacy
     ratings table is still honest about its unresolved state.
@@ -341,9 +348,16 @@ def load_resolved_player_ratings(
     from scoutfootball.evaluation.identity_registry import read_registry
 
     resolved = settings or PlatformSettings.from_root()
-    ratings_df, error = _read_player_ratings(resolved)
     if ratings_df is None:
-        raise ValueError(f"canonical_resolver_load_failed:{error}")
+        ratings_df, error = _read_player_ratings(resolved)
+        if ratings_df is None:
+            raise ValueError(f"canonical_resolver_load_failed:{error}")
+    else:
+        if not isinstance(ratings_df, pd.DataFrame):
+            raise ValueError("canonical_resolver_ratings_frame_invalid")
+        ratings_df = ratings_df.copy()
+        if ratings_df.empty:
+            raise ValueError("canonical_resolver_load_failed:player ratings has 0 rows")
 
     # Defensive: if the ratings table already carries a canonical_player_id
     # column, the caller must drop it first. The resolver never silently
@@ -387,6 +401,15 @@ def load_resolved_player_ratings(
     # ``player_name`` + ``season_id``. We normalise both to strings so
     # numeric season IDs (e.g. 2021) match their string counterparts.
     out = ratings_df.copy()
+    # Some newer rating frames already carry a source hint. Rename it before
+    # the recovery join so pandas does not create ``source_name_x`` /
+    # ``source_name_y`` and leave the resolver without its contract column.
+    rating_source_hint = None
+    if DEFAULT_SOURCE_NAME_COL in out.columns:
+        rating_source_hint = out[DEFAULT_SOURCE_NAME_COL].copy()
+        out = out.rename(columns={DEFAULT_SOURCE_NAME_COL: "_rating_source_name"})
+    if DEFAULT_SOURCE_PLAYER_ID_COL in out.columns:
+        out = out.rename(columns={DEFAULT_SOURCE_PLAYER_ID_COL: "_rating_source_player_id"})
     out["player"] = out["player"].astype(str)
     out["season"] = out["season"].astype(str)
     out = out.replace({"nan": pd.NA})
@@ -406,15 +429,69 @@ def load_resolved_player_ratings(
         how="left",
     )
 
+    # Prefer an existing source hint when it identifies one of the source
+    # rows, while retaining the generic name+season fallback for legacy rows.
+    # This prevents a same-name collision across FBref/Understat/StatsBomb
+    # from silently selecting the first source row.
+    if rating_source_hint is not None:
+        source_grouped = pm_keys.groupby(
+            ["player_name", "season_id", DEFAULT_SOURCE_NAME_COL],
+            observed=True,
+        )
+        source_first = source_grouped.first().reset_index()
+        source_counts = source_grouped.size().reset_index(name="_pm_source_match_count")
+        source_map = source_first.merge(
+            source_counts,
+            on=["player_name", "season_id", DEFAULT_SOURCE_NAME_COL],
+        ).rename(
+            columns={
+                DEFAULT_SOURCE_PLAYER_ID_COL: "_source_player_id",
+                DEFAULT_SOURCE_NAME_COL: "_source_name",
+            }
+        )
+        out = out.merge(
+            source_map[
+                [
+                    "player_name",
+                    "season_id",
+                    "_source_name",
+                    "_source_player_id",
+                    "_pm_source_match_count",
+                ]
+            ],
+            left_on=["player", "season", "_rating_source_name"],
+            right_on=["player_name", "season_id", "_source_name"],
+            how="left",
+        )
+        source_matched = out["_source_player_id"].notna() | out["_source_name"].notna()
+        out[DEFAULT_SOURCE_PLAYER_ID_COL] = out["_source_player_id"].where(
+            source_matched, out[DEFAULT_SOURCE_PLAYER_ID_COL]
+        )
+        out[DEFAULT_SOURCE_NAME_COL] = out["_source_name"].where(
+            source_matched, out[DEFAULT_SOURCE_NAME_COL]
+        )
+        out["canonical_match_ambiguous"] = out["_pm_source_match_count"].where(
+            source_matched, out["_pm_match_count"]
+        ).fillna(0).gt(1)
+    else:
+        out["canonical_match_ambiguous"] = out["_pm_match_count"].fillna(0).gt(1)
+
     # Flag ambiguous matches (multiple player_ids for same player_name +
     # season). The first match was used for the source key; downstream
     # consumers must not trust the canonical ID silently on these rows.
-    out["canonical_match_ambiguous"] = out["_pm_match_count"].fillna(0).gt(1)
-
     # Drop the join helper columns; keep player_id and source_name so
     # resolve_canonical_ids can use them as the business key.
     out = out.drop(
-        columns=["player_name", "season_id", "_pm_match_count"],
+        columns=[
+            "player_name",
+            "season_id",
+            "_pm_match_count",
+            "_source_name",
+            "_source_player_id",
+            "_pm_source_match_count",
+            "_rating_source_name",
+            "_rating_source_player_id",
+        ],
         errors="ignore",
     )
 

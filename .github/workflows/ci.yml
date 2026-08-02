@@ -51,7 +51,7 @@ jobs:
       - name: Run tests
         env:
           MPLBACKEND: Agg
-        run: uv run pytest --tb=short -q
+        run: uv run pytest --tb=short -q -m "not e2e"
 
   frontend-check:
     runs-on: ubuntu-latest

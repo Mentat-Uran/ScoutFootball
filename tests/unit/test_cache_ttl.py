@@ -368,3 +368,28 @@ class TestOtherCachedLoaders:
             assert "B" in result3["player_name"].values
         finally:
             _ttl_cache.invalidate(cache_key)
+
+
+class TestResearchHealthCache:
+    """The expensive research-health snapshot is shared across requests."""
+
+    def test_research_health_cache_and_force_refresh(self) -> None:
+        import scoutfootball.api as api
+
+        cache_key = "get_research_health"
+        api._research_health_cache.invalidate(cache_key)
+        first = {"verdict": "not_ready", "generated_at": "first"}
+        second = {"verdict": "not_ready", "generated_at": "second"}
+        try:
+            with patch(
+                "scoutfootball.evaluation.research_health.build_research_health_report",
+                side_effect=[first, second],
+            ) as builder:
+                assert api.get_research_health() is first
+                assert api.get_research_health() is first
+                assert builder.call_count == 1
+
+                assert api.get_research_health(force_refresh=True) is second
+                assert builder.call_count == 2
+        finally:
+            api._research_health_cache.invalidate(cache_key)

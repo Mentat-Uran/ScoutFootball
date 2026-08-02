@@ -2999,6 +2999,7 @@ function _staticUrlFor(apiPath) {
         "/shortlist": "/data/shortlist.json",
         "/model-runs": "/data/model_runs.json",
         "/reports/model-runs": "/data/model_runs.json",
+        "/reports/model-training": "/data/model_training.json",
         "/license": "/data/artifacts.json",
         "/players": "/data/players_list.json",
         "/players/compare": "/data/player_compare_pairs.json",
@@ -3119,6 +3120,7 @@ let predictionMeta = { status: "no_data" };
 let predictionCalibration = {};
 let valueSummaryMeta = { sample_count: 0, metrics: {} };
 let modelRuns = { count: 0, runs: [] };
+let modelTraining = { status: "no_data", history: [] };
 let truthLabelSupervision = { status: "no_data", report: {} };
 let transfermarktIdentityReport = { status: "no_data", report: {} };
 let watchlistData = [];
@@ -3731,6 +3733,15 @@ async function fetchModelRuns() {
     } catch (err) {
         console.warn("Failed to fetch model runs:", err);
         return { count: 0, runs: [] };
+    }
+}
+
+async function fetchModelTraining() {
+    try {
+        return await fetchJson("/reports/model-training");
+    } catch (err) {
+        console.warn("Failed to fetch model training history:", err);
+        return { status: "no_data", history: [] };
     }
 }
 
@@ -15845,7 +15856,61 @@ async function _renderRisersDecliners(season, topN) {
     wireToggleButtons(declinersBody, decliners);
 }
 
+function renderModelTrainingEffect() {
+    const summary = document.getElementById("model-training-summary");
+    const status = document.getElementById("model-training-status");
+    const chart = getChart("model-training-chart");
+    const z = appState.lang === "zh";
+    const history = Array.isArray(modelTraining?.history) ? modelTraining.history : [];
+    if (!summary || !status) return;
+    if (modelTraining?.status !== "ok" || history.length === 0) {
+        status.textContent = z ? "无训练曲线" : "no history";
+        status.className = "status-pill status-low";
+        summary.innerHTML = `<span style="color:var(--text-muted)">${escapeHtml(z ? "当前活动模型没有可展示的训练记录。" : "No training history is available for the active model.")}</span>`;
+        if (chart) chart.clear();
+        return;
+    }
+
+    const test = modelTraining.test || {};
+    const device = modelTraining.cuda_device || modelTraining.training_device || "unknown";
+    const epochText = `${modelTraining.epochs_completed || history.length}/${modelTraining.epochs_requested || "—"}`;
+    status.textContent = modelTraining.training_device === "cuda" ? "CUDA" : String(modelTraining.training_device || "CPU");
+    status.className = `status-pill ${modelTraining.training_device === "cuda" ? "status-high" : "status-medium"}`;
+    const metric = (value, digits = 3) => value == null ? "—" : Number(value).toFixed(digits);
+    summary.innerHTML = `
+        <div style="display:flex;gap:0.7rem;flex-wrap:wrap">
+            <span><span style="color:var(--text-muted)">${z ? "运行" : "Run"}</span> ${escapeHtml(String(modelTraining.run_id || "—"))}</span>
+            <span><span style="color:var(--text-muted)">${z ? "设备" : "Device"}</span> ${escapeHtml(String(device))}</span>
+            <span><span style="color:var(--text-muted)">${z ? "轮数" : "Epochs"}</span> ${escapeHtml(epochText)}</span>
+            <span><span style="color:var(--text-muted)">Holdout Spearman</span> ${metric(test.spearman)}</span>
+            <span><span style="color:var(--text-muted)">Holdout MAE</span> ${metric(test.mae, 1)}</span>
+            <span><span style="color:var(--text-muted)">Holdout R²</span> ${metric(test.r2)}</span>
+        </div>
+        <div style="margin-top:0.35rem;color:var(--text-muted);line-height:1.5">${escapeHtml(z ? "曲线用于检查收敛与过拟合；目标仍是球队赛季积分代理，不是独立球员能力真值。最佳权重由验证集 early stopping 选择。" : "Curves diagnose convergence and overfitting; the target remains a team-season points proxy, not independent player-ability truth. Best weights come from validation early stopping.")}</div>`;
+
+    if (!chart) return;
+    const epochs = history.map((row) => row.epoch);
+    chart.setOption({
+        animation: false,
+        tooltip: { trigger: "axis" },
+        legend: { top: 0, textStyle: { color: chartTextColor() } },
+        grid: { left: "6%", right: "7%", top: 36, bottom: 34, containLabel: true },
+        xAxis: { type: "category", data: epochs, name: z ? "轮次" : "Epoch", axisLabel: { color: chartTextColor() } },
+        yAxis: [
+            { type: "value", name: z ? "损失" : "Loss", axisLabel: { color: chartTextColor() }, splitLine: { lineStyle: { color: chartGridColor() } } },
+            { type: "value", name: "Spearman", min: -1, max: 1, axisLabel: { color: chartTextColor() }, splitLine: { show: false } },
+        ],
+        series: [
+            { name: z ? "训练损失" : "Train loss", type: "line", showSymbol: false, data: history.map((row) => row.train_loss) },
+            { name: z ? "验证损失" : "Validation loss", type: "line", showSymbol: false, data: history.map((row) => row.validation_loss) },
+            { name: z ? "训练软 Spearman" : "Train soft Spearman", type: "line", yAxisIndex: 1, showSymbol: false, data: history.map((row) => row.train_soft_spearman) },
+        ],
+    }, true);
+    chart.resize();
+}
+
 function renderReports() {
+    renderModelTrainingEffect();
     const latestRun = (modelRuns.runs || [])[0] || {};
     const latestMetrics = latestRun.metrics || {};
     const holdoutSummary = latestRun.holdout_summary || {};
@@ -27642,7 +27707,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadWatchlistNotes();
 
     // Load real data from API in parallel
-    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, truthSupervision, transfermarktIdentity, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, actionValueMatches, workspaceCapabilities, licenseResp] = await Promise.all([
+    const [ratingsData, meta, artifacts, teams, valueData, reviewData, predictionArtifact, predictionCalibrationData, runs, trainingHistory, truthSupervision, transfermarktIdentity, watchlistRows, shortlistRows, actionValues, actionEvidenceIndex, actionValueMatches, workspaceCapabilities, licenseResp] = await Promise.all([
         fetchRatings(),
         fetchRatingsMeta(),
         fetchArtifacts(),
@@ -27652,6 +27717,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fetchPredictionMeta(),
         fetchPredictionCalibration(),
         fetchModelRuns(),
+        fetchModelTraining(),
         fetchTruthLabelSupervision(),
         fetchTransfermarktIdentityReport(),
         fetchWatchlist(),
@@ -27671,6 +27737,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     predictionMeta = predictionArtifact;
     predictionCalibration = predictionCalibrationData;
     modelRuns = runs;
+    modelTraining = trainingHistory;
     truthLabelSupervision = truthSupervision;
     transfermarktIdentityReport = transfermarktIdentity;
     watchlistData = watchlistRows;

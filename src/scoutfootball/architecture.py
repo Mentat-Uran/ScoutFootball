@@ -1299,6 +1299,7 @@ def build_capability_registry() -> CapabilityRegistry:
                 "/model-runs",
                 "/reports/model-runs",
                 "/reports/model-runs/{run_id}",
+                "/reports/model-training",
             ),
             frontend_views=("data",),
         ),
