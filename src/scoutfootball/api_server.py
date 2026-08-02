@@ -369,6 +369,19 @@ async def _lifespan(app: FastAPI):
         logger.info("WC cache warmed up in %.1fs", time.time() - t0)
     except Exception as e:
         logger.warning("WC cache warmup failed (will compute on first request): %s", e)
+    try:
+        import time
+
+        from scoutfootball.api import get_research_health
+
+        t0 = time.time()
+        get_research_health()
+        logger.info("research health cache warmed up in %.1fs", time.time() - t0)
+    except Exception as e:
+        logger.warning(
+            "research health cache warmup failed (will compute on first request): %s",
+            e,
+        )
     yield
 
 
@@ -410,14 +423,14 @@ def create_app() -> FastAPI:
         return get_detailed_health(force_refresh=force_refresh)
 
     @app.get("/health/research")
-    def health_research():
+    def health_research(force_refresh: bool = Query(False)):
         """Five-layer research health for the rating system (PRS-0 R-003/R-004).
 
         Fail-closed verdict: a stale, unreviewable, synthetic or
         non-independent-label rating system is reported as ``not_ready``,
         never hidden behind a top-level ``ok``. Read-only and local.
         """
-        return get_research_health()
+        return get_research_health(force_refresh=force_refresh)
 
     @app.get("/license")
     def license_info():

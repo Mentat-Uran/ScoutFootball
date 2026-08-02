@@ -986,6 +986,25 @@ def train_team_points_mlp(
     ).to(device)
     truth_lookup = _truth_label_lookup(truth_labels)
     fit_truth = _truth_targets(fit_rows, truth_lookup)
+    test_truth = _truth_targets(
+        frame[frame["season"].astype(str).isin({str(value) for value in test_seasons})],
+        truth_lookup,
+    )
+    truth_supervision_report: dict[str, Any] = {
+        "total_rows": 0,
+        "eligible_rows": 0,
+        "proxy_rows": 0,
+        "independent_rows": 0,
+        "matched_fit_rows": int(np.isfinite(fit_truth).sum()),
+        "matched_test_rows": int(np.isfinite(test_truth).sum()),
+        "status": "no_truth_labels",
+    }
+    if truth_labels is not None:
+        from scoutfootball.evaluation.truth_labels import truth_label_supervision_report
+
+        truth_supervision_report = truth_label_supervision_report(truth_labels)
+        truth_supervision_report["matched_fit_rows"] = int(np.isfinite(fit_truth).sum())
+        truth_supervision_report["matched_test_rows"] = int(np.isfinite(test_truth).sum())
     fit_truth_mask = torch.from_numpy(np.isfinite(fit_truth)).to(device)
     fit_truth_values = torch.from_numpy(np.nan_to_num(fit_truth, nan=0.0)).to(device)
 
@@ -1123,6 +1142,7 @@ def train_team_points_mlp(
         "training_device": str(device),
         "cuda_device": torch.cuda.get_device_name(0) if device.type == "cuda" else None,
         "target_semantics": "team-season points proxy; not independent player-ability truth",
+        "truth_label_supervision": truth_supervision_report,
         "history": history,
     }
     return TeamPointsMLPResult(
@@ -1214,6 +1234,99 @@ def _write_training_curve_svg(path: Path, training_history: dict[str, Any]) -> N
         )
 
 
+def _resolve_candidate_identity(
+    candidate_ratings: pd.DataFrame,
+    output_dir: Path,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Attach the canonical identity contract to a candidate rating frame.
+
+    Candidate training frames often carry a human-readable ``player`` name
+    but not the source key used by the identity registry. Resolve through the
+    same ``player_match`` view used by the API and keep explicit unresolved
+    markers when the local registry has no confirmed mapping. A candidate
+    without this block must not pass neural model admission.
+    """
+
+    from scoutfootball.evaluation.canonical_resolver import (
+        load_resolved_player_ratings,
+        resolution_summary,
+        unresolved_canonical_id,
+    )
+
+    identity_input = candidate_ratings.drop(
+        columns=[
+            "player_id",
+            "source_name",
+            "canonical_player_id",
+            "canonical_match_ambiguous",
+        ],
+        errors="ignore",
+    )
+    settings = None
+    roots: list[Path] = []
+    try:
+        roots.append(output_dir.parents[3])
+    except IndexError:
+        pass
+    roots.append(Path.cwd())
+    for root in roots:
+        try:
+            from scoutfootball.config import PlatformSettings
+
+            possible = PlatformSettings.from_root(root)
+            if (possible.gold_root / "feature_store" / "player_match.parquet").is_file():
+                settings = possible
+                break
+        except (OSError, IndexError, TypeError, ValueError):
+            continue
+
+    try:
+        if settings is None:
+            raise ValueError("player_match.parquet unavailable for candidate identity")
+        resolved = load_resolved_player_ratings(settings=settings, ratings_df=identity_input)
+        if len(resolved) != len(candidate_ratings):
+            raise ValueError(
+                "candidate identity resolver changed row count "
+                f"({len(candidate_ratings)} -> {len(resolved)})"
+            )
+        identity_columns = [
+            "player_id",
+            "source_name",
+            "canonical_player_id",
+            "canonical_match_ambiguous",
+        ]
+        missing = [column for column in identity_columns if column not in resolved.columns]
+        if missing:
+            raise ValueError(f"candidate identity columns missing after resolution: {missing}")
+        output = candidate_ratings.copy()
+        for column in identity_columns:
+            output[column] = resolved[column].to_numpy()
+        summary = resolution_summary(output)
+        return output, {
+            "schema": "scoutfootball.canonical-resolver",
+            "version": "1.0.0",
+            "status": "ok",
+            "canonical_column": "canonical_player_id",
+            "unresolved_prefix": "unresolved:",
+            "summary": summary,
+        }
+    except Exception as exc:  # candidate generation must remain honest, not crash silently
+        output = candidate_ratings.copy()
+        output["player_id"] = pd.Series(pd.NA, index=output.index, dtype="string")
+        output["source_name"] = pd.Series(pd.NA, index=output.index, dtype="string")
+        output["canonical_player_id"] = unresolved_canonical_id("unknown", "missing")
+        output["canonical_match_ambiguous"] = False
+        return output, {
+            "schema": "scoutfootball.canonical-resolver",
+            "version": "1.0.0",
+            "status": "unavailable",
+            "canonical_column": "canonical_player_id",
+            "unresolved_prefix": "unresolved:",
+            "summary": resolution_summary(output),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
 def write_team_points_mlp_artifacts(
     result: TeamPointsMLPResult,
     output_dir: Path,
@@ -1248,6 +1361,7 @@ def write_team_points_mlp_artifacts(
             "target_semantics",
             "team-season points proxy; not independent player-ability truth",
         ),
+        "truth_label_supervision": result.metrics.get("truth_label_supervision", {}),
         "history": history,
     }
     (output_dir / "training_history.json").write_text(
@@ -1255,6 +1369,14 @@ def write_team_points_mlp_artifacts(
     )
     _write_training_curve_svg(output_dir / "training_curves.svg", training_history)
     candidate_ratings: pd.DataFrame | None = None
+    identity_resolution: dict[str, Any] = {
+        "schema": "scoutfootball.canonical-resolver",
+        "version": "1.0.0",
+        "status": "unavailable",
+        "canonical_column": "canonical_player_id",
+        "unresolved_prefix": "unresolved:",
+        "summary": {"status": "unavailable", "evidence": {"reason": "no candidate ratings"}},
+    }
     if input_frame is not None and not result.player_predictions.empty:
         keys = ["player", "team", "league", "season"]
         missing = sorted(set(keys) - set(input_frame.columns))
@@ -1296,6 +1418,9 @@ def write_team_points_mlp_artifacts(
             * 100.0
         )
         candidate_ratings = candidate_ratings.drop(columns=["_group_index"], errors="ignore")
+        candidate_ratings, identity_resolution = _resolve_candidate_identity(
+            candidate_ratings, output_dir
+        )
         candidate_ratings.to_parquet(output_dir / "player_ratings_candidate.parquet", index=False)
     metrics = {
         "trained": result.trained,
@@ -1328,6 +1453,16 @@ def write_team_points_mlp_artifacts(
         "optimizer_prior_artifact": (
             input_frame.attrs.get("optimizer_prior_artifact") if input_frame is not None else None
         ),
+        "input_sources": (
+            {
+                "fbref_standard": input_frame.attrs.get("fbref_standard_path"),
+                "optimizer_artifact_statuses": input_frame.attrs.get(
+                    "optimizer_artifact_statuses", []
+                ),
+            }
+            if input_frame is not None
+            else {}
+        ),
         "target_semantics": "team-season points proxy; not independent player-ability truth",
     }
     (output_dir / "feature_manifest.json").write_text(
@@ -1338,26 +1473,34 @@ def write_team_points_mlp_artifacts(
     # This is a candidate model-run record, not an automatic activation record.
     # Admission can verify the proxy holdout and rating artifact, but it must
     # not turn proxy supervision into independent player-ability truth.
-    feature_store_manifest = (
-        output_dir.parents[2] / "gold" / "feature_store" / ("rating_feature_matrix_manifest.json")
-    )
+    feature_store_manifest: Path | None = None
+    for parent in output_dir.parents:
+        possible_manifest = (
+            parent / "gold" / "feature_store" / "rating_feature_matrix_manifest.json"
+        )
+        if possible_manifest.is_file():
+            feature_store_manifest = possible_manifest
+            break
     recorded_feature_manifest: dict[str, Any] = {
         "path": "gold/feature_store/rating_feature_matrix_manifest.json",
         "hash": None,
         "schema_version": None,
     }
-    if feature_store_manifest.is_file():
+    if feature_store_manifest is not None:
         try:
             current = json.loads(feature_store_manifest.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             current = {}
         if isinstance(current, dict):
-            manifest_hash = current.get("hash")
-            if not isinstance(manifest_hash, str) or not manifest_hash:
-                manifest_hash = hashlib.sha256(feature_store_manifest.read_bytes()).hexdigest()[:16]
+            # Admission compares the training snapshot with the exact
+            # on-disk manifest bytes. The manifest's internal ``hash`` is the
+            # feature-data hash, not the manifest-file hash, so store both and
+            # use the file hash for the chain-of-custody field.
+            manifest_hash = hashlib.sha256(feature_store_manifest.read_bytes()).hexdigest()[:16]
             recorded_feature_manifest.update(
                 {
                     "hash": manifest_hash,
+                    "content_hash": current.get("hash"),
                     "schema_version": current.get("schema_version"),
                     "generated_at": current.get("generated_at"),
                     "input_hash": current.get("input_hash"),
@@ -1391,6 +1534,7 @@ def write_team_points_mlp_artifacts(
             "path": "training_curves.svg",
             "scope": "training_diagnostics",
         },
+        "identity": identity_resolution,
     }
     if candidate_ratings is not None:
         ratings_path = output_dir / "player_ratings_candidate.parquet"
@@ -1426,6 +1570,7 @@ def write_team_points_mlp_artifacts(
         "args": asdict(config),
         "target_semantics": metrics["target_semantics"],
         "optimizer_prior_artifact": manifest["optimizer_prior_artifact"],
+        "identity_resolution": identity_resolution,
     }
     (output_dir / "meta.json").write_text(
         json.dumps(run_meta, indent=2, ensure_ascii=False), encoding="utf-8"

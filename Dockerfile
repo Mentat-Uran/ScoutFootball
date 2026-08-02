@@ -20,12 +20,16 @@ RUN if [ "$INSTALL_SYSTEM_PACKAGES" = "1" ]; then \
 
 WORKDIR /app
 
-# Copy package metadata and source before dependency installation.
+# Keep dependency installation independent from application source changes so
+# a normal code fix does not redownload the complete Python stack.
 COPY pyproject.toml README.md ./
-COPY src/ src/
 
 RUN python -m pip install --no-cache-dir --retries 10 --timeout 120 --upgrade pip && \
-    python -m pip install --no-cache-dir --retries 10 --timeout 120 -e .
+    python -c "import subprocess,sys,tomllib; deps=tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']; subprocess.check_call([sys.executable,'-m','pip','install','--no-cache-dir','--retries','10','--timeout','120','setuptools>=80.0',*deps])"
+
+COPY src/ src/
+
+RUN python -m pip install --no-cache-dir --no-deps --no-build-isolation -e .
 
 # Copy runtime assets after dependencies so data/frontend changes do not
 # invalidate the Python dependency layer.

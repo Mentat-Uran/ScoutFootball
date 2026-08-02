@@ -1111,6 +1111,12 @@ def _build_research_readiness(
     independent_rows = int(label_report.get("independent_rows", 0))
     total_rows = int(label_report.get("total_rows", 0))
     excluded_rows = int(label_report.get("excluded_rows", 0))
+    independent_temporal = label_report.get("independent_temporal")
+    independent_temporally_eligible = (
+        int(independent_temporal.get("temporally_eligible_rows", 0))
+        if isinstance(independent_temporal, dict)
+        else independent_rows
+    )
 
     # Synthetic isolation: a fully-synthetic active rating cannot be research-ready.
     rating_synthetic = _rating_is_synthetic(_active_rating_path(settings))
@@ -1122,6 +1128,12 @@ def _build_research_readiness(
             f"{prefix}no independent player-ability labels (independent={independent_rows}, "
             f"proxy={proxy_rows}, supervision-eligible={eligible_rows}, "
             f"self-referential/excluded={excluded_rows} of {total_rows} total)"
+        )
+    elif independent_temporally_eligible < independent_rows:
+        blocking_reasons.append(
+            "independent labels are not all temporally eligible for the recorded "
+            f"season ({independent_temporally_eligible}/{independent_rows}); "
+            "they may be used as post-season benchmarks but not as causal training evidence"
         )
     if rating_synthetic is True:
         blocking_reasons.append("active rating parquet is fully synthetic")

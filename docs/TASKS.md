@@ -4,7 +4,7 @@
 
 ## 2026-08-02 整体更新窗口执行状态
 
-- [x] 建立基线并写入 [`PROJECT_AUDIT_2026-08-02.md`](PROJECT_AUDIT_2026-08-02.md)：Ruff/Node 通过；非 E2E 测试在 Windows `uv` trampoline 错误后改用等价入口，运行超过 120 秒未完成；`research-health` 真实 verdict=`not_ready`。
+- [x] 建立基线并写入 [`PROJECT_AUDIT_2026-08-02.md`](PROJECT_AUDIT_2026-08-02.md)：Ruff/Node 通过；完整非 E2E 回归已用 `uv run python -m pytest` 完成；`research-health` 真实 verdict=`not_ready`。
 - [x] A1：前端消费 `/market-value/summary` 与 `/market-value/players`，显示真实快照日期/来源/许可边界；API 离线时不消费 synthetic 身价。
 - [x] A2：消灭首页硬编码指标；移除 `predictions_default.json` 前端 fallback；建立 [`VIEW_DATA_SOURCES.md`](VIEW_DATA_SOURCES.md)，隐藏无可信离线回测数据的 `backtest` 入口。
 - [x] A3：主球员页显示优化器代理目标、最近 run_id、训练/当前 feature manifest hash；`research_health!=ready` 时评分列显示 `—` 且不按评分排序。
@@ -13,7 +13,7 @@
 - [~] A4：`/ratings` 已消费 `load_resolved_player_ratings` 派生视图，前端已提供默认实体视图/赛季视图且 unresolved/ambiguous 不合并；详情请求会携带 resolved `canonical_player_id`，Kylian profile 旧 slug 已归一到单一静态 profile。当前真实 registry 仅少量人工映射，Messi 等未确认实体仍需维护者决策后才能满足“实体只出现一次”的验收。
 - [~] B1：冲突清单已建立；维护者已明确授权并完成 18 个无工作树历史本地分支清理。双前端真源、评分文件迁移和静态数据删除仍保留为需单独决策的高风险项。
 
-本窗口追加核验（2026-08-02）：`uv run python -m pytest tests/unit tests/integration -m "not e2e" -q --durations=20` 完整运行约 503 秒，全部通过，2 项跳过；Windows 下直接 `uv run pytest` 仍是 trampoline 启动器错误，不是测试超时。项目已锁定 CUDA PyTorch `2.13.0+cu130`，实测 RTX 5070 Ti 的 `cuda:0` 矩阵计算通过。优化器、MLP、Set Transformer 在同一 2526 holdout 上比较后，MLP 作为最佳神经候选本地晋级；Set Transformer 保留为 reviewable 研究候选，旧优化器参数保留并可回滚。训练 runner 已将上限提高到 400 轮、验证 patience 50，并生成 `training_history.json`/`training_curves.svg`；400 轮配置重跑到 84 轮后 early stop，holdout 与现 active MLP 无实质改善，因此不覆盖现 active。报告页通过 `/reports/model-training` 展示 active 训练曲线与 CUDA/holdout 摘要。Transfermarkt 身价 21,037 行仍是代理标签，独立球员能力标签为 0；`research-health` 已修复为 `verdict=not_ready`，不会把代理标签错误升级为 ready。候选运行目录包含标准 `meta.json`、候选评分 parquet 和模型 SHA/lineage 记录。
+本窗口追加核验（2026-08-02）：`uv run python -m pytest tests/unit tests/integration -m "not e2e" -q --durations=20` 完整运行约 503 秒，全部通过，2 项跳过；Windows 下直接 `uv run pytest` 仍是 trampoline 启动器错误，不是测试超时。项目已锁定 CUDA PyTorch `2.13.0+cu130`，实测 RTX 5070 Ti 的 `cuda:0` 矩阵计算通过。优化器、MLP、Set Transformer 在同一 holdout 上比较后，MLP 作为最佳神经候选本地激活为 `20260802T-gpu-mlp-activated-candidate`；Set Transformer 保留为 reviewable 研究候选，旧优化器参数保留并可回滚。训练 runner 已将上限提高到 400 轮、验证 patience 50，并生成 `training_history.json`/`training_curves.svg`；当前 active 训练记录为 CUDA，holdout Spearman 约 0.682、MAE 约 11.01，仍是球队积分代理目标，不是独立球员能力真值。标准候选评分 parquet 已接入 canonical identity 解析、模型晋级门禁、active rating 与 `/ratings` 链路；当前身份链明确记录 7 行已解析、其余为显式 unresolved，不伪造匹配。Transfermarkt 身价 21,037 行仍是代理标签；新增 17 行手工赛季奖项 benchmark，但 17 行均为赛季结束后标签，时间门禁仍为 0 行可作因果训练监督，因此 `research-health` 保持 `verdict=not_ready`/`research_readiness=insufficient_labels`。可用球员特征仍主要覆盖 Big-5，当前 active scope 报告 15 个 unsupported target leagues；不能宣称非 Big-5 全量覆盖。Docker 已重建并保持 healthy；`/health/research` 增加缓存、并发刷新锁和启动预热，预热后接口约几十毫秒，`?force_refresh=true` 保留真实重算入口。候选运行目录包含标准 `meta.json`、候选评分 parquet 和模型 SHA/lineage 记录。
 
 当前状态：仓库已形成宽幅本地原型，当前开发焦点收敛到“本地个人球员评分研究系统”。主要矛盾不是功能数量，而是评分目标语义、独立标签、canonical 身份、数据粒度、跨位置可比性、不确定性、active rating 新鲜度和个人研究闭环。路线不设工期，只执行依赖已满足的节点。
 

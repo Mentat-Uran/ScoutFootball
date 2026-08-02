@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -298,6 +299,14 @@ def health_check() -> HealthResponse:
 # 5. 所有 builder 都是已有的只读函数，``get_detailed_health`` 只是组合层。
 
 _detailed_health_cache = _TTLCache()
+
+# ``/health/research`` includes lineage hashing, model admission, canonical
+# identity resolution and two sensitivity reports. It is intentionally
+# read-only, but too expensive to rebuild for every browser poll. Keep one
+# process-local snapshot and serialize refreshes so concurrent overview
+# requests do not repeat the same work.
+_research_health_cache = _TTLCache()
+_research_health_lock = threading.Lock()
 
 
 def _safe_call(builder_name: str, fn):
@@ -608,7 +617,7 @@ def get_detailed_health(*, force_refresh: bool = False) -> dict[str, Any]:
     return result
 
 
-def get_research_health() -> dict[str, Any]:
+def get_research_health(*, force_refresh: bool = False) -> dict[str, Any]:
     """Return the five-layer research health snapshot for the rating system.
 
     Thin wrapper around ``research_health.build_research_health_report`` so
@@ -622,7 +631,22 @@ def get_research_health() -> dict[str, Any]:
         build_research_health_report,
     )
 
-    return build_research_health_report()
+    cache_key = "get_research_health"
+    if not force_refresh:
+        cached = _research_health_cache.get(cache_key)
+        if cached is not _MISSING:
+            return cached
+
+    # Re-check after taking the lock: another request may have completed the
+    # expensive build while this request was waiting.
+    with _research_health_lock:
+        if not force_refresh:
+            cached = _research_health_cache.get(cache_key)
+            if cached is not _MISSING:
+                return cached
+        report = build_research_health_report()
+        _research_health_cache.set(cache_key, report)
+        return report
 
 
 def get_adapter_registry() -> dict[str, Any]:
@@ -6349,11 +6373,25 @@ def get_ratings_meta() -> dict:
 
     leagues = league_df.to_dict(orient="records") if not league_df.empty else []
 
-    # The active table is a legacy optimizer artifact. Expose the nearest
-    # recorded run and manifest comparison without mutating or silently
-    # promoting it to a reviewed rating. The frontend uses this disclosure to
-    # avoid presenting a proxy objective as independently validated ability.
+    # Resolve the activated run first. Lexical latest is only a fallback: a
+    # newer research candidate must not be shown as the model currently served
+    # by player_ratings_optimized.parquet.
     settings = _settings()
+    active_meta_path = (
+        settings.data_root / "gold" / "feature_store" / "optimized_params_meta.json"
+    )
+    active_meta_payload = _read_json(active_meta_path) if active_meta_path.exists() else {}
+    active_model = (
+        active_meta_payload.get("active_model", {})
+        if isinstance(active_meta_payload, dict)
+        else {}
+    )
+    active_run_id = active_model.get("run_id") if isinstance(active_model, dict) else None
+    active_run_meta: dict[str, Any] = {}
+    if isinstance(active_run_id, str) and active_run_id:
+        active_run_meta = _read_json(
+            settings.data_root / "models" / "runs" / active_run_id / "meta.json"
+        )
     latest_run_meta: dict[str, Any] = {}
     runs_dir = settings.data_root / "models" / "runs"
     if runs_dir.exists():
@@ -6374,19 +6412,80 @@ def get_ratings_meta() -> dict:
                 latest_run_meta = {**candidate, "run_id": run_dir.name}
                 break
 
+    selected_run_meta = active_run_meta or latest_run_meta
+    selected_run_id = selected_run_meta.get("run_id") or active_run_id
+
     current_manifest = _read_json(
         settings.data_root / "gold" / "feature_store" / "rating_feature_matrix_manifest.json"
     )
     training_manifest_hash = (
-        latest_run_meta.get("lineage", {})
+        selected_run_meta.get("lineage", {})
         .get("feature_manifest", {})
         .get("hash")
     )
     current_manifest_hash = current_manifest.get("hash")
+    run_metrics = selected_run_meta.get("metrics", {})
+    coverage = run_metrics.get("team_coverage", {}) if isinstance(run_metrics, dict) else {}
+    test_coverage = coverage.get("test", {}) if isinstance(coverage, dict) else {}
+    candidate_artifacts = (
+        selected_run_meta.get("candidate_artifacts", {})
+        if isinstance(selected_run_meta, dict)
+        else {}
+    )
+    candidate_ratings = (
+        candidate_artifacts.get("ratings", {})
+        if isinstance(candidate_artifacts, dict)
+        else {}
+    )
+    identity_resolution = (
+        candidate_artifacts.get("identity", {})
+        if isinstance(candidate_artifacts, dict)
+        else {}
+    )
+    active_model_type = (
+        active_model.get("model_type")
+        if isinstance(active_model, dict)
+        else None
+    ) or selected_run_meta.get("model_type")
+    activation_status = (
+        "activated"
+        if isinstance(active_run_id, str)
+        and active_run_id
+        and selected_run_id == active_run_id
+        else "unverified"
+    )
     rating_source = {
         "kind": "optimizer_proxy_objective",
         "label": "优化器代理目标产物（非独立验证的球员能力）",
-        "latest_run_id": latest_run_meta.get("run_id"),
+        "latest_run_id": selected_run_id,
+        "active_run_id": active_run_id,
+        "active_model_type": active_model_type,
+        "activation_status": activation_status,
+        "serving_artifact": "gold/feature_store/player_ratings_optimized.parquet",
+        "model_artifact": (
+            "gold/feature_store/player_rating_model.pt"
+            if active_model_type in {"team_points_mlp", "team_points_set_transformer"}
+            else None
+        ),
+        "training_device": (
+            run_metrics.get("training_device") if isinstance(run_metrics, dict) else None
+        ),
+        "cuda_device": (
+            run_metrics.get("cuda_device") if isinstance(run_metrics, dict) else None
+        ),
+        "architecture": selected_run_meta.get("architecture"),
+        "training_history_endpoint": (
+            f"/reports/model-training?run_id={selected_run_id}" if selected_run_id else None
+        ),
+        "candidate_ratings_artifact": candidate_ratings,
+        "scope": test_coverage.get("scope") if isinstance(test_coverage, dict) else None,
+        "unsupported_leagues": (
+            test_coverage.get("unsupported_target_leagues", [])
+            if isinstance(test_coverage, dict)
+            else []
+        ),
+        "identity_resolution": identity_resolution,
+        "identity_endpoint": "/ratings",
         "training_objective": (
             "球队积分代理目标：Spearman/NDCG、积分回归、分布/校准与联赛偏差惩罚"
         ),

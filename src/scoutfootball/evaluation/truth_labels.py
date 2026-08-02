@@ -144,6 +144,9 @@ def truth_label_supervision_report(df: pd.DataFrame) -> dict[str, Any]:
     independent = sources[independent_mask].value_counts().sort_index().to_dict()
     excluded = sources[~eligible_mask].value_counts().sort_index().to_dict()
     temporal = truth_label_temporal_report(df)
+    independent_temporal = truth_label_temporal_report(
+        df.loc[independent_mask].copy()
+    )
     return {
         "policy": "source-policy-v1",
         "total_rows": int(len(df)),
@@ -160,6 +163,7 @@ def truth_label_supervision_report(df: pd.DataFrame) -> dict[str, Any]:
         "status": "eligible_labels_available" if eligible_mask.any() else "no_eligible_labels",
         "caveat": "Source eligibility does not prove collection independence.",
         "temporal": temporal,
+        "independent_temporal": independent_temporal,
     }
 
 

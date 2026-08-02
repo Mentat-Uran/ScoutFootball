@@ -20,7 +20,8 @@ data/gold/scoutlab.duckdb
 data/gold/scoutfootball.duckdb
 data/gold/scoutlab.duckdb.wal
 data/models/*
-!data/models/runs
+!data/models/runs/
+data/models/runs/*
 data/reports/**
 data/logs/**
 data/soccerdata/**
@@ -69,6 +70,7 @@ desktop/dist/*.blockmap
 
 # Large binary artifacts
 data/gold/**/*.npy
+data/gold/**/*.pt
 !data/gold/feature_store/optimized_params.npy
 # Interactive HTML reports — regenerate locally from training_history.json
 data/gold/feature_store/training_report.html

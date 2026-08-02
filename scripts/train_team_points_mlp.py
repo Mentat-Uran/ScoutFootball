@@ -96,6 +96,12 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--truth-label-weight", type=float, default=0.08)
     parser.add_argument("--optimizer-run", type=Path, default=None)
+    parser.add_argument(
+        "--fbref-standard-path",
+        type=Path,
+        default=None,
+        help="override the FBref standard parquet used for this candidate run",
+    )
     parser.add_argument("--attention-dim", type=int, default=48)
     parser.add_argument("--attention-heads", type=int, default=4)
     parser.add_argument("--attention-layers", type=int, default=1)
@@ -114,11 +120,13 @@ def main() -> int:
     args = parser.parse_args()
 
     data_dir = args.data_dir.resolve()
-    loaded = load_data(data_dir)
+    loaded = load_data(data_dir, standard_path=args.fbref_standard_path)
     frame, team_points = loaded[:2]
+    loaded_frame_attrs = dict(frame.attrs)
     optimizer_features = build_feature_tensors(frame)
     prior_params = _get_default_params_tensor(torch.device("cpu"))
     frame = frame.copy()
+    frame.attrs.update(loaded_frame_attrs)
     frame["optimizer_prior_score"] = (
         compute_ratings_torch(optimizer_features, prior_params, torch.device("cpu"))
         .detach()
@@ -140,6 +148,7 @@ def main() -> int:
             how="left",
             validate="one_to_one",
         )
+        frame.attrs.update(loaded_frame_attrs)
         frame["optimizer_prior_score"] = frame["optimizer_prior_score_fitted"].fillna(
             frame["optimizer_prior_score"]
         )

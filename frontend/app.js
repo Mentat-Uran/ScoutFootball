@@ -3079,7 +3079,7 @@ function _tryRefreshFromApi(apiPath, params, fetchOpts) {
 }
 
 async function _fetchJsonApiFirst(apiPath, params, fetchOpts) {
-    const apiTimeout = (fetchOpts && fetchOpts.signal) ? undefined : AbortSignal.timeout(5000);
+    const apiTimeout = (fetchOpts && fetchOpts.signal) || AbortSignal.timeout(5000);
 
     try {
         let url = API_BASE + apiPath;
@@ -3293,7 +3293,13 @@ function buildPlayerView(rows) {
 
 async function fetchResearchHealth() {
     try {
-        return await fetchJson("/health/research");
+        // Research health performs local lineage/admission diagnostics. The
+        // API caches the result, but allow the first cold request enough time
+        // to finish instead of falling back to an apparently broken Docker
+        // instance after the generic 5-second API timeout.
+        return await fetchJson("/health/research", {
+            fetchOpts: { signal: AbortSignal.timeout(60000) },
+        });
     } catch (err) {
         console.warn("Failed to fetch research health:", err);
         return { verdict: "unavailable", blocking_reasons: ["health_unavailable"] };
@@ -4372,6 +4378,17 @@ function renderRatingSourceNotice() {
     const runId = source.latest_run_id || "not_recorded";
     const trainHash = source.training_manifest_hash || "not_recorded";
     const currentHash = source.current_manifest_hash || "not_recorded";
+    const modelType = source.active_model_type || "not_recorded";
+    const activation = source.activation_status || "unverified";
+    const scope = source.scope || "not_recorded";
+    const unsupportedCount = Array.isArray(source.unsupported_leagues)
+        ? source.unsupported_leagues.length
+        : 0;
+    const identity = source.identity_resolution || {};
+    const identitySummary = identity.summary || {};
+    const identityText = identitySummary.total_rows != null
+        ? `${identitySummary.resolved_rows || 0}/${identitySummary.total_rows} resolved`
+        : "not_recorded";
     const status = ready
         ? (appState.lang === "zh" ? "可用于研究视图" : "Research view available")
         : (appState.lang === "zh" ? "未就绪：不作强排名" : "Not ready: strong ranking disabled");
@@ -4381,6 +4398,8 @@ function renderRatingSourceNotice() {
     note.innerHTML = `<div style="display:grid;gap:0.2rem">
         <strong>${escapeHtml(source.label || (appState.lang === "zh" ? "评分来源未记录" : "Rating source not recorded"))}</strong>
         <span>${escapeHtml(status)} · run_id=${escapeHtml(runId)}</span>
+        <span>${appState.lang === "zh" ? "模型" : "model"}=${escapeHtml(modelType)} · ${appState.lang === "zh" ? "激活" : "activation"}=${escapeHtml(activation)} · ${appState.lang === "zh" ? "设备" : "device"}=${escapeHtml(source.cuda_device || source.training_device || "not_recorded")}</span>
+        <span>${appState.lang === "zh" ? "范围" : "scope"}=${escapeHtml(scope)} · ${appState.lang === "zh" ? "未覆盖联赛" : "unsupported leagues"}=${escapeHtml(String(unsupportedCount))} · ${appState.lang === "zh" ? "身份链" : "identity"}=${escapeHtml(identityText)}</span>
         <span>objective=${escapeHtml(source.training_objective || "not_recorded")}</span>
         <span>feature_hash=${escapeHtml(trainHash)} → current=${escapeHtml(currentHash)} · match=${source.manifest_match ? "yes" : "no"}</span>
         ${blocker ? `<span style="color:var(--text-muted)">research_health: ${escapeHtml(blocker)}</span>` : ""}

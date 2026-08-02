@@ -401,6 +401,15 @@ def load_resolved_player_ratings(
     # ``player_name`` + ``season_id``. We normalise both to strings so
     # numeric season IDs (e.g. 2021) match their string counterparts.
     out = ratings_df.copy()
+    # Some newer rating frames already carry a source hint. Rename it before
+    # the recovery join so pandas does not create ``source_name_x`` /
+    # ``source_name_y`` and leave the resolver without its contract column.
+    rating_source_hint = None
+    if DEFAULT_SOURCE_NAME_COL in out.columns:
+        rating_source_hint = out[DEFAULT_SOURCE_NAME_COL].copy()
+        out = out.rename(columns={DEFAULT_SOURCE_NAME_COL: "_rating_source_name"})
+    if DEFAULT_SOURCE_PLAYER_ID_COL in out.columns:
+        out = out.rename(columns={DEFAULT_SOURCE_PLAYER_ID_COL: "_rating_source_player_id"})
     out["player"] = out["player"].astype(str)
     out["season"] = out["season"].astype(str)
     out = out.replace({"nan": pd.NA})
@@ -420,15 +429,69 @@ def load_resolved_player_ratings(
         how="left",
     )
 
+    # Prefer an existing source hint when it identifies one of the source
+    # rows, while retaining the generic name+season fallback for legacy rows.
+    # This prevents a same-name collision across FBref/Understat/StatsBomb
+    # from silently selecting the first source row.
+    if rating_source_hint is not None:
+        source_grouped = pm_keys.groupby(
+            ["player_name", "season_id", DEFAULT_SOURCE_NAME_COL],
+            observed=True,
+        )
+        source_first = source_grouped.first().reset_index()
+        source_counts = source_grouped.size().reset_index(name="_pm_source_match_count")
+        source_map = source_first.merge(
+            source_counts,
+            on=["player_name", "season_id", DEFAULT_SOURCE_NAME_COL],
+        ).rename(
+            columns={
+                DEFAULT_SOURCE_PLAYER_ID_COL: "_source_player_id",
+                DEFAULT_SOURCE_NAME_COL: "_source_name",
+            }
+        )
+        out = out.merge(
+            source_map[
+                [
+                    "player_name",
+                    "season_id",
+                    "_source_name",
+                    "_source_player_id",
+                    "_pm_source_match_count",
+                ]
+            ],
+            left_on=["player", "season", "_rating_source_name"],
+            right_on=["player_name", "season_id", "_source_name"],
+            how="left",
+        )
+        source_matched = out["_source_player_id"].notna() | out["_source_name"].notna()
+        out[DEFAULT_SOURCE_PLAYER_ID_COL] = out["_source_player_id"].where(
+            source_matched, out[DEFAULT_SOURCE_PLAYER_ID_COL]
+        )
+        out[DEFAULT_SOURCE_NAME_COL] = out["_source_name"].where(
+            source_matched, out[DEFAULT_SOURCE_NAME_COL]
+        )
+        out["canonical_match_ambiguous"] = out["_pm_source_match_count"].where(
+            source_matched, out["_pm_match_count"]
+        ).fillna(0).gt(1)
+    else:
+        out["canonical_match_ambiguous"] = out["_pm_match_count"].fillna(0).gt(1)
+
     # Flag ambiguous matches (multiple player_ids for same player_name +
     # season). The first match was used for the source key; downstream
     # consumers must not trust the canonical ID silently on these rows.
-    out["canonical_match_ambiguous"] = out["_pm_match_count"].fillna(0).gt(1)
-
     # Drop the join helper columns; keep player_id and source_name so
     # resolve_canonical_ids can use them as the business key.
     out = out.drop(
-        columns=["player_name", "season_id", "_pm_match_count"],
+        columns=[
+            "player_name",
+            "season_id",
+            "_pm_match_count",
+            "_source_name",
+            "_source_player_id",
+            "_pm_source_match_count",
+            "_rating_source_name",
+            "_rating_source_player_id",
+        ],
         errors="ignore",
     )
 

@@ -106,6 +106,65 @@ def _evaluate_candidate_rating_artifact(meta: dict[str, Any], directory: Path) -
     return "candidate rating artifact verified", True
 
 
+def _evaluate_candidate_identity_artifact(
+    meta: dict[str, Any], directory: Path
+) -> tuple[str, bool]:
+    """Verify that the candidate ratings carry the canonical identity chain."""
+
+    artifacts = meta.get("candidate_artifacts")
+    identity = artifacts.get("identity") if isinstance(artifacts, dict) else None
+    if not isinstance(identity, dict):
+        return "candidate identity metadata is missing", False
+    if identity.get("status") != "ok":
+        return (
+            "candidate identity resolution is not available: "
+            f"{identity.get('error', identity.get('status', 'unknown'))}",
+            False,
+        )
+    ratings_meta = artifacts.get("ratings") if isinstance(artifacts, dict) else None
+    rel_path = ratings_meta.get("path") if isinstance(ratings_meta, dict) else None
+    if not isinstance(rel_path, str) or not rel_path:
+        return "candidate ratings are required for identity validation", False
+    ratings_path = (directory / rel_path).resolve()
+    try:
+        ratings_path.relative_to(directory.resolve())
+    except ValueError:
+        return f"candidate rating path escapes run directory: {rel_path}", False
+    try:
+        import pandas as pd
+
+        ratings = pd.read_parquet(ratings_path)
+    except Exception as exc:  # noqa: BLE001 — admission reports failures, it does not raise
+        return f"candidate ratings unreadable for identity validation: {type(exc).__name__}", False
+    required = {
+        "player_id",
+        "source_name",
+        "canonical_player_id",
+        "canonical_match_ambiguous",
+    }
+    missing = sorted(required - set(ratings.columns))
+    if missing:
+        return f"candidate identity columns missing: {', '.join(missing)}", False
+    canonical_raw = ratings["canonical_player_id"]
+    canonical = canonical_raw.astype(str).str.strip()
+    if (
+        canonical.empty
+        or canonical_raw.isna().any()
+        or canonical.eq("").any()
+        or canonical.eq("nan").any()
+    ):
+        return "candidate canonical_player_id contains empty values", False
+    summary = identity.get("summary")
+    if not isinstance(summary, dict) or int(summary.get("total_rows", -1)) != len(ratings):
+        return "candidate identity summary does not match rating rows", False
+    return (
+        "candidate identity columns and canonical resolution summary verified "
+        f"({summary.get('resolved_rows', 0)} resolved, "
+        f"{summary.get('unresolved_rows', 0)} explicitly unresolved)",
+        True,
+    )
+
+
 def _evaluate_candidate_model_artifact(meta: dict[str, Any], directory: Path) -> tuple[str, bool]:
     """Verify the serialized model artifact for a non-optimizer candidate."""
     artifacts = meta.get("candidate_artifacts")
@@ -335,6 +394,7 @@ def _evaluate_team_points_neural_run(
     lineage = meta.get("lineage") if isinstance(meta.get("lineage"), dict) else {}
     model_note, model_ok = _evaluate_candidate_model_artifact(meta, directory)
     rating_note, rating_ok = _evaluate_candidate_rating_artifact(meta, directory)
+    identity_note, identity_ok = _evaluate_candidate_identity_artifact(meta, directory)
     lineage_note, lineage_ok = _evaluate_recorded_lineage(lineage, settings)
     train = meta.get("train_seasons")
     test = meta.get("test_seasons")
@@ -366,6 +426,7 @@ def _evaluate_team_points_neural_run(
             "proxy target is explicitly disclosed",
         ),
         _check("candidate_rating_artifact", rating_ok, rating_note),
+        _check("candidate_identity_chain", identity_ok, identity_note),
     ]
     failed = [item["name"] for item in checks if item["status"] == "fail"]
     return {

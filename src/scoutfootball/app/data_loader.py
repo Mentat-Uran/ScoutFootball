@@ -143,6 +143,42 @@ def _duckdb_exists() -> bool:
     return _duckdb_path().exists()
 
 
+def _duckdb_has_table(table_name: str) -> bool:
+    """Return whether the local DuckDB contains a requested application table.
+
+    Some local workspaces keep a small DuckDB shell for compatibility while
+    the authoritative artifacts are Parquet files. Checking only the file's
+    existence makes every request attempt a missing-table query and emit a
+    misleading traceback before falling back successfully. Cache this cheap
+    schema probe with the same TTL as the data loaders.
+    """
+    cache_key = f"duckdb_table:{table_name}"
+    cached = _ttl_cache.get(cache_key)
+    if cached is not _MISSING:
+        return bool(cached)
+    if not _duckdb_exists():
+        _ttl_cache.set(cache_key, False)
+        return False
+
+    found = False
+    try:
+        import duckdb
+
+        con = duckdb.connect(str(_duckdb_path()), read_only=True)
+        try:
+            found = con.execute(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = 'main' AND table_name = ? LIMIT 1",
+                [table_name],
+            ).fetchone() is not None
+        finally:
+            con.close()
+    except Exception as exc:
+        logger.debug("DuckDB schema probe failed for %s: %s", table_name, exc)
+    _ttl_cache.set(cache_key, found)
+    return found
+
+
 def _minutes_to_confidence(minutes: float) -> str:
     if minutes >= 900:
         return "HIGH"
@@ -213,7 +249,7 @@ def _load_all_player_ratings(force_refresh: bool = False) -> pd.DataFrame:
         if cached is not _MISSING:
             return cached
 
-    if _duckdb_exists():
+    if _duckdb_has_table("player_ratings"):
         try:
             import duckdb
 
@@ -289,7 +325,7 @@ def load_model_meta(force_refresh: bool = False) -> pd.DataFrame:
         if cached is not _MISSING:
             return cached
 
-    if _duckdb_exists():
+    if _duckdb_has_table("model_meta"):
         try:
             import duckdb
 
@@ -338,7 +374,7 @@ def load_league_metrics(force_refresh: bool = False) -> pd.DataFrame:
         if cached is not _MISSING:
             return cached
 
-    if _duckdb_exists():
+    if _duckdb_has_table("league_metrics"):
         try:
             import duckdb
 

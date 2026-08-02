@@ -660,7 +660,7 @@ loss: composite_objective (同上)
 regularization: L2 + dropout
 ```
 
-NN 模型输入为 `rating_feature_matrix.parquet` 中的标准化特征向量，输出单个优化评分。
+NN 模型输入为 `rating_feature_matrix.parquet` 中的标准化特征向量，输出单个优化评分。当前已实现并比较两类 GPU 候选：共享球员编码的 MLP，以及对球队球员集合做注意力聚合的 Set Transformer。两者都复用优化器的复合目标、先验正则、时间切分和早停门禁；Set Transformer 结构上更适合阵容集合，但不能仅凭结构复杂度替换 MLP。
 
 训练使用时间序列分割验证，避免未来数据泄漏。NN 候选模型与遗传算法优化器并行运行，通过 holdout 指标（Spearman、Pearson、NDCG、校准 MAE）比较选择更优模型。
 
@@ -677,9 +677,10 @@ player_truth_anchor_loss =
 集成条件：
 - 需要通过 `rating_feature_matrix.parquet` 解析到 player_id → player_name/season 匹配
 - 默认阈值：`--min-truth-labels 50`
-- 当标签表为空时自动跳过
+- 只接收 `source_policy=independent` 且通过时间门禁的标签；`expert_tier` 派生标签始终排除
+- 当前标签表含 17 行手工赛季奖项 benchmark，但均为赛季结束后标签，因此时间可用于因果训练的独立行数仍为 0
 
-目的：在有人工/身价/奖项标签后，把优化器从纯球队层代理信号拉回球员层真实影响力。
+目的：在有满足时间边界的人工/身价/奖项标签后，把优化器从纯球队层代理信号拉回球员层真实影响力。当前 17 行只能作为 post-season benchmark，不能证明球员能力真值，也不会让 `research_health` 自动变成 `ready`。
 
 ## 数据流
 

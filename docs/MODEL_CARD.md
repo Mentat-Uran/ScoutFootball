@@ -1,12 +1,12 @@
 # ScoutFootball 球员评分模型卡
 
-> 当前文档包含 2026-06 历史模型描述，尚未由 PRS-0 的生成式事实区替代。2026-07-29 本地审计确认：当前 active rating 早于现行特征矩阵，本地 41 个模型运行中没有可复核运行，29,723 条标签全部为 `expert_tier` 且独立合格监督标签为 0。因此下文版本和指标不能作为当前模型已准入或球员能力已验证的证明。当前边界见 [`CAPABILITIES.md`](CAPABILITIES.md)，专项修复与新版模型卡要求见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)。
+> 本文保留历史指标，同时在下方记录当前本地激活证据。当前 active 评分是球队积分代理目标的神经候选，不是独立验证的球员能力真值；`research_health` 仍为 `not_ready`。当前边界见 [`CAPABILITIES.md`](CAPABILITIES.md)，专项修复与新版模型卡要求见 [`PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md`](PLAYER_RATING_RESEARCH_SYSTEM_PLAN.md)。
 
 ## 模型概述
 
 ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，覆盖 Big 5 联赛（英超、西甲、德甲、意甲、法甲）2016/17–2025/26 赛季。模型将球员能力拆解为出勤可靠性、进攻贡献、防守贡献、控球推进、效率质量等维度，按位置组分配不同权重，经联赛强度和球队环境修正后输出最终评分。
 
-**当前版本：v1.3.2-dev（联赛校准 + 球员真值标签锚定代码已更新，完整 GPU 重跑待执行；NN 候选入口已实现但因本地真值标签为空而跳过；不可用于正式球探决策）**
+**当前版本：v1.3.3-dev（GPU MLP 已本地激活，Set Transformer 保留为 reviewable 候选；评分仍不可作为独立球员能力结论或正式球探决策）**
 
 ## 数据源
 
@@ -26,9 +26,9 @@ ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，
 - 积分校准目标：训练集拟合的单调 affine 校准层，把 raw team strength 映射为 season points，并优化积分回归、1D 分布匹配、争冠/降级尾部球队误差和联赛平均残差。
 - 球员真值锚定目标（v1.3.2-dev）：当 `player_truth_labels.parquet` 能解析到足够球员赛季标签时，加入球员评分与真值标签的 z-score 距离和 soft-rank 一致性损失。
 
-**标签局限**：无球员级真实标签，球队积分 ≠ 球员影响力，强队系统性低估，降级队系统性高估。
+**标签局限**：当前没有满足时间门禁的独立球员能力标签；17 行奖项标签均为赛季结束后 benchmark，球队积分 ≠ 球员影响力，强队系统性低估，降级队系统性高估。
 
-**神经网络候选边界**：`scoutfootball train-rating-nn` 已提供监督式 sklearn MLP 候选模型，读取 `rating_feature_matrix.parquet` + `player_truth_labels.parquet` 并与 `player_ratings_optimized` baseline 对比。当前本地 `player_truth_labels.parquet` 为空，命令输出 skipped 状态，不生成可用 NN 评分结论，也不替换默认评分产物。
+**神经网络候选边界**：当前 active run 为 `20260802T-gpu-mlp-activated-candidate`，使用 CUDA RTX 5070 Ti，holdout Spearman 约 0.682、MAE 约 11.01；该指标是球队积分代理目标的时间外评估，不是球员能力验证。Set Transformer 在同一比较中未优于 MLP，保留为 reviewable 候选。候选评分已写入标准 parquet 并经过 identity/admission 链路，但 7 行已解析、其余身份为显式 unresolved；当前可用球员特征主要为 Big-5，15 个 target leagues 不支持。
 
 **校准边界**：积分校准层只能在训练赛季拟合，holdout/test 必须复用训练集 `slope/intercept` 和训练集联赛 residual offset；不能用测试集实际积分重新拟合。
 
@@ -38,7 +38,7 @@ ScoutFootball 球员评分模型输出位置感知的球员赛季综合评分，
 
 ## 当前指标
 
-以下指标来自 v1.3 GPU 重跑结果（2026-06-09 23:05，本地 `optimized_params_meta.json`）。v1.3.1-dev 新增的 league-bias loss 尚未完整重跑。
+以下表格保留 v1.3 GPU 历史快照（2026-06-09）；当前 active 神经候选的最新证据见上方“神经网络候选边界”和运行产物 `data/models/runs/20260802T-gpu-mlp-activated-candidate/`。
 
 ### Holdout（2526 赛季）
 
@@ -94,6 +94,12 @@ Test Spearman: mean=0.716, std=0.001
 - 新增 CLI 参数：`--truth-label-weight`、`--min-truth-labels`、`--disable-truth-label-anchor`；标签为空或匹配不足时自动禁用。
 - 新增 `src/scoutfootball/models/player_rating_nn.py` 和 `scoutfootball train-rating-nn`：监督式 sklearn MLP 候选模型，按赛季时间切分，输出 metrics/predictions/model 到 `data/models/player_rating_nn/`。
 - 当前真值标签表为空，NN 候选和 truth-anchor 都只完成代码入口与 skip 行为验证；完整训练和模型卡指标待标签层补齐后执行。
+
+### v1.3.3-dev（2026-08-02）
+
+- GPU MLP 与 Set Transformer 使用同一时间切分和复合目标比较；MLP 本地激活，Set Transformer 保留为 reviewable 候选。
+- 候选运行输出 `meta.json`、`metrics.json`、`training_history.json`、`training_curves.svg`、标准 `player_ratings_candidate.parquet` 和身份解析摘要；active 产物保留 optimizer 参数以便回滚。
+- 新增 17 行赛季奖项 benchmark，但全部为 post-season 标签；独立时间可用标签仍为 0，研究门禁保持 `not_ready`。
 
 ### Truth-label source policy（2026-07-13）
 
