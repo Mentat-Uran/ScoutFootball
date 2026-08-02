@@ -57,7 +57,7 @@ run_uv() {
 
 # Install PyInstaller explicitly because macOS builds intentionally omit the
 # dev dependency group above.
-run_uv python -m pip install pyinstaller --quiet
+uv pip install pyinstaller --quiet
 
 # Build the backend executable
 cd "$DESKTOP_DIR"
