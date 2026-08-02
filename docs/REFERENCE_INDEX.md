@@ -4,8 +4,8 @@
 
 - manifest schema：`1.0.0`
 - package version：`1.1.1`
-- manifest generated_at：`2026-08-01T22:32:16.187809+00:00`
-- content SHA-256：`c9ffa680a25f0122ddd0f44e3bbe5d2637d3ae5a565bf3af125302ce122e5d1f`
+- manifest generated_at：`2026-08-02T01:10:52.355905+00:00`
+- content SHA-256：`edd7a5ed12193fb2231fd831ef8a233208bf2a45029d9f210b99b07a38254eab`
 
 本页用于定位本地入口和已登记契约；它不证明 Parquet 内容已解码、样例具有完整覆盖，或线上部署当前可达。请运行相应的 preflight、契约检查和本地工作流后再作此类陈述。
 
@@ -149,7 +149,7 @@
 | api.server | infrastructure | delivered | /health, /health/detailed, /health/research, /license, /search, /local-pack/export, /local-pack/import (POST), /tactical-board/capabilities, /tactical-board/export/mp4 (POST) | serve | — |
 | local.portable_pack | infrastructure | delivered | /local-pack/export, /local-pack/import (POST) | export-local-pack, import-local-pack | — |
 | frontend.analyst_console | infrastructure | delivered | — | — | overview, players, compare, value, matches, teams, league, scouting, actions, reports, tactical, wc_schedule, wc_squads, wc_compare, wc_probability, wc_knockout, wc_tournament, license, data, calibration, backtest, help, workflow, versions |
-| data.artifacts | infrastructure | delivered | /artifacts, /model-runs, /reports/model-runs, /reports/model-runs/{run_id} | info, capabilities, data-contracts | data |
+| data.artifacts | infrastructure | delivered | /artifacts, /model-runs, /reports/model-runs, /reports/model-runs/{run_id}, /reports/model-training | info, capabilities, data-contracts | data |
 
 ## 数据契约登记
 

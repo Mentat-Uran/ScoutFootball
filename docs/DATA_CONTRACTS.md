@@ -216,7 +216,8 @@ a run cannot be interpreted as complete if either cannot be read.
 ## 6. player_truth_labels.parquet
 
 **File**: `data/gold/feature_store/player_truth_labels.parquet`
-**Purpose**: Ground truth labels for rating validation
+**Purpose**: External/proxy and human labels for rating experiments; this file
+does not by itself establish player-ability truth.
 
 | Column | Type | Description |
 |---|---|---|
@@ -242,7 +243,11 @@ a run cannot be interpreted as complete if either cannot be read.
 `award`, `manual_calibration`, and `scouting_review` are eligible for the NN
 candidate and optimizer truth-anchor. `expert_tier` is excluded because the
 current local tier import was derived from `optimized_score`, so using it would
-create a circular target. Eligibility is a guardrail, not proof that a manual
+create a circular target. `transfermarkt_value` is explicitly an external
+market-value proxy: it remains eligible for disclosed proxy training, but it is
+not counted as an independent player-ability label by `research-health`.
+`independent_rows` currently counts only `award`, `manual_calibration`, and
+`scouting_review`; source eligibility is a guardrail, not proof that a manual
 or scouting label was collected independently.
 
 The audit also reports `temporal`: for eligible sources, a label is
@@ -252,9 +257,11 @@ dates remain visible as audit findings; this date check alone does not prove
 that a label was causally collected.
 
 Use `scoutfootball audit-truth-labels` or `GET /reports/truth-labels` to see
-the exact row/source counts used by the policy. The current tracked artifact
-has no supervision-eligible rows; training and truth anchoring must remain
-skipped until independent labels are imported.
+the exact row/source counts used by the policy, including
+`proxy_rows`/`independent_rows`. The current tracked artifact contains
+21,037 `transfermarkt_value` proxy rows and 29,723 excluded `expert_tier` rows,
+but `independent_rows=0`; `research-health` must therefore remain
+`not_ready` even though proxy training is allowed.
 
 **Manual Transfermarkt import**: only a local CSV or Parquet snapshot is
 accepted; this project does not scrape Transfermarkt. Use
@@ -850,6 +857,26 @@ reproducibility review. New runs may also include `data_coverage` with source
 rows, observed-field counts, and optional-artifact statuses. Historic runs
 without that field are not retroactively labelled as fully audited.
 
+Team-points neural candidates may use `model_type=team_points_mlp` or
+`model_type=team_points_set_transformer`. Their `meta.json` records the
+architecture, chronological train/validation/test seasons, proxy-target
+semantics, feature-manifest lineage, `model_state.pt` SHA-256, and a standard
+`player_ratings_candidate.parquet` artifact with row/column/hash metadata.
+Set Transformer runs process each team-league-season player set with
+permutation-invariant self-attention and pooling attention; MLP runs remain a
+required comparison baseline. Both use the optimizer output only as an
+explicit prior/feature and never treat it as an independent truth label.
+Their admission contract verifies the serialized model, candidate rating
+snapshot, lineage, time split, finite proxy holdout metrics, team coverage, and
+explicit proxy disclosure. `reviewable` still means human-reviewable, not
+automatically active or independently validated.
+
+Neural candidate directories also contain `training_history.json` with the
+per-epoch train/validation diagnostics and device metadata, plus the derived
+`training_curves.svg` chart. `GET /reports/model-training` reads the active
+run's history for the local reports UI; it is a convergence diagnostic and
+does not change admission or activation status.
+
 ### Local model-admission report
 
 `scoutfootball model-admission` is a read-only local screen over
@@ -905,6 +932,15 @@ the current active ratings, parameters, and metadata before copying all three
 to a unique local `data/models/backups/<backup_id>/` directory with hashes.
 Only then does it replace the three active artifacts and record the human
 decision and backup ID in both active and candidate metadata.
+
+For a team-points neural candidate, the explicit local promotion additionally
+copies `model_state.pt` to `gold/feature_store/player_rating_model.pt` and
+backs up that file when present. It replaces the active rating parquet and
+metadata, but deliberately retains `optimized_params.npy` as legacy optimizer
+parameters for comparison and rollback compatibility. The active metadata
+records the neural `model_type`, run ID, scope, decision, and backup ID; the
+candidate remains explicitly caveated as a team-season proxy rather than
+independent player-ability truth.
 
 `scoutfootball rollback-model-run <backup_id> --decision <text>` is likewise a
 preview until `--confirm`. It accepts only the verified backup belonging to the

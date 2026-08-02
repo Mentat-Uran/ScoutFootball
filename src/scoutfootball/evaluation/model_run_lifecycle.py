@@ -27,6 +27,10 @@ ACTIVE_ARTIFACT_FILENAMES = (
     "optimized_params.npy",
     "optimized_params_meta.json",
 )
+ACTIVE_MLP_MODEL_FILENAME = "player_rating_model.pt"
+TEAM_POINTS_NEURAL_MODEL_TYPES = frozenset(
+    {"team_points_mlp", "team_points_set_transformer"}
+)
 REQUIRED_RATING_COLUMNS = {
     "player",
     "team",
@@ -131,9 +135,10 @@ def _validate_rating_frame(frame: pd.DataFrame, *, label: str) -> None:
         raise ModelRunLifecycleError(f"{label} has non-finite optimized scores")
     if not np.isfinite(percentiles.to_numpy(dtype=float)).all():
         raise ModelRunLifecycleError(f"{label} has non-finite position percentiles")
-    expected = frame.groupby(["sub_position", "season"], observed=True)["optimized_score"].rank(
-        pct=True
-    ) * 100.0
+    expected = (
+        frame.groupby(["sub_position", "season"], observed=True)["optimized_score"].rank(pct=True)
+        * 100.0
+    )
     if not np.array_equal(percentiles.to_numpy(dtype=float), expected.to_numpy(dtype=float)):
         raise ModelRunLifecycleError(f"{label} does not satisfy the position-percentile contract")
 
@@ -155,6 +160,10 @@ def _validate_params(path: Path, *, label: str) -> int:
 def _active_paths(settings: PlatformSettings) -> dict[str, Path]:
     root = _feature_store(settings)
     return {name: root / name for name in ACTIVE_ARTIFACT_FILENAMES}
+
+
+def _active_mlp_model_path(settings: PlatformSettings) -> Path:
+    return _feature_store(settings) / ACTIVE_MLP_MODEL_FILENAME
 
 
 def _validate_active_artifacts(settings: PlatformSettings) -> dict[str, Path]:
@@ -207,9 +216,8 @@ def _candidate_promotion_inputs(
         raise ModelRunLifecycleError(
             f"candidate ratings are unreadable: {type(exc).__name__}"
         ) from exc
-    if (
-        ratings_meta.get("rows") != len(ratings)
-        or ratings_meta.get("columns") != list(ratings.columns)
+    if ratings_meta.get("rows") != len(ratings) or ratings_meta.get("columns") != list(
+        ratings.columns
     ):
         raise ModelRunLifecycleError(
             "candidate rating artifact rows or columns do not match metadata"
@@ -365,9 +373,7 @@ def discard_optimizer_run(
     allow_incomplete: bool = False,
 ) -> dict[str, Any]:
     """Discard one explicit local candidate after a safety check and confirmation."""
-    report = inspect_optimizer_run_discard(
-        settings, run_id, allow_incomplete=allow_incomplete
-    )
+    report = inspect_optimizer_run_discard(settings, run_id, allow_incomplete=allow_incomplete)
     report["confirmed"] = bool(confirm)
     report["deleted"] = False
     if not report["discardable"]:
@@ -514,6 +520,214 @@ def promote_optimizer_run(
     report["promoted"] = True
     report["activated_at"] = active_meta["active_model"]["activated_at"]
     return report
+
+
+def _candidate_mlp_promotion_inputs(
+    settings: PlatformSettings, run_id: str
+) -> tuple[Path, dict[str, Any], Path, Path, dict[str, Any]]:
+    directory = _run_directory(settings, run_id)
+    meta = _read_json_object(directory / "meta.json", label="candidate metadata")
+    model_type = meta.get("model_type")
+    if model_type not in TEAM_POINTS_NEURAL_MODEL_TYPES:
+        raise ModelRunLifecycleError("candidate is not a supported team-points neural run")
+    activation = meta.get("activation")
+    if not isinstance(activation, dict) or activation.get("status") != "not_activated":
+        raise ModelRunLifecycleError("candidate is not explicitly not_activated")
+    admission = evaluate_optimizer_run(directory, settings=settings)
+    if admission["status"] != "reviewable":
+        raise ModelRunLifecycleError(
+            "candidate is not reviewable: " + ", ".join(admission["failed_checks"])
+        )
+    artifacts = meta.get("candidate_artifacts")
+    ratings_meta = artifacts.get("ratings") if isinstance(artifacts, dict) else None
+    model_meta = artifacts.get("model") if isinstance(artifacts, dict) else None
+    if not isinstance(ratings_meta, dict) or not isinstance(model_meta, dict):
+        raise ModelRunLifecycleError("candidate neural artifact metadata is missing")
+    ratings_path = _candidate_file(
+        directory, str(ratings_meta.get("path", "")), label="candidate ratings"
+    )
+    model_path = _candidate_file(
+        directory, str(model_meta.get("path", "")), label="candidate model"
+    )
+    if (
+        not isinstance(ratings_meta.get("sha256"), str)
+        or _sha256_file(ratings_path) != ratings_meta["sha256"]
+    ):
+        raise ModelRunLifecycleError("candidate rating artifact SHA-256 does not match metadata")
+    if (
+        not isinstance(model_meta.get("sha256"), str)
+        or _sha256_file(model_path) != model_meta["sha256"]
+    ):
+        raise ModelRunLifecycleError("candidate model artifact SHA-256 does not match metadata")
+    try:
+        ratings = pd.read_parquet(ratings_path)
+    except (OSError, ValueError, TypeError) as exc:
+        raise ModelRunLifecycleError(
+            f"candidate ratings are unreadable: {type(exc).__name__}"
+        ) from exc
+    if ratings_meta.get("rows") != len(ratings) or ratings_meta.get("columns") != list(
+        ratings.columns
+    ):
+        raise ModelRunLifecycleError(
+            "candidate rating artifact rows or columns do not match metadata"
+        )
+    _validate_rating_frame(ratings, label="candidate ratings")
+    return directory, meta, ratings_path, model_path, admission
+
+
+def _create_mlp_backup(
+    settings: PlatformSettings, *, run_id: str, backup_id: str
+) -> tuple[Path, dict[str, Any]]:
+    active_paths = _validate_active_artifacts(settings)
+    backup_dir, manifest = _create_backup(
+        settings, run_id=run_id, active_paths=active_paths, backup_id=backup_id
+    )
+    model_path = _active_mlp_model_path(settings)
+    model_entry: dict[str, Any] = {"present": False}
+    if model_path.is_file():
+        target = backup_dir / ACTIVE_MLP_MODEL_FILENAME
+        shutil.copyfile(model_path, target)
+        model_entry = {
+            "present": True,
+            "sha256": _sha256_file(target),
+            "size_bytes": target.stat().st_size,
+        }
+    manifest["mlp_model"] = model_entry
+    _write_json_atomic(backup_dir / "manifest.json", manifest)
+    return backup_dir, manifest
+
+
+def inspect_team_points_mlp_promotion(
+    settings: PlatformSettings, run_id: str, *, decision: str
+) -> dict[str, Any]:
+    """Preview a reversible, explicitly scoped neural promotion."""
+    cleaned_decision = _require_decision(decision)
+    _, meta, ratings_path, model_path, admission = _candidate_mlp_promotion_inputs(settings, run_id)
+    active_paths = _validate_active_artifacts(settings)
+    backup_id = _backup_id(run_id)
+    return {
+        "run_id": run_id,
+        "model_type": meta.get("model_type"),
+        "action": "promote",
+        "decision": cleaned_decision,
+        "admission_status": admission["status"],
+        "target_semantics": meta.get("target_semantics"),
+        "candidate_ratings": {
+            "path": str(ratings_path),
+            "rows": meta["candidate_artifacts"]["ratings"]["rows"],
+        },
+        "candidate_model": {"path": str(model_path), "sha256": _sha256_file(model_path)},
+        "active_artifacts": {name: str(path) for name, path in active_paths.items()},
+        "active_mlp_model": str(_active_mlp_model_path(settings)),
+        "backup_id": backup_id,
+        "backup_path": str(_backups_root(settings) / backup_id),
+        "will_replace_active_artifacts": [
+            "player_ratings_optimized.parquet",
+            ACTIVE_MLP_MODEL_FILENAME,
+            "optimized_params_meta.json",
+        ],
+    }
+
+
+def promote_team_points_mlp_run(
+    settings: PlatformSettings, run_id: str, *, decision: str, confirm: bool = False
+) -> dict[str, Any]:
+    """Promote a reviewable neural rating snapshot while retaining legacy params."""
+    report = inspect_team_points_mlp_promotion(settings, run_id, decision=decision)
+    report["confirmed"] = bool(confirm)
+    report["promoted"] = False
+    if not confirm:
+        return report
+
+    directory, meta, ratings_path, model_path, _ = _candidate_mlp_promotion_inputs(settings, run_id)
+    active_paths = _validate_active_artifacts(settings)
+    backup_id = report["backup_id"]
+    backup_dir, backup_manifest = _create_mlp_backup(settings, run_id=run_id, backup_id=backup_id)
+    active_model_path = _active_mlp_model_path(settings)
+    active_meta = deepcopy(meta)
+    activated_at = _now()
+    model_type = meta.get("model_type")
+    active_meta.update(
+        {
+            "timestamp": activated_at,
+            "run_id": run_id,
+            "active_model": {
+                "schema": MODEL_LIFECYCLE_SCHEMA,
+                "version": MODEL_LIFECYCLE_VERSION,
+                "run_id": run_id,
+                "model_type": model_type,
+                "model_artifact": ACTIVE_MLP_MODEL_FILENAME,
+                "backup_id": backup_id,
+                "activated_at": activated_at,
+                "decision": report["decision"],
+            },
+            "legacy_optimizer_params": {
+                "status": "retained_for_rollback_compatibility",
+                "note": (
+                    "The active player rating snapshot is served from the MLP artifact; "
+                    "optimized_params.npy was not repurposed."
+                ),
+            },
+        }
+    )
+    activated_meta = deepcopy(meta)
+    activated_meta["activation"] = {
+        "status": "activated",
+        "activated_at": activated_at,
+        "decision": report["decision"],
+        "backup_id": backup_id,
+        "scope": "leagues_with_player_features",
+        "note": (
+            "Neural ratings are active as a scoped proxy-target candidate; independent "
+            "player-ability truth is not established."
+        ),
+    }
+    replaced = False
+    try:
+        _copy_atomic(ratings_path, active_paths["player_ratings_optimized.parquet"])
+        _copy_atomic(model_path, active_model_path)
+        _write_json_atomic(active_paths["optimized_params_meta.json"], active_meta)
+        replaced = True
+        _write_json_atomic(directory / "meta.json", activated_meta)
+    except Exception as exc:
+        if replaced or active_model_path.is_file():
+            for name in ACTIVE_ARTIFACT_FILENAMES:
+                _copy_atomic(backup_dir / name, active_paths[name])
+            model_entry = backup_manifest.get("mlp_model", {})
+            if model_entry.get("present") is True:
+                _copy_atomic(backup_dir / ACTIVE_MLP_MODEL_FILENAME, active_model_path)
+            elif active_model_path.is_file():
+                active_model_path.unlink()
+        raise ModelRunLifecycleError(
+            f"neural promotion failed and active artifacts were restored: {type(exc).__name__}"
+        ) from exc
+    report["promoted"] = True
+    report["activated_at"] = activated_at
+    return report
+
+
+def inspect_team_points_set_transformer_promotion(
+    settings: PlatformSettings, run_id: str, *, decision: str
+) -> dict[str, Any]:
+    """Preview promotion for a Set Transformer candidate."""
+
+    report = inspect_team_points_mlp_promotion(settings, run_id, decision=decision)
+    if report.get("model_type") != "team_points_set_transformer":
+        raise ModelRunLifecycleError("candidate is not a team_points_set_transformer run")
+    return report
+
+
+def promote_team_points_set_transformer_run(
+    settings: PlatformSettings, run_id: str, *, decision: str, confirm: bool = False
+) -> dict[str, Any]:
+    """Promote a reviewed Set Transformer candidate through the neural path."""
+
+    report = inspect_team_points_set_transformer_promotion(settings, run_id, decision=decision)
+    if not confirm:
+        report["confirmed"] = False
+        report["promoted"] = False
+        return report
+    return promote_team_points_mlp_run(settings, run_id, decision=decision, confirm=True)
 
 
 def _backup_directory(settings: PlatformSettings, backup_id: str) -> Path:

@@ -89,6 +89,7 @@ from scoutfootball.api import (
     get_model_comparison,
     get_model_run_detail,
     get_model_runs,
+    get_model_training_history,
     get_opposition_briefing,
     get_opposition_briefings,
     get_opposition_contracts,
@@ -1679,6 +1680,10 @@ def create_app() -> FastAPI:
     @app.get("/reports/model-runs")
     def report_model_runs():
         return get_model_runs()
+
+    @app.get("/reports/model-training")
+    def report_model_training(run_id: str | None = None):
+        return get_model_training_history(run_id=run_id)
 
     @app.get("/reports/model-runs/{run_id}")
     def report_model_run_detail(run_id: str):

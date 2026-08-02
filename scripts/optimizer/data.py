@@ -522,18 +522,43 @@ def load_data(data_dir: Path):
         total_points=("points", "sum"),
     ).reset_index()
 
-    # Diagnostics: report team name matching rate
-    player_teams = set(df["team"].dropna().unique())
-    pts_teams = set(team_pts["team"].dropna().unique())
-    matched_teams = player_teams & pts_teams
-    unmatched_player = player_teams - pts_teams
-    if unmatched_player:
+    # Diagnostics: compare the actual training unit (team-season) only inside
+    # leagues for which this input has player features.  The former 154/538
+    # raw-string ratio mixed unsupported leagues and multi-club season strings
+    # into one denominator, making valid Big-5 coverage look artificially low.
+    feature_leagues = set(df["league"].dropna().astype(str))
+    feature_groups = (
+        df.assign(_team_key=df["team"].map(normalize_team_name))
+        .groupby(["_team_key", "league", "season"], observed=True)
+        .size()
+        .rename("n_players")
+        .reset_index()
+    )
+    feature_groups = feature_groups.loc[feature_groups["n_players"] >= 5]
+    target_groups = team_pts.loc[team_pts["league"].isin(feature_leagues), [
+        "team", "league", "season"
+    ]].copy()
+    target_groups["_team_key"] = target_groups["team"].map(normalize_team_name)
+    target_groups = target_groups[["_team_key", "league", "season"]].drop_duplicates()
+    matched_groups = target_groups.merge(
+        feature_groups[["_team_key", "league", "season"]],
+        on=["_team_key", "league", "season"],
+        how="inner",
+    )
+    coverage = len(matched_groups) / len(target_groups) if len(target_groups) else 0.0
+    unsupported_leagues = sorted(
+        set(team_pts["league"].astype(str).unique()) - feature_leagues
+    )
+    print(
+        "  球队积分匹配（有球员特征的联赛范围）："
+        f"{len(matched_groups)}/{len(target_groups)} team-season "
+        f"({coverage:.1%})，source_leagues={sorted(feature_leagues)}"
+    )
+    if unsupported_leagues:
         print(
-            f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 球员侧球队匹配积分侧, "
-            f"未匹配: {sorted(unmatched_player)[:20]}"
+            "  未纳入训练的积分联赛（缺少对应球员特征）："
+            f"{unsupported_leagues}"
         )
-    else:
-        print(f"  队名匹配: {len(matched_teams)}/{len(player_teams)} 全部匹配")
 
     # Report NaN stats coverage
     for col in ["defense_composite", "possession_composite"]:

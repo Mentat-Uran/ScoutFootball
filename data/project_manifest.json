@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-08-01T22:32:16.187809+00:00",
+  "generated_at": "2026-08-02T01:10:52.355905+00:00",
   "package_version": "1.1.1",
   "architecture": {
     "package_name": "scoutfootball",
@@ -364,7 +364,7 @@
     ]
   },
   "capabilities": {
-    "generated_at": "2026-08-01T22:32:16.186771+00:00",
+    "generated_at": "2026-08-02T01:10:52.354880+00:00",
     "package_version": "1.1.1",
     "domains": [
       "action_value",
@@ -1400,7 +1400,8 @@
           "/artifacts",
           "/model-runs",
           "/reports/model-runs",
-          "/reports/model-runs/{run_id}"
+          "/reports/model-runs/{run_id}",
+          "/reports/model-training"
         ],
         "cli_commands": [
           "info",
@@ -1416,7 +1417,7 @@
     ]
   },
   "data_contracts": {
-    "generated_at": "2026-08-01T22:32:16.187809+00:00",
+    "generated_at": "2026-08-02T01:10:52.355905+00:00",
     "package_version": "1.1.1",
     "layers": [
       "gold",
@@ -2342,5 +2343,5 @@
       }
     ]
   },
-  "content_sha256": "c9ffa680a25f0122ddd0f44e3bbe5d2637d3ae5a565bf3af125302ce122e5d1f"
+  "content_sha256": "edd7a5ed12193fb2231fd831ef8a233208bf2a45029d9f210b99b07a38254eab"
 }

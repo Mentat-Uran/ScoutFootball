@@ -180,6 +180,28 @@ class TestTruthLabelSupervisionPolicy:
         assert report["excluded_source_counts"] == {"expert_tier": 1}
         assert eligible["label_source"].tolist() == ["award", "manual_calibration"]
 
+    def test_transfermarkt_value_is_proxy_not_independent_ability_truth(self) -> None:
+        labels = pd.DataFrame(
+            {
+                "player_id": ["p1", "p2", "p3"],
+                "season": ["2425"] * 3,
+                "label_source": ["transfermarkt_value", "scouting_review", "expert_tier"],
+                "label_confidence": ["medium", "high", "medium"],
+                "label_value": [50.0, 1.0, 2.0],
+                "as_of_date": ["2025-05-01"] * 3,
+                "position_scope": ["all"] * 3,
+                "manual_review_flag": [False, True, False],
+            },
+        )
+
+        report = truth_label_supervision_report(labels)
+
+        assert report["eligible_rows"] == 2
+        assert report["proxy_rows"] == 1
+        assert report["independent_rows"] == 1
+        assert report["proxy_source_counts"] == {"transfermarkt_value": 1}
+        assert report["independent_source_counts"] == {"scouting_review": 1}
+
     def test_temporal_report_separates_pre_and_post_season_labels(self) -> None:
         labels = pd.DataFrame(
             {

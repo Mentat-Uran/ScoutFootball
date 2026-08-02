@@ -69,3 +69,40 @@ def test_model_run_api_exposes_read_only_admission_summary(tmp_path, monkeypatch
     assert result["runs"][0]["admission"]["status"] == "reviewable"
     assert result["runs"][0]["admission"]["comparison"]["delta_spearman"] == pytest.approx(0.1)
     assert "activation" not in result["runs"][0]["admission"]
+
+
+def test_model_training_api_reads_active_run_history(tmp_path, monkeypatch) -> None:
+    from scoutfootball import api
+
+    run_id = "candidate-neural"
+    run = tmp_path / "data" / "models" / "runs" / run_id
+    run.mkdir(parents=True)
+    (run / "meta.json").write_text(
+        json.dumps({"model_type": "team_points_mlp", "architecture": "mlp"}),
+        encoding="utf-8",
+    )
+    (run / "training_history.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "history": [{"epoch": 1, "train_loss": 0.9, "validation_loss": 0.8}],
+                "training_device": "cuda",
+                "cuda_device": "NVIDIA test GPU",
+            }
+        ),
+        encoding="utf-8",
+    )
+    feature_store = tmp_path / "data" / "gold" / "feature_store"
+    feature_store.mkdir(parents=True)
+    (feature_store / "optimized_params_meta.json").write_text(
+        json.dumps({"active_model": {"run_id": run_id}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "_settings", lambda: PlatformSettings.from_root(tmp_path))
+
+    result = api.get_model_training_history()
+
+    assert result["status"] == "ok"
+    assert result["run_id"] == run_id
+    assert result["training_device"] == "cuda"
+    assert result["history"][0]["validation_loss"] == pytest.approx(0.8)

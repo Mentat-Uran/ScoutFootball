@@ -7950,6 +7950,78 @@ def get_model_run_detail(run_id: str) -> dict[str, Any]:
     return {**_make_error_response(f"Run '{run_id}' not found"), "available_runs": _get_run_ids()}
 
 
+def get_model_training_history(run_id: str | None = None) -> dict[str, Any]:
+    """Return the active neural run's training diagnostics for the UI.
+
+    This endpoint exposes convergence history and holdout context only. It
+    never promotes a candidate and does not treat proxy supervision as player
+    ability truth.
+    """
+
+    settings = _settings()
+    feature_store = settings.data_root / "gold" / "feature_store"
+    active_meta = _read_json(feature_store / "optimized_params_meta.json")
+    active = active_meta.get("active_model", {}) if isinstance(active_meta, dict) else {}
+    resolved_run_id = str(run_id or active.get("run_id") or "").strip()
+    if not resolved_run_id or Path(resolved_run_id).name != resolved_run_id:
+        return {
+            "status": "no_data",
+            "message": "No active model run has training diagnostics.",
+        }
+
+    run_dir = settings.data_root / "models" / "runs" / resolved_run_id
+    meta_path = run_dir / "meta.json"
+    history_path = run_dir / "training_history.json"
+    if not run_dir.is_dir() or not meta_path.is_file():
+        return {
+            "status": "no_data",
+            "run_id": resolved_run_id,
+            "message": "Model run metadata is unavailable.",
+        }
+
+    meta = _read_json(meta_path)
+    if history_path.is_file():
+        payload = _read_json(history_path)
+    else:
+        metrics = meta.get("metrics", {}) if isinstance(meta, dict) else {}
+        payload = {
+            "run_id": resolved_run_id,
+            "model_type": meta.get("model_type"),
+            "architecture": meta.get("architecture"),
+            "training_device": metrics.get("training_device"),
+            "cuda_device": metrics.get("cuda_device"),
+            "train_seasons": metrics.get("train_seasons", []),
+            "validation_seasons": metrics.get("validation_seasons", []),
+            "test_seasons": metrics.get("test_seasons", []),
+            "epochs_requested": meta.get("args", {}).get("epochs"),
+            "epochs_completed": metrics.get("epochs_completed"),
+            "best_validation_loss": metrics.get("best_validation_mse"),
+            "test": metrics.get("test", {}),
+            "target_semantics": metrics.get("target_semantics"),
+            "history": metrics.get("history", []),
+        }
+    if not isinstance(payload, dict) or not isinstance(payload.get("history"), list):
+        return {
+            "status": "no_data",
+            "run_id": resolved_run_id,
+            "message": "Training history is unavailable for this run.",
+        }
+
+    payload = {
+        **payload,
+        "status": "ok",
+        "run_id": resolved_run_id,
+        "model_type": payload.get("model_type") or meta.get("model_type"),
+        "architecture": payload.get("architecture") or meta.get("architecture"),
+        "chart_artifact": (
+            f"data/models/runs/{resolved_run_id}/training_curves.svg"
+            if (run_dir / "training_curves.svg").is_file()
+            else None
+        ),
+    }
+    return _clean_json_value(payload)
+
+
 def _player_list_to_csv(player_list: list[dict]) -> str:
     """Convert a list of player dicts to CSV text.
 

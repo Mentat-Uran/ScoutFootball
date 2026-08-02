@@ -220,6 +220,33 @@ def test_healthy_workspace_is_ready(tmp_path) -> None:
     assert report["blocking_reasons"] == []
 
 
+def test_proxy_only_labels_do_not_make_research_ready(tmp_path) -> None:
+    """Market value can anchor a proxy model but cannot prove ability truth."""
+    manifest_hash = _write_manifest(tmp_path)
+    _write_feature_matrix(tmp_path)
+    _write_active_rating(tmp_path, synthetic=False)
+    _write_truth_labels(tmp_path, sources=["transfermarkt_value"])
+    _write_run(
+        tmp_path,
+        "20260729T000000Z-proxy-only",
+        manifest_hash=manifest_hash,
+        activated=True,
+        reviewable=True,
+    )
+
+    report = build_research_health_report(settings=PlatformSettings.from_root(tmp_path))
+
+    assert report["verdict"] == VERDICT_NOT_READY
+    assert report["research_readiness"]["status"] == READINESS_BLOCKED
+    evidence = report["research_readiness"]["evidence"]
+    assert evidence["label_report"]["proxy_rows"] == 1
+    assert evidence["label_report"]["independent_rows"] == 0
+    assert any(
+        "no independent player-ability labels" in reason
+        for reason in evidence["blocking_reasons"]
+    )
+
+
 def test_stale_lineage_forces_not_ready(tmp_path) -> None:
     """Manifest rebuilt after training → lineage stale, verdict not_ready."""
     manifest_hash = _build_healthy_workspace(tmp_path)

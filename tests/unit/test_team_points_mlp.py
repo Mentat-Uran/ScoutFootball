@@ -66,7 +66,10 @@ def test_team_points_mlp_uses_chronological_proxy_holdout() -> None:
     assert set(result.team_predictions["split"]) == {"train", "test"}
     assert set(result.metrics["fit_seasons"]).isdisjoint(result.metrics["test_seasons"])
     assert "optimized_score" not in result.feature_columns
+    assert result.metrics["architecture"] == "set_transformer"
     assert result.metrics["target_semantics"].startswith("team-season points proxy")
+    assert result.metrics["team_coverage"]["test"]["coverage_rate"] == 1.0
+    assert result.metrics["team_coverage"]["test"]["scope"] == "leagues_with_player_features"
 
 
 def test_team_points_mlp_rejects_missing_team_points_schema() -> None:
@@ -91,9 +94,28 @@ def test_team_points_mlp_writer_emits_read_only_model_registry_metadata(tmp_path
     write_team_points_mlp_artifacts(result, output_dir, config=config, input_frame=features)
 
     metadata = (output_dir / "meta.json").read_text(encoding="utf-8")
-    assert '"model_type": "team_points_mlp"' in metadata
+    assert '"model_type": "team_points_set_transformer"' in metadata
+    assert '"architecture": "set_transformer"' in metadata
     assert '"status": "not_activated"' in metadata
     assert (
         '"target_semantics": "team-season points proxy; '
         'not independent player-ability truth"'
     ) in metadata
+
+
+def test_team_points_mlp_architecture_remains_available_as_comparison_baseline() -> None:
+    features, targets = _synthetic_inputs()
+    result = train_team_points_mlp(
+        features,
+        targets,
+        config=TeamPointsMLPConfig(
+            architecture="mlp",
+            hidden_layer_sizes=(8,),
+            epochs=5,
+            patience=2,
+            min_team_players=3,
+        ),
+    )
+
+    assert result.trained is True
+    assert result.metrics["architecture"] == "mlp"

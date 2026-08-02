@@ -50,6 +50,17 @@ where = ["src"]
 [tool.uv]
 link-mode = "copy"
 
+# The local optimizer/neural-rating path needs CUDA on the maintained Windows
+# workstation.  The CUDA wheel still supports CPU execution on machines
+# without an NVIDIA device; training code selects the device at runtime.
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+
 [tool.pytest.ini_options]
 addopts = "-q -m \"not e2e\""
 pythonpath = ["src"]

@@ -97,6 +97,17 @@ def test_ratings_meta_exposes_proxy_source_lineage(client: TestClient):
     assert "/health/research" in source["research_health_endpoint"]
 
 
+def test_model_training_endpoint_exposes_active_neural_diagnostics(client: TestClient):
+    response = client.get("/reports/model-training")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] in {"ok", "no_data"}
+    if payload["status"] == "ok":
+        assert payload["model_type"] in {"team_points_mlp", "team_points_set_transformer"}
+        assert payload["history"]
+        assert payload["training_device"] in {"cuda", "cpu"}
+
+
 def test_market_value_endpoint_preserves_source_boundary(client: TestClient):
     response = client.get("/market-value/summary")
     assert response.status_code == 200

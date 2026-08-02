@@ -19,6 +19,15 @@
 - 追加测试兼容性记录：完整回归仍出现 Starlette 的 TestClient/httpx 弃用告警，但不影响本次结果；后续单独评估升级到兼容的 httpx/Starlette 组合或固定兼容版本，避免把依赖迁移与评分模型实验混在同一变更中。
 - 追加问题清单复核：A1/A2/A3、写入访问门、MP4 安全边界和默认非 E2E 测试入口已落地；A4 身份覆盖、C3/C4 前端双真源与拆分、C5 单一依赖真源、静态 demo 快照清理及滚动文档归档仍为部分完成，不能标记为全部关闭。
 
+## 后续模型开发与复核（2026-08-02）
+
+- 将球队积分神经候选扩展为可选的普通 MLP 与 Set Transformer。Set Transformer 对每个 `team|league|season` 球员集合执行共享编码、集合自注意力、PMA 池化注意力、位置槽位上限、分钟权重和球队积分回归；旧优化器继续作为 prior、排名基线和回滚依据。
+- 在同一 2526 holdout（96 个 Big-5 team-season）上用相同特征、标签、时间切分比较：优化器 Spearman=`0.6954`、points MAE=`14.95`、RMSE=`17.55`；MLP Spearman=`0.6820`、MAE=`11.01`、RMSE=`14.27`、R²=`0.2580`、bias=`-2.56`；默认 Set Transformer Spearman=`0.6559`、MAE=`11.63`、RMSE=`14.35`、R²=`0.2494`、bias=`1.25`。32 维/2 层注意力变体 Spearman=`0.6560`，未超过默认注意力模型。
+- 选择 MLP 作为当前最佳神经候选并本地晋级：run=`20260802T-gpu-mlp-selected`，`meta.json`、候选评分 parquet、模型 SHA 和 lineage admission 全部通过；active `player_ratings_optimized.parquet`=`26,663` 行，active `player_rating_model.pt` 与候选模型 SHA 一致，旧 `optimized_params.npy` 与晋级前备份字节一致。Set Transformer run=`20260802T-gpu-set-transformer-selected` 保留为 `reviewable` 研究候选，不替换 MLP。
+- 修复 PyTorch 环境：项目 uv source 锁定 `torch 2.13.0+cu130`；实测 `torch.cuda.is_available()=True`、`NVIDIA GeForce RTX 5070 Ti`、矩阵乘法在 `cuda:0` 完成；候选 `metrics.json` 记录 `training_device=cuda`。
+- 修复研究健康门禁的语义漏洞：Transfermarkt 身价标签共 `21,037` 行仍允许作为代理监督，但 `independent_rows=0` 时不得把系统升级为 `ready`。当前 `research-health` 已回到 `verdict=not_ready`，原因明确为无独立球员能力标签；这不否定候选模型可复核，只限制真实性结论。
+- 聚焦回归：truth-label 与 research-health 测试通过；Ruff 通过。以上晋级为本地、可回滚动作，未推送远端。
+
 > 审计性质：独立只读复核（git 历史、测试配置、依赖管理、仓库卫生、文档契约），与 2026-07-31 的前后端核心审计（`FRONTEND_BACKEND_CORE_AUDIT_2026-07-31.md`）重叠部分重新验证并注明；本文件是新发现 + 确认未修复项的当前清单，是下一个开发窗口的工作输入。
 > 审计时点：2026-08-02，分支 `main`（`fc44ac2`），工作区有未提交的版本号类改动（10 文件、18 行，未含任何审计项修复）。
 > 已执行：`ruff check src tests` 通过；`test_grain.py`/`test_role_system.py` 定向通过；pytest 收集 5,865 项（含 48 e2e + 34 integration）；`node --check frontend/app.js`、`desktop/app.js` 通过。

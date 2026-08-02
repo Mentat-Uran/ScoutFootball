@@ -49,12 +49,7 @@ def _sha256_file_short(path: Path) -> str:
 
 def _rating_feature_matrix_manifest_path(settings: PlatformSettings) -> Path:
     """Return the absolute path to the on-disk rating_feature_matrix manifest."""
-    return (
-        settings.data_root
-        / "gold"
-        / "feature_store"
-        / "rating_feature_matrix_manifest.json"
-    )
+    return settings.data_root / "gold" / "feature_store" / "rating_feature_matrix_manifest.json"
 
 
 def _current_rating_manifest_hash(settings: PlatformSettings) -> str | None:
@@ -73,9 +68,7 @@ def _current_rating_manifest_hash(settings: PlatformSettings) -> str | None:
     return _sha256_file_short(manifest_path)
 
 
-def _evaluate_candidate_rating_artifact(
-    meta: dict[str, Any], directory: Path
-) -> tuple[str, bool]:
+def _evaluate_candidate_rating_artifact(meta: dict[str, Any], directory: Path) -> tuple[str, bool]:
     """Verify the candidate rating parquet exists and matches its recorded SHA-256.
 
     A reviewable run must not rely on a missing or tampered candidate score
@@ -111,6 +104,34 @@ def _evaluate_candidate_rating_artifact(
             False,
         )
     return "candidate rating artifact verified", True
+
+
+def _evaluate_candidate_model_artifact(meta: dict[str, Any], directory: Path) -> tuple[str, bool]:
+    """Verify the serialized model artifact for a non-optimizer candidate."""
+    artifacts = meta.get("candidate_artifacts")
+    model_meta = artifacts.get("model") if isinstance(artifacts, dict) else None
+    if not isinstance(model_meta, dict):
+        return "candidate model metadata is missing", False
+    rel_path = model_meta.get("path")
+    expected_hash = model_meta.get("sha256")
+    if not isinstance(rel_path, str) or not rel_path:
+        return "candidate model path is missing", False
+    if not isinstance(expected_hash, str) or not expected_hash:
+        return "candidate model sha256 is missing", False
+    model_path = (directory / rel_path).resolve()
+    try:
+        model_path.relative_to(directory.resolve())
+    except ValueError:
+        return f"candidate model path escapes run directory: {rel_path}", False
+    if not model_path.is_file():
+        return f"candidate model file is missing: {rel_path}", False
+    actual_hash = _sha256_file(model_path)
+    if actual_hash != expected_hash:
+        return (
+            f"candidate model sha256 mismatch: metadata={expected_hash} actual={actual_hash}",
+            False,
+        )
+    return "candidate model artifact verified", True
 
 
 def _evaluate_recorded_lineage(
@@ -202,6 +223,11 @@ def evaluate_optimizer_run(
             "checks": [_check("metadata", False, f"meta.json unreadable: {type(exc).__name__}")],
             "failed_checks": ["metadata"],
         }
+    if isinstance(meta, dict) and meta.get("model_type") in {
+        "team_points_mlp",
+        "team_points_set_transformer",
+    }:
+        return _evaluate_team_points_neural_run(meta, directory, settings=settings)
     lineage = meta.get("lineage") if isinstance(meta.get("lineage"), dict) else {}
     metrics = meta.get("metrics") if isinstance(meta.get("metrics"), dict) else {}
     baseline = metrics.get("baseline_test")
@@ -288,6 +314,86 @@ def evaluate_optimizer_run(
     }
 
 
+def _evaluate_team_points_neural_run(
+    meta: dict[str, Any],
+    directory: Path,
+    *,
+    settings: PlatformSettings | None,
+) -> dict[str, Any]:
+    """Assess a neural team-points candidate against its proxy evidence contract.
+
+    This is intentionally separate from the optimizer admission contract:
+    the model has a serialized neural model and a team-points proxy holdout, not
+    optimizer parameters or a baseline/optimized pair.  It may become
+    reviewable for scoped activation, but it never turns the proxy into player
+    ability truth.
+    """
+    metrics = meta.get("metrics") if isinstance(meta.get("metrics"), dict) else {}
+    test_metrics = metrics.get("test") if isinstance(metrics.get("test"), dict) else {}
+    coverage = metrics.get("team_coverage")
+    test_coverage = coverage.get("test") if isinstance(coverage, dict) else None
+    lineage = meta.get("lineage") if isinstance(meta.get("lineage"), dict) else {}
+    model_note, model_ok = _evaluate_candidate_model_artifact(meta, directory)
+    rating_note, rating_ok = _evaluate_candidate_rating_artifact(meta, directory)
+    lineage_note, lineage_ok = _evaluate_recorded_lineage(lineage, settings)
+    train = meta.get("train_seasons")
+    test = meta.get("test_seasons")
+    checks = [
+        _check("model_artifact", model_ok, model_note),
+        _check("recorded_lineage", lineage_ok, lineage_note),
+        _check(
+            "time_split",
+            isinstance(train, list) and bool(train) and isinstance(test, list) and bool(test),
+            "train and holdout seasons",
+        ),
+        _check(
+            "proxy_holdout",
+            _finite_metric(test_metrics.get("spearman")) and _finite_metric(test_metrics.get("r2")),
+            "structured finite test spearman and r2",
+        ),
+        _check(
+            "team_coverage",
+            isinstance(test_coverage, dict)
+            and _finite_metric(test_coverage.get("coverage_rate"))
+            and float(test_coverage.get("coverage_rate", 0.0)) > 0.0,
+            "holdout team-season coverage within leagues with player features",
+        ),
+        _check(
+            "target_semantics",
+            isinstance(meta.get("target_semantics"), str)
+            and "proxy" in meta["target_semantics"].lower()
+            and "not independent" in meta["target_semantics"].lower(),
+            "proxy target is explicitly disclosed",
+        ),
+        _check("candidate_rating_artifact", rating_ok, rating_note),
+    ]
+    failed = [item["name"] for item in checks if item["status"] == "fail"]
+    return {
+        "run_id": directory.name,
+        "model_type": meta.get("model_type"),
+        "status": "reviewable" if not failed else "not_reviewable",
+        "checks": checks,
+        "failed_checks": failed,
+        "comparison": {
+            "test_spearman": float(test_metrics["spearman"]),
+            "test_r2": float(test_metrics["r2"]),
+        }
+        if _finite_metric(test_metrics.get("spearman")) and _finite_metric(test_metrics.get("r2"))
+        else None,
+        "limitations": [
+            "Reviewable means the proxy-target evidence and rating artifact are present.",
+            (
+                "The neural target is team-season performance plus disclosed proxy labels, "
+                "not independent player-ability truth."
+            ),
+            (
+                "Promotion must remain scoped to leagues with player-feature coverage "
+                "and is reversible locally."
+            ),
+        ],
+    }
+
+
 def build_model_admission_report(
     settings: PlatformSettings | None = None, *, run_id: str | None = None
 ) -> dict[str, Any]:
@@ -317,9 +423,7 @@ def build_model_admission_report(
 
 
 def format_model_admission_report(report: dict[str, Any]) -> str:
-    lines = [
-        f"Model admission: {report['reviewable_run_count']}/{report['run_count']} reviewable"
-    ]
+    lines = [f"Model admission: {report['reviewable_run_count']}/{report['run_count']} reviewable"]
     for run in report["runs"]:
         lines.append(f"  - {run['run_id']}: {run['status']}")
         if run["failed_checks"]:
