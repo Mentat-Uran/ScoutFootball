@@ -83,27 +83,7 @@ jobs:
             uv sync
           fi
 
-      - name: Run data pipeline
-        if: matrix.os != 'macos-latest'
-        shell: bash
-        run: |
-          set -e
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            UV_RUN=(uv run --no-dev)
-          else
-            UV_RUN=(uv run)
-          fi
-          # ingest may fail in CI when external data sources are unreachable;
-          # continue with the existing committed data but leave a warning.
-          "${UV_RUN[@]}" python -m scoutfootball ingest || echo "WARNING: ingest failed; continuing with existing committed data"
-          # build-features and train are local computations and must succeed —
-          # a failure here means the data or code is broken and the release
-          # must not ship a "successful" build with missing derived artifacts.
-          "${UV_RUN[@]}" python -m scoutfootball build-features
-          "${UV_RUN[@]}" python -m scoutfootball train
-
-      - name: Verify committed data artifacts for macOS packaging
-        if: matrix.os == 'macos-latest'
+      - name: Verify committed data artifacts for packaging
         shell: bash
         run: |
           set -e
