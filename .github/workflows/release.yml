@@ -84,6 +84,7 @@ jobs:
           fi
 
       - name: Run data pipeline
+        if: matrix.os != 'macos-latest'
         shell: bash
         run: |
           set -e
@@ -100,6 +101,21 @@ jobs:
           # must not ship a "successful" build with missing derived artifacts.
           "${UV_RUN[@]}" python -m scoutfootball build-features
           "${UV_RUN[@]}" python -m scoutfootball train
+
+      - name: Verify committed data artifacts for macOS packaging
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          set -e
+          for artifact in \
+            data/gold/feature_store/player_ratings_optimized.parquet \
+            data/gold/feature_store/player_truth_labels.parquet \
+            data/gold/feature_store/rating_feature_matrix.parquet \
+            data/gold/feature_store/team_match.parquet \
+            data/gold/feature_store/training_history.json; do
+            test -s "$artifact" || { echo "Missing committed release artifact: $artifact"; exit 1; }
+          done
+          echo "Using committed gold artifacts for macOS packaging."
 
       - name: Ensure data directories exist for packaging
         shell: bash
