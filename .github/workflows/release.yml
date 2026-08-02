@@ -87,14 +87,19 @@ jobs:
         shell: bash
         run: |
           set -e
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            UV_RUN=(uv run --no-dev)
+          else
+            UV_RUN=(uv run)
+          fi
           # ingest may fail in CI when external data sources are unreachable;
           # continue with the existing committed data but leave a warning.
-          uv run python -m scoutfootball ingest || echo "WARNING: ingest failed; continuing with existing committed data"
+          "${UV_RUN[@]}" python -m scoutfootball ingest || echo "WARNING: ingest failed; continuing with existing committed data"
           # build-features and train are local computations and must succeed —
           # a failure here means the data or code is broken and the release
           # must not ship a "successful" build with missing derived artifacts.
-          uv run python -m scoutfootball build-features
-          uv run python -m scoutfootball train
+          "${UV_RUN[@]}" python -m scoutfootball build-features
+          "${UV_RUN[@]}" python -m scoutfootball train
 
       - name: Ensure data directories exist for packaging
         shell: bash
@@ -111,7 +116,11 @@ jobs:
           touch data/raw/statsbomb_open/.gitkeep
           # Create duckdb placeholder if not exists (use uv run to ensure duckdb is available)
           if [ ! -f data/gold/scoutlab.duckdb ]; then
-            uv run python -c "import duckdb; duckdb.connect('data/gold/scoutlab.duckdb').close(); print('Created empty scoutlab.duckdb')" 2>/dev/null || touch data/gold/scoutlab.duckdb
+            if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+              uv run --no-dev python -c "import duckdb; duckdb.connect('data/gold/scoutlab.duckdb').close(); print('Created empty scoutlab.duckdb')" 2>/dev/null || touch data/gold/scoutlab.duckdb
+            else
+              uv run python -c "import duckdb; duckdb.connect('data/gold/scoutlab.duckdb').close(); print('Created empty scoutlab.duckdb')" 2>/dev/null || touch data/gold/scoutlab.duckdb
+            fi
           fi
 
       - name: Set up Node.js

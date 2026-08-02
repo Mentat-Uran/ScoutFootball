@@ -47,13 +47,21 @@ else
     uv sync --quiet
 fi
 
+run_uv() {
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        uv run --no-dev "$@"
+    else
+        uv run "$@"
+    fi
+}
+
 # Install PyInstaller explicitly because macOS builds intentionally omit the
 # dev dependency group above.
-uv run python -m pip install pyinstaller --quiet
+run_uv python -m pip install pyinstaller --quiet
 
 # Build the backend executable
 cd "$DESKTOP_DIR"
-uv run python -m PyInstaller \
+run_uv python -m PyInstaller \
     --clean \
     --noconfirm \
     --distpath backend-dist \
