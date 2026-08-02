@@ -71,7 +71,17 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install Python dependencies
-        run: uv sync
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            # The maintained Windows workstation uses the CUDA torch index,
+            # which has no macOS wheel.  The desktop backend only needs the
+            # runtime dependencies on macOS; the build script installs
+            # PyInstaller separately below.
+            uv sync --no-dev
+          else
+            uv sync
+          fi
 
       - name: Run data pipeline
         shell: bash
