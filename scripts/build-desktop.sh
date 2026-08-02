@@ -38,10 +38,18 @@ echo "[1/4] Building Python backend with PyInstaller..."
 
 # Install Python dependencies for the backend
 cd "$PROJECT_DIR"
-uv sync --quiet
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    # The project dev group pins CUDA torch for the maintained Windows
+    # workstation.  macOS packaging only needs runtime dependencies because
+    # that explicit index does not provide a macOS wheel.
+    uv sync --quiet --no-dev
+else
+    uv sync --quiet
+fi
 
-# Install PyInstaller if not present
-uv run pip install pyinstaller --quiet 2>/dev/null || true
+# Install PyInstaller explicitly because macOS builds intentionally omit the
+# dev dependency group above.
+uv run python -m pip install pyinstaller --quiet
 
 # Build the backend executable
 cd "$DESKTOP_DIR"
