@@ -6515,7 +6515,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     serve_p = sub.add_parser("serve", help="Start FastAPI server")
-    serve_p.add_argument("--host", default="0.0.0.0")
+    serve_p.add_argument("--host", default="127.0.0.1")
     serve_p.add_argument("--port", type=int, default=8000)
 
     # Tournament state management (2026 World Cup)

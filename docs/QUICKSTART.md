@@ -107,8 +107,10 @@ uv run python -m scoutfootball export-ratings
 
 ```bash
 uv sync
-uv run python -m scoutfootball serve --host 0.0.0.0 --port 8000
+uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
 ```
+
+The service listens on this computer only by default. To share it on a trusted LAN, use this computer's specific LAN address with `--host` (and set `SCOUTFOOTBALL_BIND_HOST` to that address when using Docker Compose). This exposes the local API data to reachable LAN clients; avoid binding to `0.0.0.0`.
 
 然后在本机访问：
 
@@ -165,7 +167,7 @@ uv run streamlit run src/scoutfootball/app/streamlit_app.py
 ```bash
 uv run python -m scoutfootball serve
 # 或
-uv run uvicorn scoutfootball.api_server:create_app --factory --host 0.0.0.0 --port 8000
+uv run uvicorn scoutfootball.api_server:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
 ### API 文档

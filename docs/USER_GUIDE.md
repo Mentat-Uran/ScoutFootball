@@ -46,10 +46,12 @@ uv sync
 ### 4.1 FastAPI 单端口模式（推荐）
 
 ```bash
-uv run python -m scoutfootball serve --host 0.0.0.0 --port 8000
+uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
 ```
 
 浏览器访问 http://127.0.0.1:8000 ，前端和 API 同端口。
+
+服务默认只监听本机。Docker Compose 也默认只向本机发布端口。
 
 ### 4.2 Streamlit 模式
 
@@ -65,9 +67,7 @@ uv run streamlit run src/scoutfootball/app/streamlit_app.py
 
 ### 4.4 局域网访问
 
-```bash
-uv run python -m scoutfootball serve --host 0.0.0.0 --port 8000
-```
+如需让可信局域网中的其他设备访问，请将 `--host` 设置为这台电脑的具体局域网接口地址；使用 Docker Compose 时，将 `SCOUTFOOTBALL_BIND_HOST` 设置为同一地址。不要使用 `0.0.0.0`，以免同时监听其他网络接口。此设置会让可达的局域网客户端读取本机 API 数据。
 
 同一网络内的其他设备访问 `http://你的电脑IP:8000`
 

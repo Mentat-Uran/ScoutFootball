@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import sys
 from pathlib import Path
@@ -23,3 +24,19 @@ def test_console_progress_bar_is_gbk_safe(capsys) -> None:
     console.update(step=10, pop_idx=0, loss=0.1, spearman=0.2, pearson=0.3)
 
     capsys.readouterr().out.encode("gbk")
+
+
+def test_live_training_dashboard_binds_to_loopback():
+    source = Path(__file__).resolve().parents[2] / "scripts/optimizer/viz.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    bind_hosts = [
+        keyword.value.value
+        for call in ast.walk(tree)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "run"
+        for keyword in call.keywords
+        if keyword.arg == "host" and isinstance(keyword.value, ast.Constant)
+    ]
+
+    assert bind_hosts == ["127.0.0.1"]

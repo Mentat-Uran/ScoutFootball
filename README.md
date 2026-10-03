@@ -54,7 +54,7 @@ To run the local service:
 uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
 ```
 
-The service is intended to remain local by default. Do not expose it to an untrusted network without reviewing the security and data boundaries first.
+The `serve` command and Docker Compose port mapping default to loopback. For deliberate access from a trusted LAN, bind to this computer's specific LAN address with `--host` or `SCOUTFOOTBALL_BIND_HOST`; avoid the wildcard address `0.0.0.0`. LAN clients can read the API's local data, while remote write routes also require `SCOUTFOOTBALL_WRITE_TOKEN`.
 
 ## Data and attribution
 

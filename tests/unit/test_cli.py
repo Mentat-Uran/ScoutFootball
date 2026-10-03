@@ -1,4 +1,4 @@
-from scoutfootball.__main__ import _cmd_info, main
+from scoutfootball.__main__ import _cmd_info, build_parser, main
 
 
 def test_cmd_info_runs(capsys):
@@ -24,3 +24,10 @@ def test_main_no_args_shows_help(capsys):
         assert "scoutfootball" in out.lower()
     finally:
         sys.argv = old_argv
+
+
+def test_serve_defaults_to_loopback_and_allows_explicit_host():
+    parser = build_parser()
+
+    assert parser.parse_args(["serve"]).host == "127.0.0.1"
+    assert parser.parse_args(["serve", "--host", "192.0.2.10"]).host == "192.0.2.10"
