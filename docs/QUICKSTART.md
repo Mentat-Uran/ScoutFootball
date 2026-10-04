@@ -130,6 +130,8 @@ Windows 可直接运行：
 scripts\start-lan.bat
 ```
 
+该启动器只从 Windows 网络类别为 `Private` 的活动物理网卡中选择 RFC1918 IPv4 地址，并让 Uvicorn 绑定到这个具体地址；没有检测到地址时会停止启动。启动器创建的 `ScoutFootball <端口>` 防火墙规则，以及同名的已有规则，都会限定为该 `LocalAddress`、`RemoteAddress=LocalSubnet` 和 `Private` 配置文件。请使用启动器显示的地址在本机和局域网设备访问。若无法创建防火墙规则，启动器会提示需要相应权限；若发现已有同名规则却无法收窄，则会停止启动。
+
 如果其他设备仍无法访问，通常是以下两类原因：
 
 - Windows 防火墙未放行对应 TCP 端口。
