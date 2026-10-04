@@ -11,7 +11,7 @@ function Get-NetFirewallRule {
             $exception = [System.Exception]::new("No matching firewall rule")
             $errorRecord = [System.Management.Automation.ErrorRecord]::new(
                 $exception,
-                "CmdletizationQuery_NotFound,Get-NetFirewallRule",
+                "CmdletizationQuery_NotFound",
                 [System.Management.Automation.ErrorCategory]::ObjectNotFound,
                 $DisplayName
             )
