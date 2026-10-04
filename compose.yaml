@@ -7,7 +7,7 @@ services:
         INSTALL_SYSTEM_PACKAGES: ${SCOUTFOOTBALL_INSTALL_SYSTEM_PACKAGES:-1}
     image: scoutfootball:local
     ports:
-      - "8000:8000"
+      - "${SCOUTFOOTBALL_BIND_HOST:-127.0.0.1}:8000:8000"
     environment:
       SCOUTFOOTBALL_DATA_ROOT: /app/data
       SCOUTFOOTBALL_CORS_ORIGINS: http://localhost:8000,http://127.0.0.1:8000

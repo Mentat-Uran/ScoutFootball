@@ -419,7 +419,7 @@ class LiveTrainingViz:
                         style={"height": "95vh"},
                     )
 
-            self._dash_app.run(debug=False, port=self.port, host="0.0.0.0", use_reloader=False)
+            self._dash_app.run(debug=False, port=self.port, host="127.0.0.1", use_reloader=False)
         except ImportError as e:
             print(f"  [Viz] Dash 未安装，可视化降级为 HTML 文件模式: {e}")
             self._running = False

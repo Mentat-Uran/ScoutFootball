@@ -107,8 +107,10 @@ uv run python -m scoutfootball export-ratings
 
 ```bash
 uv sync
-uv run python -m scoutfootball serve --host 0.0.0.0 --port 8000
+uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000
 ```
+
+The service listens on this computer only by default. To share it on a trusted LAN, use this computer's specific LAN address with `--host` (and set `SCOUTFOOTBALL_BIND_HOST` to that address when using Docker Compose). This exposes the local API data to reachable LAN clients; avoid binding to `0.0.0.0`.
 
 然后在本机访问：
 
@@ -127,6 +129,8 @@ Windows 可直接运行：
 ```bat
 scripts\start-lan.bat
 ```
+
+该启动器只从 Windows 网络类别为 `Private` 的活动物理网卡中选择 RFC1918 IPv4 地址，并让 Uvicorn 绑定到这个具体地址；没有检测到地址时会停止启动。启动器创建的 `ScoutFootball <端口>` 防火墙规则，以及同名的已有规则，都会限定为该 `LocalAddress`、`RemoteAddress=LocalSubnet` 和 `Private` 配置文件。请使用启动器显示的地址在本机和局域网设备访问。若无法创建防火墙规则，启动器会提示需要相应权限；若发现已有同名规则却无法收窄，则会停止启动。
 
 如果其他设备仍无法访问，通常是以下两类原因：
 
@@ -165,7 +169,7 @@ uv run streamlit run src/scoutfootball/app/streamlit_app.py
 ```bash
 uv run python -m scoutfootball serve
 # 或
-uv run uvicorn scoutfootball.api_server:create_app --factory --host 0.0.0.0 --port 8000
+uv run uvicorn scoutfootball.api_server:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
 ### API 文档

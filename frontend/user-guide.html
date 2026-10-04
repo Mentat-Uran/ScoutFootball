@@ -822,7 +822,7 @@ uv sync</code></pre>
                     <h2><span class="section-num">4</span>启动方式</h2>
 
                     <h3>4.1 FastAPI 单端口模式（推荐）</h3>
-                    <pre><code>uv run python -m scoutfootball serve --host 0.0.0.0 --port 8000</code></pre>
+                    <pre><code>uv run python -m scoutfootball serve --host 127.0.0.1 --port 8000</code></pre>
                     <p>浏览器访问 <span class="inline-code">http://127.0.0.1:8000</span></p>
 
                     <h3>4.2 Streamlit 模式</h3>
@@ -832,7 +832,8 @@ uv sync</code></pre>
                     <p>双击 ScoutFootball.app 或 ScoutFootball.exe 即可启动。</p>
 
                     <h3>4.4 局域网访问</h3>
-                    <pre><code>uv run python -m scoutfootball serve --host 0.0.0.0 --port 8000</code></pre>
+                    <pre><code>uv run python -m scoutfootball serve --host 你的电脑IP --port 8000</code></pre>
+                    <p>仅在可信局域网内使用具体网卡 IP 绑定；局域网客户端可以读取本机 API 数据。避免绑定到 <span class="inline-code">0.0.0.0</span>。</p>
                     <p>同一网络内其他设备访问 <span class="inline-code">http://你的电脑IP:8000</span></p>
                 </div>
             </section>
