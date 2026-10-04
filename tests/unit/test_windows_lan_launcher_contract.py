@@ -36,13 +36,38 @@ def test_windows_lan_launcher_fails_closed_and_binds_the_detected_private_ip():
 
 def test_windows_lan_firewall_rule_is_scoped_for_new_and_existing_rules():
     _, powershell, _ = _launcher_files()
-    assert "Get-NetFirewallRule -DisplayName $ruleName -ErrorAction Stop" in powershell
+    helper = (
+        Path(__file__).resolve().parents[2] / "scripts/firewall-rule-lookup.ps1"
+    ).read_text(encoding="utf-8")
+    assert '. (Join-Path $PSScriptRoot "firewall-rule-lookup.ps1")' in powershell
+    assert "$existingRules = @(Get-ScoutFootballFirewallRules -DisplayName $ruleName)" in powershell
+    assert "Could not query firewall rule '$ruleName'; refusing to start" in powershell
+
+    lookup = helper.index("$rules = @(")
+    not_found_check = helper.index("$_.CategoryInfo.Category -eq")
+    query_failure_check = helper.index("$lookupErrors.Count -ne $notFoundErrors.Count")
+    helper_return = helper.index("return $rules")
+    assert (
+        'Get-NetFirewallRule -DisplayName $DisplayName '
+        '-ErrorAction SilentlyContinue -ErrorVariable lookupErrors'
+    ) in helper
+    assert (
+        '$_.FullyQualifiedErrorId -eq "CmdletizationQuery_NotFound,Get-NetFirewallRule"'
+    ) in helper
+    assert lookup < not_found_check < query_failure_check < helper_return
+
+    query = powershell.index("$existingRules = @(Get-ScoutFootballFirewallRules")
+    query_error_exit = powershell.index("exit 1", query)
+    creation = powershell.index("New-NetFirewallRule")
+    assert query < query_error_exit < creation
+
     existing_block = powershell[
         powershell.index("if ($existingRules.Count -gt 0)") :
         powershell.index("} else {", powershell.index("if ($existingRules.Count -gt 0)"))
     ]
+    new_rule_start = powershell.index("New-NetFirewallRule")
     new_rule_block = powershell[
-        powershell.index("New-NetFirewallRule") : powershell.index("} catch {")
+        new_rule_start : powershell.index("} catch {", new_rule_start)
     ]
 
     assert (
@@ -64,6 +89,13 @@ def test_windows_lan_firewall_rule_is_scoped_for_new_and_existing_rules():
     assert "-Profile Private" in new_rule_block
     assert "-Protocol TCP" in new_rule_block
     assert "-LocalPort $port" in new_rule_block
+
+
+def test_windows_ci_runs_firewall_lookup_behavior_contract():
+    repository_root = Path(__file__).resolve().parents[2]
+    workflow = (repository_root / ".github/workflows/brief-ci.yml").read_text(encoding="utf-8")
+
+    assert "tests/windows/test_firewall_rule_lookup.ps1" in workflow
 
 
 def test_windows_lan_quickstart_documents_narrowed_listener_and_firewall():

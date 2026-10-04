@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "firewall-rule-lookup.ps1")
 
 $portText = $env:SCOUTFOOTBALL_LAN_PORT
 if ($portText -notmatch '^[0-9]{1,5}$') {
@@ -54,9 +55,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $ruleName = "ScoutFootball $port"
-$existingRules = @(
-    Get-NetFirewallRule -DisplayName $ruleName -ErrorAction Stop
-)
+try {
+    $existingRules = @(Get-ScoutFootballFirewallRules -DisplayName $ruleName)
+} catch {
+    Write-Error "Could not query firewall rule '$ruleName'; refusing to start the LAN server. $_" -ErrorAction Continue
+    exit 1
+}
 
 try {
     if ($existingRules.Count -gt 0) {

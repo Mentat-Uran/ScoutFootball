@@ -42,6 +42,10 @@ jobs:
           python -m pip install pytest
           python -m pytest tests/unit/test_windows_lan_launcher_contract.py -q
 
+      - name: Run firewall rule lookup behavior contract
+        shell: pwsh
+        run: ./tests/windows/test_firewall_rule_lookup.ps1
+
       - name: Parse Windows launcher PowerShell
         shell: pwsh
         run: |
